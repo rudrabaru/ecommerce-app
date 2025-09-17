@@ -8,9 +8,7 @@ Route::get('/', function () {
     return view('welcome');
 })->name('home');
 
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+// Remove default Breeze dashboard in favor of role-based dashboards
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -24,3 +22,10 @@ require __DIR__.'/auth.php';
 foreach (glob(base_path('Modules/*/Routes/web.php')) as $moduleRoutes) {
     require $moduleRoutes;
 }
+
+// OTP verification routes
+Route::middleware('auth')->group(function () {
+    Route::get('/verify-otp', [\App\Http\Controllers\Auth\EmailOtpController::class, 'show'])->name('verification.otp.notice');
+    Route::get('/verify-otp/send', [\App\Http\Controllers\Auth\EmailOtpController::class, 'send'])->name('verification.otp.send');
+    Route::post('/verify-otp', [\App\Http\Controllers\Auth\EmailOtpController::class, 'verify'])->name('verification.otp.verify');
+});

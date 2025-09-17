@@ -11,6 +11,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
 use Illuminate\View\View;
+use App\Models\EmailOtp;
+use App\Mail\VerifyOtpMail;
+use Illuminate\Support\Facades\Mail;
 
 class RegisteredUserController extends Controller
 {
@@ -38,13 +41,27 @@ class RegisteredUserController extends Controller
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
+            'role' => 'user',
             'password' => Hash::make($request->password),
         ]);
+
+        // Assign default role to every newly registered user
+        if (! $user->hasRole('user')) {
+            $user->assignRole('user');
+        }
 
         event(new Registered($user));
 
         Auth::login($user);
 
-        return redirect(route('dashboard', absolute: false));
+        // Generate and send OTP for first-time email verification
+        $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        EmailOtp::updateOrCreate(
+            ['user_id' => $user->id, 'email' => $user->email, 'used' => false],
+            ['code' => $code, 'expires_at' => now()->addMinutes(10)]
+        );
+        Mail::to($user->email)->send(new VerifyOtpMail($code));
+
+        return redirect()->route('verification.otp.notice')->with('status', 'Verification code sent.');
     }
 }

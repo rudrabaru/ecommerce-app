@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\User\Http\Controllers\UserController;
+use Modules\User\Http\Controllers\UserProfileController;
 
 /*
 |--------------------------------------------------------------------------
@@ -14,6 +15,7 @@ use Modules\User\Http\Controllers\UserController;
 |
 */
 
-Route::group([], function () {
-    Route::resource('user', UserController::class)->names('user');
+Route::middleware(['web','auth','ensure_role:user'])->group(function () {
+    Route::get('/user/dashboard', fn () => view('user::dashboard'))->name('user.dashboard');
+    Route::get('/user/profile', [UserProfileController::class, 'edit'])->name('user.profile');
 });

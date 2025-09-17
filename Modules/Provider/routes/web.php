@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Provider\Http\Controllers\ProviderController;
+use Modules\Provider\Http\Controllers\ProviderProfileController;
 
 /*
 |--------------------------------------------------------------------------
@@ -14,6 +15,7 @@ use Modules\Provider\Http\Controllers\ProviderController;
 |
 */
 
-Route::group([], function () {
-    Route::resource('provider', ProviderController::class)->names('provider');
+Route::middleware(['web','auth','ensure_role:provider'])->group(function () {
+    Route::get('/provider/dashboard', fn () => view('provider::dashboard'))->name('provider.dashboard');
+    Route::get('/provider/profile', [ProviderProfileController::class, 'edit'])->name('provider.profile');
 });
