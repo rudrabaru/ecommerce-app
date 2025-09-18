@@ -16,24 +16,24 @@
     <div class="bg-white rounded-xl shadow-sm border p-6">
         <table class="w-full text-sm">
             <thead>
-                <tr class="text-left text-gray-500">
-                    <th class="py-2">Name</th>
-                    <th class="py-2">Email</th>
-                    <th class="py-2">Roles</th>
-                    <th class="py-2">Action</th>
+                <tr class="text-gray-500">
+                    <th class="py-2 text-center">Name</th>
+                    <th class="py-2 text-center">Email</th>
+                    <th class="py-2 text-center">Role</th>
+                    <th class="py-2 text-center">Action</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach ($users as $user)
                     <tr class="border-t">
-                        <td class="py-2">{{ $user->name }}</td>
-                        <td class="py-2">{{ $user->email }}</td>
-                        <td class="py-2">{{ implode(', ', $user->getRoleNames()->toArray()) }}</td>
-                        <td class="py-2">
-                            @if(!$user->hasRole('admin'))
+                        <td class="py-2 text-center">{{ $user->name }}</td>
+                        <td class="py-2 text-center">{{ $user->email }}</td>
+                        <td class="py-2 text-center">{{ implode(', ', $user->getRoleNames()->toArray()) }}</td>
+                        <td class="py-2 text-center">
+                            @if($user->hasRole('user'))
                                 <form method="POST" action="{{ route('admin.users.promote', $user) }}">
                                     @csrf
-                                    <button class="px-3 py-1.5 bg-indigo-600 text-white rounded-md">Promote to Provider</button>
+                                    <button class="px-3 py-1.5 bg-indigo-600 text-black rounded-md">Promote to Provider</button>
                                 </form>
                             @endif
                         </td>

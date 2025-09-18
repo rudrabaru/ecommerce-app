@@ -23,7 +23,7 @@
                         </x-nav-link>
                         @if (Auth::user()->hasRole('admin'))
                             <x-nav-link :href="route('admin.users.index')" :active="request()->is('admin/users')">
-                                {{ __('View All Users') }}
+                                {{ __('Manage Users') }}
                             </x-nav-link>
                         @endif
                     @else
@@ -106,7 +106,7 @@
                 </x-responsive-nav-link>
                 @if (Auth::user()->hasRole('admin'))
                     <x-responsive-nav-link :href="route('admin.users.index')">
-                        {{ __('View All Users') }}
+                        {{ __('Manage Users') }}
                     </x-responsive-nav-link>
                 @endif
             @else

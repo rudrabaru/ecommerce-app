@@ -8,6 +8,21 @@ Route::get('/', function () {
     return view('welcome');
 })->name('home');
 
+// Provide a common dashboard route for auth flows/tests; redirect by role
+Route::get('/dashboard', function () {
+    if (! Auth::check()) {
+        return redirect()->route('login');
+    }
+    $user = Auth::user();
+    if ($user->hasRole('admin')) {
+        return redirect()->route('admin.dashboard');
+    }
+    if ($user->hasRole('provider')) {
+        return redirect()->route('provider.dashboard');
+    }
+    return redirect()->route('user.dashboard');
+})->name('dashboard');
+
 // Remove default Breeze dashboard in favor of role-based dashboards
 
 Route::middleware('auth')->group(function () {

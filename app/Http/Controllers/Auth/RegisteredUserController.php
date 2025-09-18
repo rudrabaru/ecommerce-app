@@ -14,6 +14,7 @@ use Illuminate\View\View;
 use App\Models\EmailOtp;
 use App\Mail\VerifyOtpMail;
 use Illuminate\Support\Facades\Mail;
+use Spatie\Permission\Models\Role;
 
 class RegisteredUserController extends Controller
 {
@@ -41,11 +42,11 @@ class RegisteredUserController extends Controller
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            'role' => 'user',
             'password' => Hash::make($request->password),
         ]);
 
-        // Assign default role to every newly registered user
+        // Ensure default role exists and assign to user
+        Role::firstOrCreate(['name' => 'user', 'guard_name' => 'web']);
         if (! $user->hasRole('user')) {
             $user->assignRole('user');
         }
@@ -53,6 +54,7 @@ class RegisteredUserController extends Controller
         event(new Registered($user));
 
         Auth::login($user);
+        $request->session()->regenerate();
 
         // Generate and send OTP for first-time email verification
         $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
