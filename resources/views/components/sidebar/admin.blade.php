@@ -1,0 +1,59 @@
+{{-- Admin Sidebar Component --}}
+<ul class="nav flex-column">
+    <li class="nav-item">
+        <a class="nav-link js-ajax-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}" 
+           href="{{ route('admin.dashboard') }}">
+            <i class="fas fa-tachometer-alt me-2"></i>
+            {{ __('Dashboard') }}
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link js-ajax-link {{ request()->routeIs('admin.users.*') ? 'active' : '' }}" 
+           href="{{ route('admin.users.index') }}">
+            <i class="fas fa-users me-2"></i>
+            {{ __('Users') }}
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link js-ajax-link {{ request()->routeIs('admin.products.*') ? 'active' : '' }}" 
+           href="{{ route('admin.products.index') }}">
+            <i class="fas fa-box me-2"></i>
+            {{ __('Products') }}
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link js-ajax-link {{ request()->routeIs('admin.categories.*') ? 'active' : '' }}" 
+           href="{{ route('admin.categories.index') }}">
+            <i class="fas fa-tags me-2"></i>
+            {{ __('Categories') }}
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link js-ajax-link {{ request()->routeIs('admin.orders.*') ? 'active' : '' }}" 
+           href="{{ Route::has('admin.orders.index') ? route('admin.orders.index') : '#' }}">
+            <i class="fas fa-shopping-cart me-2"></i>
+            {{ __('Orders') }}
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link js-ajax-link {{ request()->routeIs('admin.payments.*') ? 'active' : '' }}" 
+           href="{{ Route::has('admin.payments.index') ? route('admin.payments.index') : '#' }}">
+            <i class="fas fa-credit-card me-2"></i>
+            {{ __('Payments') }}
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link js-ajax-link {{ request()->routeIs('admin.reports.*') ? 'active' : '' }}" 
+           href="{{ Route::has('admin.reports.index') ? route('admin.reports.index') : '#' }}">
+            <i class="fas fa-chart-bar me-2"></i>
+            {{ __('Reports') }}
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link js-ajax-link {{ request()->routeIs('admin.settings.*') ? 'active' : '' }}" 
+           href="{{ Route::has('admin.settings.index') ? route('admin.settings.index') : '#' }}">
+            <i class="fas fa-cog me-2"></i>
+            {{ __('Settings') }}
+        </a>
+    </li>
+</ul>

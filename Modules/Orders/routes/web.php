@@ -14,6 +14,14 @@ use Modules\Orders\Http\Controllers\OrdersController;
 |
 */
 
-Route::group([], function () {
-    Route::resource('orders', OrdersController::class)->names('orders');
+Route::middleware(['web', 'auth'])->group(function () {
+    // Provider Orders
+    Route::prefix('provider')->as('provider.')->group(function () {
+        Route::resource('orders', OrdersController::class)->names('orders');
+    });
+
+    // Admin Orders (if needed now or future)
+    Route::prefix('admin')->as('admin.')->group(function () {
+        Route::resource('orders', OrdersController::class)->names('orders');
+    });
 });

@@ -3,6 +3,7 @@
 namespace Modules\Products\Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Modules\Products\App\Models\Category;
 
 class ProductsDatabaseSeeder extends Seeder
 {
@@ -11,6 +12,10 @@ class ProductsDatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // $this->call([]);
+        if (Category::count() === 0) {
+            Category::create(['name' => 'Electronics']);
+            Category::create(['name' => 'Clothing']);
+            Category::create(['name' => 'Books']);
+        }
     }
 }

@@ -1,11 +1,26 @@
 <x-app-layout>
-    <div class="min-h-screen bg-gray-50">
-        <div class="flex">
-            <aside class="hidden md:block w-64 bg-white border-r border-gray-200 min-h-screen fixed md:static left-0 top-0 md:top-auto">
-            </aside>
-            <main class="flex-1 md:ml-64 p-4 md:p-8">
-                {{ $slot }}
-            </main>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex flex-column">
+                    @isset($title)
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <div>
+                                <h1 class="h3 mb-1">{{ $title }}</h1>
+                                @isset($subtitle)
+                                    <p class="text-muted mb-0">{{ $subtitle }}</p>
+                                @endisset
+                            </div>
+                        </div>
+                    @endisset
+                    
+                    <div class="row">
+                        <div class="col-12">
+                            {{ $slot }}
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </x-app-layout>
