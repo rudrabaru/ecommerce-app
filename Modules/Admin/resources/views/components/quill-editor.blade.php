@@ -8,13 +8,9 @@
 
 @once
 <link rel="stylesheet" href="{{ asset('vendor/quill/quill.min.css') }}" />
-@php
-    $__quillMaxHeight = $maxHeight !== '-1' ? $maxHeight : 'none';
-@endphp
 <style>
     .ql-editor {
-        min-height: {{ $height }};
-        max-height: {{ $__quillMaxHeight }};
+        /* Heights are applied via JS to avoid Blade syntax inside CSS */
         overflow-y: auto;
     }
     .ql-toolbar.ql-snow {
@@ -70,132 +66,6 @@
 
 <script src="{{ asset('vendor/quill/quill.min.js') }}"></script>
 @endonce
-
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const editorId = '{{ $editorId }}';
-        const editorType = '{{ $type }}';
-        const textareaElement = document.getElementById(editorId);
-        const customToolbar = @json($customToolbar);
-
-        if (!textareaElement) {
-            console.error(`Textarea with ID "${editorId}" not found`);
-            return;
-        }
-
-        // Create a div after the textarea to host Quill
-        const quillContainer = document.createElement('div');
-        quillContainer.id = `quill-${editorId}`;
-        quillContainer.className = 'quill-container';
-        textareaElement.insertAdjacentElement('afterend', quillContainer);
-
-        // Store original textarea content
-        const initialContent = textareaElement.value || '';
-
-        // Define toolbar configurations based on type (removed default image handler)
-        const toolbarConfigs = {
-            full: [
-                ['bold', 'italic', 'underline', 'strike'],
-                [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-                ['blockquote'],
-                [{ 'align': [] }],
-                [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                [{ 'indent': '-1' }, { 'indent': '+1' }],
-                [{ 'color': [] }, { 'background': [] }],
-                [{ 'font': [] }],
-                ['link', 'media-modal', 'video', 'code-block']
-            ],
-            basic: [
-                ['bold', 'italic', 'underline'],
-                [{ 'header': [1, 2, 3, false] }],
-                [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                ['link', 'media-modal']
-            ],
-            minimal: [
-                ['bold', 'italic'],
-                [{ 'list': 'ordered' }, { 'list': 'bullet' }]
-            ]
-        };
-
-        // Select toolbar configuration based on type or use custom if provided
-        let toolbarConfig;
-        try {
-            toolbarConfig = customToolbar ? JSON.parse(customToolbar) : (toolbarConfigs[editorType] || toolbarConfigs.basic);
-        } catch (e) {
-            console.warn('Invalid customToolbar JSON, falling back to preset.', e);
-            toolbarConfig = toolbarConfigs[editorType] || toolbarConfigs.basic;
-        }
-
-        // Custom media modal handler
-        const mediaModalHandler = function() {
-            const modalId = `quillMediaModal_${editorId}`;
-            
-            // Open media modal using the existing component (single selection for editor)
-            openMediaModal(modalId, false, 'all', `handleQuillMediaSelect_${editorId}`);
-        };
-
-        // Initialize Quill on the container div
-        const quill = new Quill(`#quill-${editorId}`, {
-            theme: "snow",
-            placeholder: '{{ __('Type here...') }}',
-            modules: {
-                toolbar: {
-                    container: toolbarConfig,
-                    handlers: {
-                        'media-modal': mediaModalHandler
-                    }
-                }
-            }
-        });
-
-        window['quill_' + editorId] = quill;
-
-        // Create media selection handler function for this specific editor
-        window[`handleQuillMediaSelect_${editorId}`] = function(files) {
-            if (files.length > 0) {
-                const file = files[0];
-                const range = quill.getSelection(true);
-                
-                if (file.mime_type && file.mime_type.startsWith('image/')) {
-                    // Insert image
-                    quill.insertEmbed(range.index, 'image', file.url, 'user');
-                } else {
-                    // Insert as link for non-image files
-                    quill.insertText(range.index, file.name, 'link', file.url, 'user');
-                }
-                
-                // Move cursor after inserted content
-                quill.setSelection(range.index + 1);
-            }
-        };
-
-        // Set initial content from textarea
-        if (initialContent) {
-            quill.clipboard.dangerouslyPasteHTML(initialContent);
-        }
-
-        // Hide textarea visually but keep it in the DOM for form submission
-        textareaElement.style.display = 'none';
-
-        // Update textarea on editor change for form submission
-        quill.on('text-change', function() {
-            textareaElement.value = quill.root.innerHTML;
-            
-            // Trigger form change detection for the unsaved changes warning
-            const event = new Event('input', { bubbles: true });
-            textareaElement.dispatchEvent(event);
-        });
-
-        // Also update on form submit to ensure the latest content is captured
-        const form = textareaElement.closest('form');
-        if (form) {
-            form.addEventListener('submit', function() {
-                textareaElement.value = quill.root.innerHTML;
-            });
-        }
-
-    });
-</script>
 
 <!-- Include the media modal component for Quill editor -->
 <x-media-modal 

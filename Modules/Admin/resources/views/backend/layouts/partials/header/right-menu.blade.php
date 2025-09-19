@@ -1,49 +1,3 @@
-{!! Hook::applyFilters(AdminFilterHook::HEADER_RIGHT_MENU_BEFORE, '') !!}
-
-<div class="flex items-center gap-1">
-    <div class="hidden md:block">
-        @include('backend.layouts.partials.demo-mode-notice')
-    </div>
-
-    {!! Hook::applyFilters(AdminFilterHook::HEADER_BEFORE_LOCALE_SWITCHER, '') !!}
-    <x-tooltip title="{{ __('Change locale') }}" position="bottom">
-        @include('backend.layouts.partials.locale-switcher')
-    </x-tooltip>
-    {!! Hook::applyFilters(AdminFilterHook::HEADER_AFTER_LOCALE_SWITCHER, '') !!}
-
-    {!! Hook::applyFilters(AdminFilterHook::DARK_MODE_TOGGLER_BEFORE_BUTTON, '') !!}
-
-    <x-tooltip title="{{ __('Toggle theme mode') }}" position="bottom">
-        <button id="darkModeToggle"
-            class="hover:text-dark-900 relative flex items-center justify-center rounded-full text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white p-2 dark-mode-toggle"
-            @click.prevent="darkMode = !darkMode" @click="menuToggle = true">
-            <iconify-icon icon="lucide:moon" width="24" height="24" class="hidden dark:block"></iconify-icon>
-            <iconify-icon icon="lucide:sun" width="24" height="24" class="dark:hidden"></iconify-icon>
-        </button>
-    </x-tooltip>
-    {!! Hook::applyFilters(AdminFilterHook::DARK_MODE_TOGGLER_AFTER_BUTTON, '') !!}
-
-    @if (config('app.show_demo_component_preview', false))
-        <x-tooltip title="{{ __('Preview demo components') }}" position="bottom">
-            <a href="{{ route('demo.preview') }}" class="hover:text-dark-900 relative flex p-2 items-center justify-center rounded-full text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white">
-                <iconify-icon icon="lucide:view" width="22" height="22"></iconify-icon>
-            </a>
-        </x-tooltip>
-    @endif
-
-    @if (env('GITHUB_LINK'))
-        <x-tooltip title="{{ __('Go to Github') }}" position="bottom">
-            <a href="{{ env('GITHUB_LINK') }}" target="_blank"
-                class="hover:text-dark-900 relative flex p-2 items-center justify-center rounded-full text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white">
-                <iconify-icon icon="lucide:github" width="22" height="22"
-                    class=""></iconify-icon>
-            </a>
-        </x-tooltip>
-    @endif
-
-    {!! Hook::applyFilters(AdminFilterHook::HEADER_AFTER_ACTIONS, '') !!}
-</div>
-
 {!! Hook::applyFilters(AdminFilterHook::USER_DROPDOWN_BEFORE, '') !!}
 
 <div class="relative" x-data="{ dropdownOpen: false }" @click.outside="dropdownOpen = false">
@@ -107,5 +61,4 @@
         @endif
     </div>
 </div>
-
-{!! Hook::applyFilters(AdminFilterHook::HEADER_RIGHT_MENU_AFTER, '') !!}
+{!! Hook::applyFilters(AdminFilterHook::USER_DROPDOWN_AFTER, '') !!}

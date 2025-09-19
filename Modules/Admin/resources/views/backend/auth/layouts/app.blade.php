@@ -120,9 +120,7 @@ x-init="
     @stack('scripts')
 
     @if (!empty(config('settings.global_custom_js')))
-    <script>
-        {!! config('settings.global_custom_js') !!}
-    </script>
+    
     @endif
 </body>
 
