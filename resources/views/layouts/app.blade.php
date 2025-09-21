@@ -136,6 +136,7 @@
         <script src="https://cdn.datatables.net/2.0.8/js/dataTables.min.js"></script>
         <link rel="stylesheet" href="https://cdn.datatables.net/2.0.8/css/dataTables.dataTables.min.css" />
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         <script>
             (function(){
                 const content = document.getElementById('app-content');
@@ -302,6 +303,185 @@
                 if (window.$ && token) {
                     $.ajaxSetup({ headers: { 'X-CSRF-TOKEN': token, 'X-Requested-With': 'XMLHttpRequest' } });
                 }
+            })();
+            
+            // Global DataTable Management System
+            (function(){
+                // Store DataTable instances
+                window.DataTableInstances = window.DataTableInstances || {};
+                
+                // Function to destroy all existing DataTables
+                function destroyAllDataTables() {
+                    Object.keys(window.DataTableInstances).forEach(tableId => {
+                        if (window.DataTableInstances[tableId] && $.fn.DataTable.isDataTable('#' + tableId)) {
+                            try {
+                                window.DataTableInstances[tableId].destroy();
+                                delete window.DataTableInstances[tableId];
+                            } catch (e) {
+                                console.warn('Error destroying DataTable:', tableId, e);
+                            }
+                        }
+                    });
+                }
+                
+                // Function to initialize DataTables in current content
+                function initializeDataTables() {
+                    // Initialize Products DataTable
+                    if ($('#products-table').length && !$.fn.DataTable.isDataTable('#products-table')) {
+                        const ajaxUrl = window.location.pathname.includes('/admin/') 
+                            ? '/admin/products/data' 
+                            : '/provider/products/data';
+                            
+                        window.DataTableInstances['products-table'] = $('#products-table').DataTable({
+                            processing: true,
+                            serverSide: true,
+                            ajax: ajaxUrl,
+                            columns: [
+                                { data: 'id', name: 'id', width: '60px' },
+                                { data: 'title', name: 'title' },
+                                { data: 'category', name: 'category.name' },
+                                { 
+                                    data: 'price', 
+                                    name: 'price',
+                                    render: function(data) {
+                                        return '$' + parseFloat(data).toFixed(2);
+                                    },
+                                    width: '100px'
+                                },
+                                { data: 'stock', name: 'stock', width: '80px' },
+                                { data: 'status', name: 'is_approved', width: '100px' },
+                                { data: 'actions', name: 'actions', orderable: false, searchable: false, width: '200px' }
+                            ],
+                            order: [[0, 'desc']],
+                            pageLength: 25,
+                            responsive: true,
+                            language: {
+                                processing: "Loading...",
+                                emptyTable: "No data available",
+                                info: "Showing _START_ to _END_ of _TOTAL_ entries",
+                                infoEmpty: "Showing 0 to 0 of 0 entries",
+                                infoFiltered: "(filtered from _MAX_ total entries)",
+                                lengthMenu: "Show _MENU_ entries",
+                                search: "Search:",
+                                zeroRecords: "No matching records found"
+                            }
+                        });
+                    }
+                    
+                    // Initialize Categories DataTable
+                    if ($('#categories-table').length && !$.fn.DataTable.isDataTable('#categories-table')) {
+                        window.DataTableInstances['categories-table'] = $('#categories-table').DataTable({
+                            processing: true,
+                            serverSide: true,
+                            ajax: '/admin/categories/data',
+                            columns: [
+                                { data: 'id', name: 'id', width: '60px' },
+                                { data: 'name', name: 'name' },
+                                { data: 'parent', name: 'parent.name' },
+                                { 
+                                    data: 'products_count', 
+                                    name: 'products_count',
+                                    orderable: false,
+                                    searchable: false,
+                                    width: '100px'
+                                },
+                                { data: 'actions', name: 'actions', orderable: false, searchable: false, width: '150px' }
+                            ],
+                            order: [[0, 'desc']],
+                            pageLength: 25,
+                            responsive: true,
+                            language: {
+                                processing: "Loading...",
+                                emptyTable: "No data available",
+                                info: "Showing _START_ to _END_ of _TOTAL_ entries",
+                                infoEmpty: "Showing 0 to 0 of 0 entries",
+                                infoFiltered: "(filtered from _MAX_ total entries)",
+                                lengthMenu: "Show _MENU_ entries",
+                                search: "Search:",
+                                zeroRecords: "No matching records found"
+                            }
+                        });
+                    }
+                    
+                    // Initialize Users DataTable
+                    if ($('#users-table').length && !$.fn.DataTable.isDataTable('#users-table')) {
+                        window.DataTableInstances['users-table'] = $('#users-table').DataTable({
+                            processing: true,
+                            serverSide: true,
+                            ajax: '/admin/users/data',
+                            columns: [
+                                { data: 'id', name: 'id', width: '60px' },
+                                { data: 'name', name: 'name' },
+                                { data: 'email', name: 'email' },
+                                { data: 'role', name: 'role', orderable: false, searchable: false },
+                                { data: 'actions', name: 'actions', orderable: false, searchable: false, width: '150px' }
+                            ],
+                            order: [[0, 'desc']],
+                            pageLength: 25,
+                            responsive: true,
+                            language: {
+                                processing: "Loading...",
+                                emptyTable: "No data available",
+                                info: "Showing _START_ to _END_ of _TOTAL_ entries",
+                                infoEmpty: "Showing 0 to 0 of 0 entries",
+                                infoFiltered: "(filtered from _MAX_ total entries)",
+                                lengthMenu: "Show _MENU_ entries",
+                                search: "Search:",
+                                zeroRecords: "No matching records found"
+                            }
+                        });
+                    }
+                    
+                    // Initialize Orders DataTable
+                    if ($('#orders-table').length && !$.fn.DataTable.isDataTable('#orders-table')) {
+                        const ajaxUrl = window.location.pathname.includes('/admin/') 
+                            ? '/admin/orders/data' 
+                            : '/provider/orders/data';
+                            
+                        window.DataTableInstances['orders-table'] = $('#orders-table').DataTable({
+                            processing: true,
+                            serverSide: true,
+                            ajax: ajaxUrl,
+                            columns: [
+                                { data: 'id', name: 'id', width: '60px' },
+                                { data: 'order_number', name: 'order_number' },
+                                { data: 'customer_name', name: 'customer_name' },
+                                { data: 'product_name', name: 'product_name' },
+                                { data: 'total', name: 'total', width: '100px' },
+                                { data: 'status', name: 'status', width: '100px' },
+                                { data: 'created_at', name: 'created_at', width: '120px' },
+                                { data: 'actions', name: 'actions', orderable: false, searchable: false, width: '150px' }
+                            ],
+                            order: [[0, 'desc']],
+                            pageLength: 25,
+                            responsive: true,
+                            language: {
+                                processing: "Loading...",
+                                emptyTable: "No data available",
+                                info: "Showing _START_ to _END_ of _TOTAL_ entries",
+                                infoEmpty: "Showing 0 to 0 of 0 entries",
+                                infoFiltered: "(filtered from _MAX_ total entries)",
+                                lengthMenu: "Show _MENU_ entries",
+                                search: "Search:",
+                                zeroRecords: "No matching records found"
+                            }
+                        });
+                    }
+                }
+                
+                // Listen for AJAX page loaded event
+                window.addEventListener('ajaxPageLoaded', function() {
+                    // Small delay to ensure DOM is ready
+                    setTimeout(function() {
+                        destroyAllDataTables();
+                        initializeDataTables();
+                    }, 100);
+                });
+                
+                // Initialize DataTables on initial page load
+                $(document).ready(function() {
+                    initializeDataTables();
+                });
             })();
         </script>
     </body>

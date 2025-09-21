@@ -55,7 +55,13 @@ class ProductsController extends Controller
             throw $e;
         }
 
-        $validated['provider_id'] = Auth::id();
+        // Auto-assign provider_id based on user role
+        if (Auth::user()->hasRole('provider')) {
+            $validated['provider_id'] = Auth::id();
+        } elseif (Auth::user()->hasRole('admin')) {
+            // Admin can assign to any provider, but if not specified, assign to themselves
+            $validated['provider_id'] = $request->input('provider_id', Auth::id());
+        }
 
         if ($request->hasFile('image')) {
             $path = $request->file('image')->store('products', 'public');
@@ -127,6 +133,11 @@ class ProductsController extends Controller
                 ], 422);
             }
             throw $e;
+        }
+
+        // Ensure providers can only update their own products
+        if (Auth::user()->hasRole('provider')) {
+            $validated['provider_id'] = Auth::id();
         }
 
         if ($request->hasFile('image')) {

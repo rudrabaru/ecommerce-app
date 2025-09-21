@@ -6,9 +6,6 @@
                 <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#categoryModal" onclick="openCategoryModal()">
                     <i class="fas fa-plus"></i> Create Category
                 </button>
-                <a href="{{ route('admin.products.index') }}" class="btn btn-secondary js-ajax-link">
-                    <i class="fas fa-box"></i> Back to Products
-                </a>
             </div>
         </div>
 
@@ -77,32 +74,7 @@
 
     @push('scripts')
     <script>
-        let categoriesTable;
-        
-        $(document).ready(function() {
-            // Initialize DataTable
-            categoriesTable = $('#categories-table').DataTable({
-                processing: true,
-                serverSide: true,
-                ajax: '{{ route('admin.categories.data') }}',
-                columns: [
-                    { data: 'id', name: 'id', width: '60px' },
-                    { data: 'name', name: 'name' },
-                    { data: 'parent', name: 'parent.name' },
-                    { 
-                        data: 'products_count', 
-                        name: 'products_count',
-                        orderable: false,
-                        searchable: false,
-                        width: '100px'
-                    },
-                    { data: 'actions', name: 'actions', orderable: false, searchable: false, width: '150px' }
-                ],
-                order: [[0, 'desc']],
-                pageLength: 25,
-                responsive: true
-            });
-        });
+        // DataTable is now initialized globally - no need for individual initialization
         
         function openCategoryModal(categoryId = null) {
             // Reset form
@@ -170,8 +142,10 @@
             .then(data => {
                 if (data.success) {
                     $('#categoryModal').modal('hide');
-                    categoriesTable.ajax.reload();
-                    showAlert('success', data.message || 'Category saved successfully!');
+                    if (window.DataTableInstances['categories-table']) {
+                        window.DataTableInstances['categories-table'].ajax.reload();
+                    }
+                    Swal.fire('Success', data.message || 'Category saved successfully!', 'success');
                 } else {
                     // Handle validation errors
                     if (data.errors) {
@@ -180,12 +154,12 @@
                             $(`#${field}`).siblings('.invalid-feedback').text(data.errors[field][0]);
                         });
                     }
-                    showAlert('danger', data.message || 'Please fix the errors above.');
+                    Swal.fire('Error', data.message || 'Please fix the errors above.', 'error');
                 }
             })
             .catch(error => {
                 console.error('Error saving category:', error);
-                showAlert('danger', 'An error occurred while saving the category.');
+                Swal.fire('Error', 'An error occurred while saving the category.', 'error');
             })
             .finally(() => {
                 $('#categorySaveSpinner').addClass('d-none');
@@ -194,29 +168,39 @@
         }
         
         function deleteCategory(categoryId) {
-            if (!confirm('Are you sure you want to delete this category?')) {
-                return;
-            }
-            
-            fetch(`/admin/categories/${categoryId}`, {
-                method: 'DELETE',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+            Swal.fire({
+                title: 'Are you sure?',
+                text: "You won't be able to revert this!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Yes, delete it!'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    fetch(`/admin/categories/${categoryId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            if (window.DataTableInstances['categories-table']) {
+                                window.DataTableInstances['categories-table'].ajax.reload();
+                            }
+                            Swal.fire('Deleted!', data.message || 'Category deleted successfully!', 'success');
+                        } else {
+                            Swal.fire('Error', data.message || 'Error deleting category.', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error deleting category:', error);
+                        Swal.fire('Error', 'An error occurred while deleting the category.', 'error');
+                    });
                 }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    categoriesTable.ajax.reload();
-                    showAlert('success', data.message || 'Category deleted successfully!');
-                } else {
-                    showAlert('danger', data.message || 'Error deleting category.');
-                }
-            })
-            .catch(error => {
-                console.error('Error deleting category:', error);
-                showAlert('danger', 'An error occurred while deleting the category.');
             });
         }
         
@@ -239,6 +223,26 @@
                 $('.alert').fadeOut();
             }, 5000);
         }
+        
+        // Form validation for Categories
+        function validateCategoryForm() {
+            const name = $('#name').val().trim();
+            const parentId = $('#parent_id').val();
+            
+            let isValid = name !== '';
+            
+            // Parent ID validation (if provided, must be valid)
+            if (parentId && parentId !== '') {
+                // Additional validation can be added here if needed
+            }
+            
+            $('#categorySaveSpinner').parent().prop('disabled', !isValid);
+        }
+        
+        // Add event listeners for form validation
+        $(document).ready(function() {
+            $('#name, #parent_id').on('input change', validateCategoryForm);
+        });
     </script>
     @endpush
 </x-app-layout>

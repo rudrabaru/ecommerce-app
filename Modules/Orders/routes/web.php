@@ -15,13 +15,15 @@ use Modules\Orders\Http\Controllers\OrdersController;
 */
 
 Route::middleware(['web', 'auth'])->group(function () {
-    // Provider Orders
-    Route::prefix('provider')->as('provider.')->group(function () {
+    // Provider Orders - only providers can access
+    Route::middleware(['ensure_role:provider'])->prefix('provider')->as('provider.')->group(function () {
+        Route::get('orders/data', [OrdersController::class, 'data'])->name('orders.data');
         Route::resource('orders', OrdersController::class)->names('orders');
     });
 
-    // Admin Orders (if needed now or future)
-    Route::prefix('admin')->as('admin.')->group(function () {
+    // Admin Orders - only admins can access
+    Route::middleware(['ensure_role:admin'])->prefix('admin')->as('admin.')->group(function () {
+        Route::get('orders/data', [OrdersController::class, 'data'])->name('orders.data');
         Route::resource('orders', OrdersController::class)->names('orders');
     });
 });

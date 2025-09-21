@@ -3,14 +3,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="mb-0">Products</h1>
             <div>
-                @if(auth()->user()->hasRole('admin'))
-                    <button type="button" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#productModal" onclick="openProductModal()">
-                        <i class="fas fa-plus"></i> Create Product
-                    </button>
-                    <a href="{{ route('admin.categories.index') }}" class="btn btn-secondary js-ajax-link">
-                        <i class="fas fa-tags"></i> Manage Categories
-                    </a>
-                @else
+                @if(auth()->user()->hasRole('provider'))
                     <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#productModal" onclick="openProductModal()">
                         <i class="fas fa-plus"></i> Create Product
                     </button>
@@ -127,35 +120,7 @@
 
     @push('scripts')
     <script>
-        let productsTable;
-        
-        $(document).ready(function() {
-            // Initialize DataTable
-            productsTable = $('#products-table').DataTable({
-                processing: true,
-                serverSide: true,
-                ajax: '{{ auth()->user()->hasRole('admin') ? route('admin.products.data') : route('provider.products.data') }}',
-                columns: [
-                    { data: 'id', name: 'id', width: '60px' },
-                    { data: 'title', name: 'title' },
-                    { data: 'category', name: 'category.name' },
-                    { 
-                        data: 'price', 
-                        name: 'price',
-                        render: function(data) {
-                            return '$' + parseFloat(data).toFixed(2);
-                        },
-                        width: '100px'
-                    },
-                    { data: 'stock', name: 'stock', width: '80px' },
-                    { data: 'status', name: 'is_approved', width: '100px' },
-                    { data: 'actions', name: 'actions', orderable: false, searchable: false, width: '200px' }
-                ],
-                order: [[0, 'desc']],
-                pageLength: 25,
-                responsive: true
-            });
-        });
+        // DataTable is now initialized globally - no need for individual initialization
         
         function openProductModal(productId = null) {
             // Reset form
@@ -170,7 +135,7 @@
                 $('#productId').val(productId);
                 
                 // Load product data
-                const prefix = '{{ auth()->user()->hasRole('admin') ? 'admin' : 'provider' }}';
+                const prefix = '{{ auth()->user()->hasRole("admin") ? "admin" : "provider" }}';
                 fetch(`/${prefix}/products/${productId}/edit`, {
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest',
@@ -206,7 +171,7 @@
             const form = document.getElementById('productForm');
             const formData = new FormData(form);
             const productId = $('#productId').val();
-            const prefix = '{{ auth()->user()->hasRole('admin') ? 'admin' : 'provider' }}';
+            const prefix = '{{ auth()->user()->hasRole("admin") ? "admin" : "provider" }}';
             
             let url = `/${prefix}/products`;
             if (productId) {
@@ -234,8 +199,10 @@
             .then(data => {
                 if (data.success) {
                     $('#productModal').modal('hide');
-                    productsTable.ajax.reload();
-                    showAlert('success', data.message || 'Product saved successfully!');
+                    if (window.DataTableInstances['products-table']) {
+                        window.DataTableInstances['products-table'].ajax.reload();
+                    }
+                    Swal.fire('Success', data.message || 'Product saved successfully!', 'success');
                 } else {
                     // Handle validation errors
                     if (data.errors) {
@@ -244,12 +211,12 @@
                             $(`#${field}`).siblings('.invalid-feedback').text(data.errors[field][0]);
                         });
                     }
-                    showAlert('danger', data.message || 'Please fix the errors above.');
+                    Swal.fire('Error', data.message || 'Please fix the errors above.', 'error');
                 }
             })
             .catch(error => {
                 console.error('Error saving product:', error);
-                showAlert('danger', 'An error occurred while saving the product.');
+                Swal.fire('Error', 'An error occurred while saving the product.', 'error');
             })
             .finally(() => {
                 $('#saveSpinner').addClass('d-none');
@@ -258,31 +225,41 @@
         }
         
         function deleteProduct(productId) {
-            if (!confirm('Are you sure you want to delete this product?')) {
-                return;
-            }
-            
-            const prefix = '{{ auth()->user()->hasRole('admin') ? 'admin' : 'provider' }}';
-            
-            fetch(`/${prefix}/products/${productId}`, {
-                method: 'DELETE',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+            Swal.fire({
+                title: 'Are you sure?',
+                text: "You won't be able to revert this!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Yes, delete it!'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const prefix = '{{ auth()->user()->hasRole("admin") ? "admin" : "provider" }}';
+                    
+                    fetch(`/${prefix}/products/${productId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            if (window.DataTableInstances['products-table']) {
+                                window.DataTableInstances['products-table'].ajax.reload();
+                            }
+                            Swal.fire('Deleted!', data.message || 'Product deleted successfully!', 'success');
+                        } else {
+                            Swal.fire('Error', data.message || 'Error deleting product.', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error deleting product:', error);
+                        Swal.fire('Error', 'An error occurred while deleting the product.', 'error');
+                    });
                 }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    productsTable.ajax.reload();
-                    showAlert('success', data.message || 'Product deleted successfully!');
-                } else {
-                    showAlert('danger', data.message || 'Error deleting product.');
-                }
-            })
-            .catch(error => {
-                console.error('Error deleting product:', error);
-                showAlert('danger', 'An error occurred while deleting the product.');
             });
         }
         
@@ -305,6 +282,34 @@
                 $('.alert').fadeOut();
             }, 5000);
         }
+        
+        // Form validation for Products
+        function validateProductForm() {
+            const title = $('#title').val().trim();
+            const description = $('#description').val().trim();
+            const price = $('#price').val();
+            const stock = $('#stock').val();
+            const categoryId = $('#category_id').val();
+            
+            let isValid = title !== '' && description !== '' && price !== '' && stock !== '' && categoryId !== '';
+            
+            // Price validation
+            if (price && (isNaN(price) || parseFloat(price) < 0)) {
+                isValid = false;
+            }
+            
+            // Stock validation
+            if (stock && (isNaN(stock) || parseInt(stock) < 0)) {
+                isValid = false;
+            }
+            
+            $('#saveSpinner').parent().prop('disabled', !isValid);
+        }
+        
+        // Add event listeners for form validation
+        $(document).ready(function() {
+            $('#title, #description, #price, #stock, #category_id').on('input change', validateProductForm);
+        });
         
         // Handle DataTable actions
         $(document).on('click', '.edit-product', function() {
