@@ -121,7 +121,6 @@
         </div>
     </div>
 
-    @push('scripts')
     <script>
         // DataTable is now initialized globally - no need for individual initialization
         
@@ -292,5 +291,4 @@
             deleteOrder(orderId);
         });
     </script>
-    @endpush
 </x-app-layout>

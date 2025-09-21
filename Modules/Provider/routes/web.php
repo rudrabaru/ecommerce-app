@@ -16,7 +16,12 @@ use Modules\Provider\Http\Controllers\ProviderProfileController;
 */
 
 Route::middleware(['web','auth','ensure_role:provider'])->group(function () {
-    Route::get('/provider/dashboard', fn () => view('provider::dashboard'))->name('provider.dashboard');
+    Route::get('/provider/dashboard', function () {
+        if (request()->ajax()) {
+            return view('provider::dashboard');
+        }
+        return view('provider::dashboard');
+    })->name('provider.dashboard');
     Route::get('/provider/profile', [ProviderProfileController::class, 'edit'])->name('provider.profile');
     
     // Dashboard data endpoints

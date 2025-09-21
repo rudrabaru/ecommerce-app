@@ -149,10 +149,22 @@
         </div>
     </div>
 
-    @push('scripts')
     <script>
-        $(document).ready(function() {
+        // Dashboard initialization function
+        function initializeProviderDashboard() {
             loadDashboardData();
+        }
+        
+        // Auto-initialize on page load or AJAX navigation
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeProviderDashboard);
+        } else {
+            initializeProviderDashboard();
+        }
+        
+        // Also initialize when AJAX page is loaded
+        window.addEventListener('ajaxPageLoaded', function() {
+            setTimeout(initializeProviderDashboard, 100);
         });
 
         function loadDashboardData() {
@@ -222,13 +234,11 @@
                     html = '<tr><td colspan="3" class="text-center text-muted">No products yet</td></tr>';
                 } else {
                     data.forEach(product => {
-                        const statusClass = product.is_approved ? 'badge-success' : 'badge-warning';
-                        const statusText = product.is_approved ? 'Approved' : 'Pending';
                         html += `
                             <tr>
                                 <td>${product.title}</td>
                                 <td>${product.stock}</td>
-                                <td><span class="badge ${statusClass}">${statusText}</span></td>
+                                <td>${product.status}</td>
                             </tr>
                         `;
                     });
@@ -252,5 +262,4 @@
             }
         }
     </script>
-    @endpush
 </x-app-layout>

@@ -97,12 +97,13 @@
                                         <th>Name</th>
                                         <th>Email</th>
                                         <th>Role</th>
+                                        <th>Status</th>
                                         <th>Joined</th>
                                     </tr>
                                 </thead>
                                 <tbody id="recent-users">
                                     <tr>
-                                        <td colspan="4" class="text-center">
+                                        <td colspan="5" class="text-center">
                                             <div class="spinner-border spinner-border-sm" role="status">
                                                 <span class="sr-only">Loading...</span>
                                             </div>
@@ -151,10 +152,22 @@
         </div>
     </div>
 
-    @push('scripts')
     <script>
-        $(document).ready(function() {
+        // Dashboard initialization function
+        function initializeAdminDashboard() {
             loadDashboardData();
+        }
+        
+        // Auto-initialize on page load or AJAX navigation
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeAdminDashboard);
+        } else {
+            initializeAdminDashboard();
+        }
+        
+        // Also initialize when AJAX page is loaded
+        window.addEventListener('ajaxPageLoaded', function() {
+            setTimeout(initializeAdminDashboard, 100);
         });
 
         function loadDashboardData() {
@@ -187,14 +200,15 @@
             .then(data => {
                 let html = '';
                 if (data.length === 0) {
-                    html = '<tr><td colspan="4" class="text-center text-muted">No recent users</td></tr>';
+                    html = '<tr><td colspan="5" class="text-center text-muted">No recent users</td></tr>';
                 } else {
                     data.forEach(user => {
                         html += `
                             <tr>
                                 <td>${user.name}</td>
                                 <td>${user.email}</td>
-                                <td><span class="badge badge-primary">${user.role}</span></td>
+                                <td>${user.role}</td>
+                                <td>${user.status}</td>
                                 <td>${new Date(user.created_at).toLocaleDateString()}</td>
                             </tr>
                         `;
@@ -204,7 +218,7 @@
             })
             .catch(error => {
                 console.error('Error loading recent users:', error);
-                $('#recent-users').html('<tr><td colspan="4" class="text-center text-danger">Error loading data</td></tr>');
+                $('#recent-users').html('<tr><td colspan="5" class="text-center text-danger">Error loading data</td></tr>');
             });
 
             // Load recent products
@@ -221,14 +235,12 @@
                     html = '<tr><td colspan="4" class="text-center text-muted">No recent products</td></tr>';
                 } else {
                     data.forEach(product => {
-                        const statusClass = product.is_approved ? 'badge-success' : 'badge-warning';
-                        const statusText = product.is_approved ? 'Approved' : 'Pending';
                         html += `
                             <tr>
                                 <td>${product.title}</td>
                                 <td>${product.provider_name}</td>
                                 <td>$${parseFloat(product.price).toFixed(2)}</td>
-                                <td><span class="badge ${statusClass}">${statusText}</span></td>
+                                <td>${product.status}</td>
                             </tr>
                         `;
                     });
@@ -241,5 +253,4 @@
             });
         }
     </script>
-    @endpush
 </x-app-layout>

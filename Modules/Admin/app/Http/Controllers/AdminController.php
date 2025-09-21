@@ -176,21 +176,31 @@ class AdminController extends Controller
     {
         $query = User::with('roles');
         return $dataTables->eloquent($query)
-            ->addColumn('role', fn($row) => $row->roles->pluck('name')->implode(', '))
+            ->addColumn('role', function($row){
+                $badges = $row->roles->map(function($role){
+                    $map = [
+                        'admin' => 'primary',
+                        'provider' => 'warning',
+                        'user' => 'secondary',
+                        'customer' => 'info'
+                    ];
+                    $variant = $map[strtolower($role->name)] ?? 'secondary';
+                    return '<span class="badge bg-' . $variant . '">' . ucfirst($role->name) . '</span>';
+                });
+                return $badges->implode(' ');
+            })
             ->addColumn('actions', function($row){
                 $btns = '<div class="btn-group" role="group">';
                 $btns .= '<button class="btn btn-sm btn-outline-primary edit-user" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#userModal" onclick="openUserModal('.$row->id.')">';
                 $btns .= '<i class="fas fa-edit"></i> Edit</button>';
-                
                 if (!$row->hasRole('admin')) {
-                    $btns .= '<button class="btn btn-sm btn-outline-danger delete-user" data-id="'.$row->id.'" onclick="deleteUser('.$row->id.')">';
+                    $btns .= '<button class="btn btn-sm btn-outline-danger delete-user js-delete" data-id="'.$row->id.'" data-delete-url="'.route('admin.users.destroy', $row->id).'">';
                     $btns .= '<i class="fas fa-trash"></i> Delete</button>';
                 }
-                
                 $btns .= '</div>';
                 return $btns;
             })
-            ->rawColumns(['actions'])
+            ->rawColumns(['actions','role'])
             ->toJson();
     }
 

@@ -33,11 +33,22 @@ class AdminDashboardController extends Controller
             ->limit(5)
             ->get()
             ->map(function($user) {
+                $role = $user->roles->first();
+                $roleName = $role ? $role->name : 'user';
+                $roleClass = match(strtolower($roleName)) {
+                    'admin' => 'primary',
+                    'provider' => 'warning',
+                    'user' => 'secondary',
+                    'customer' => 'info',
+                    default => 'secondary'
+                };
+                
                 return [
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'role' => $user->roles->first()->name ?? 'user',
+                    'role' => '<span class="badge bg-' . $roleClass . '">' . ucfirst($roleName) . '</span>',
+                    'status' => '<span class="badge bg-success">Active</span>',
                     'created_at' => $user->created_at,
                 ];
             });
@@ -54,12 +65,16 @@ class AdminDashboardController extends Controller
             ->limit(5)
             ->get()
             ->map(function($product) {
+                $statusClass = $product->is_approved ? 'success' : 'warning';
+                $statusText = $product->is_approved ? 'Approved' : 'Pending';
+                
                 return [
                     'id' => $product->id,
                     'title' => $product->title,
                     'price' => $product->price,
                     'is_approved' => $product->is_approved,
                     'provider_name' => $product->provider->name ?? 'Unknown',
+                    'status' => '<span class="badge bg-' . $statusClass . '">' . $statusText . '</span>',
                     'created_at' => $product->created_at,
                 ];
             });

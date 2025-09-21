@@ -72,7 +72,6 @@
         </div>
     </div>
 
-    @push('scripts')
     <script>
         // DataTable is now initialized globally - no need for individual initialization
         
@@ -98,6 +97,12 @@
                 .then(data => {
                     $('#name').val(data.name);
                     $('#parent_id').val(data.parent_id || '');
+                    
+                    // Trigger validation after prefilling
+                    setTimeout(() => {
+                        // Trigger input events to update validation state
+                        $('#name, #parent_id').trigger('input');
+                    }, 100);
                 })
                 .catch(error => {
                     console.error('Error loading category:', error);
@@ -244,7 +249,6 @@
             $('#name, #parent_id').on('input change', validateCategoryForm);
         });
     </script>
-    @endpush
 </x-app-layout>
 
 

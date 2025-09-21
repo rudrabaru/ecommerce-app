@@ -223,13 +223,17 @@ class ProductsController extends Controller
         }
         return $dataTables->eloquent($query)
             ->addColumn('category', fn($row) => optional($row->category)->name)
-            ->addColumn('status', fn($row) => $row->is_approved ? 'Approved' : 'Pending')
+            ->addColumn('status', function($row){
+                return $row->is_approved
+                    ? '<span class="badge bg-success">Approved</span>'
+                    : '<span class="badge bg-warning text-dark">Pending</span>';
+            })
             ->addColumn('actions', function($row){
                 $isAdmin = Auth::user()->hasRole('admin');
                 $btns = '<div class="btn-group" role="group">';
                 $btns .= '<button class="btn btn-sm btn-outline-primary edit-product" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#productModal" onclick="openProductModal('.$row->id.')">';
                 $btns .= '<i class="fas fa-edit"></i> Edit</button>';
-                $btns .= '<button class="btn btn-sm btn-outline-danger delete-product" data-id="'.$row->id.'" onclick="deleteProduct('.$row->id.')">';
+                $btns .= '<button class="btn btn-sm btn-outline-danger delete-product js-delete" data-id="'.$row->id.'" data-delete-url="'.(Auth::user()->hasRole('admin') ? route('admin.products.destroy', $row->id) : route('provider.products.destroy', $row->id)).'">';
                 $btns .= '<i class="fas fa-trash"></i> Delete</button>';
                 if ($isAdmin) {
                     $approve = route('admin.products.approve', $row->id);
@@ -245,7 +249,7 @@ class ProductsController extends Controller
                 $btns .= '</div>';
                 return $btns;
             })
-            ->rawColumns(['actions'])
+            ->rawColumns(['actions','status'])
             ->toJson();
     }
 }

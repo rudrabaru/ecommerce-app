@@ -16,7 +16,12 @@ use Modules\Admin\Http\Controllers\AdminProfileController;
 */
 
 Route::middleware(['web','auth','ensure_role:admin'])->group(function () {
-    Route::get('/admin/dashboard', fn () => view('admin::dashboard'))->name('admin.dashboard');
+    Route::get('/admin/dashboard', function () {
+        if (request()->ajax()) {
+            return view('admin::dashboard');
+        }
+        return view('admin::dashboard');
+    })->name('admin.dashboard');
     Route::get('/admin/profile', [AdminProfileController::class, 'edit'])->name('admin.profile');
     
     // Dashboard data endpoints

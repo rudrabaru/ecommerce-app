@@ -67,11 +67,15 @@ class ProviderDashboardController extends Controller
             ->limit(5)
             ->get()
             ->map(function($product) {
+                $statusClass = $product->is_approved ? 'success' : 'warning';
+                $statusText = $product->is_approved ? 'Approved' : 'Pending';
+                
                 return [
                     'id' => $product->id,
                     'title' => $product->title,
                     'stock' => $product->stock,
                     'is_approved' => $product->is_approved,
+                    'status' => '<span class="badge bg-' . $statusClass . '">' . $statusText . '</span>',
                     'created_at' => $product->created_at,
                 ];
             });

@@ -118,7 +118,6 @@
         </div>
     </div>
 
-    @push('scripts')
     <script>
         // DataTable is now initialized globally - no need for individual initialization
         
@@ -154,6 +153,13 @@
                         $('#imagePreview').attr('src', `/storage/${data.image}`);
                         $('#currentImage').show();
                     }
+                    
+                    // Trigger validation after prefilling
+                    setTimeout(() => {
+                        validateProductForm();
+                        // Trigger input events to update validation state
+                        $('#title, #description, #price, #stock, #category_id').trigger('input');
+                    }, 100);
                 })
                 .catch(error => {
                     console.error('Error loading product:', error);
@@ -322,5 +328,4 @@
             deleteProduct(productId);
         });
     </script>
-    @endpush
 </x-app-layout>

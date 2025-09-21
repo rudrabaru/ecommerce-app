@@ -12,17 +12,38 @@
         <div class="card">
             <div class="card-body">
                 <div class="table-responsive">
-                    <table id="users-table" class="table table-hover" width="100%">
-                        <thead class="table-light">
-                            <tr>
-                                <th>ID</th>
-                                <th>Name</th>
-                                <th>Email</th>
-                                <th>Role</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
+                    <table id="users-table" class="table table-hover" width="100%"
+                        data-dt-url="{{ route('admin.users.data') }}"
+                        data-dt-page-length="25"
+                        data-dt-order='[[0, "desc"]]'>
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
                     </table>
+                    <script>
+                    $(function () {
+                        $('#users-table').DataTable({
+                            processing: true,
+                            serverSide: true,
+                            ajax: $('#users-table').data('dt-url'),
+                            pageLength: $('#users-table').data('dt-page-length'),
+                            order: JSON.parse($('#users-table').attr('data-dt-order')),
+                            columns: [
+                                { data: "id", name: "id", width: "60px" },
+                                { data: "name", name: "name" },
+                                { data: "email", name: "email" },
+                                { data: "role", name: "role", orderable: false, searchable: false },
+                                { data: "actions", name: "actions", orderable: false, searchable: false }
+                            ]
+                        });
+                    });
+                    </script>
                 </div>
             </div>
         </div>
@@ -84,7 +105,6 @@
         </div>
     </div>
 
-    @push('scripts')
     <script>
         // DataTable is now initialized globally - no need for individual initialization
         
@@ -114,7 +134,12 @@
                     $('#name').val(data.user.name);
                     $('#email').val(data.user.email);
                     $('#role').val(data.user.roles[0]?.name || '');
-                    validateForm();
+                    // Trigger validation after prefilling
+                    setTimeout(() => {
+                        validateForm();
+                        // Trigger input events to update validation state
+                        $('#name, #email, #role').trigger('input');
+                    }, 100);
                 })
                 .catch(error => {
                     console.error('Error loading user:', error);
@@ -267,7 +292,6 @@
             deleteUser(userId);
         });
     </script>
-    @endpush
 </x-app-layout>
 
 

@@ -197,6 +197,25 @@
                         if (next) {
                             content.innerHTML = next.innerHTML;
                             updateActiveSidebarLinks(url);
+
+                            // Execute inline scripts inside new content
+                            (function executeScripts(container){
+                                const scripts = Array.from(container.querySelectorAll('script'));
+                                scripts.forEach(oldScript => {
+                                    const s = document.createElement('script');
+                                    for (const attr of oldScript.attributes) s.setAttribute(attr.name, attr.value);
+                                    if (oldScript.src) s.src = oldScript.src; else s.textContent = oldScript.textContent;
+                                    oldScript.parentNode.replaceChild(s, oldScript);
+                                });
+                            })(content);
+                            
+                            // Execute scripts from @push('scripts') stack
+                            const pushScripts = tmp.querySelectorAll('script[data-push="scripts"]');
+                            pushScripts.forEach(script => {
+                                const s = document.createElement('script');
+                                s.textContent = script.textContent;
+                                document.head.appendChild(s);
+                            });
                             
                             // Update page title if available
                             const newTitle = tmp.querySelector('title');
@@ -206,6 +225,26 @@
                             
                             // Trigger custom event for other scripts
                             window.dispatchEvent(new CustomEvent('ajaxPageLoaded', { detail: { url } }));
+                            
+                            // Re-initialize global components
+                            setTimeout(() => {
+                                // Re-scan and wire forms
+                                document.querySelectorAll('.modal form').forEach(wireForm);
+                                
+                                // Re-initialize tooltips
+                                if (window.bootstrap && bootstrap.Tooltip) {
+                                    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+                                        new bootstrap.Tooltip(el);
+                                    });
+                                }
+                                
+                                // Re-initialize popovers
+                                if (window.bootstrap && bootstrap.Popover) {
+                                    document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
+                                        new bootstrap.Popover(el);
+                                    });
+                                }
+                            }, 200);
                         } else {
                             window.location.href = url;
                         }
@@ -475,6 +514,11 @@
                     setTimeout(function() {
                         destroyAllDataTables();
                         initializeDataTables();
+                        
+                        // Re-initialize any page-specific functionality
+                        if (typeof window.initializePageSpecific === 'function') {
+                            window.initializePageSpecific();
+                        }
                     }, 100);
                 });
                 
@@ -482,6 +526,107 @@
                 $(document).ready(function() {
                     initializeDataTables();
                 });
+            })();
+        </script>
+        
+        <script>
+            // Global delegated delete handler and generic modal validation
+            (function(){
+                function reloadAllTables(){
+                    document.querySelectorAll('#app-content table').forEach(t => {
+                        try { if ($.fn.dataTable.isDataTable(t)) { $(t).DataTable().ajax.reload(null, false); } } catch(e) {}
+                    });
+                }
+                document.addEventListener('click', function(e){
+                    const btn = e.target.closest('[data-delete-url], .js-delete');
+                    if (!btn) return;
+                    const url = btn.getAttribute('data-delete-url') || btn.getAttribute('href');
+                    if (!url) return;
+                    e.preventDefault();
+                    const confirmFn = window.Swal ?
+                        () => Swal.fire({ title: 'Are you sure?', text: 'This action cannot be undone.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }) :
+                        () => Promise.resolve({ isConfirmed: window.confirm('Are you sure?') });
+                    confirmFn().then(res => {
+                        if (!res.isConfirmed) return;
+                        fetch(url, { method: 'DELETE', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content } })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data && data.success) {
+                                reloadAllTables();
+                                if (window.Swal) Swal.fire('Deleted', data.message || 'Deleted successfully', 'success'); else alert(data.message || 'Deleted successfully');
+                            } else {
+                                if (window.Swal) Swal.fire('Error', (data && data.message) || 'Delete failed', 'error'); else alert((data && data.message) || 'Delete failed');
+                            }
+                        })
+                        .catch(err => { console.error('Delete error:', err); if (window.Swal) Swal.fire('Error', 'Delete failed due to an error.', 'error'); else alert('Delete failed due to an error.'); });
+                    });
+                });
+
+                function wireForm(form){
+                    const submit = form.closest('.modal-content')?.querySelector('.modal-footer .btn.btn-primary') || form.querySelector('button[type="submit"].btn-primary') || form.querySelector('button.btn-primary');
+                    if (!submit) return;
+                    
+                    let hasAttemptedSubmit = false;
+                    
+                    function validate(showErrors = false){
+                        let valid = form.checkValidity();
+                        form.querySelectorAll('select[required]').forEach(sel => { if (!sel.value) valid = false; });
+                        submit.disabled = !valid;
+                        
+                        // Only show validation errors if we should show them
+                        if (showErrors || hasAttemptedSubmit) {
+                            form.querySelectorAll('input, textarea, select').forEach(el => {
+                                if (el.willValidate) {
+                                    if (!el.checkValidity()) {
+                                        el.classList.add('is-invalid');
+                                        const fb = el.parentElement.querySelector('.invalid-feedback');
+                                        if (fb && !fb.textContent) fb.textContent = el.validationMessage;
+                                    } else {
+                                        el.classList.remove('is-invalid');
+                                    }
+                                }
+                            });
+                        }
+                    }
+                    
+                    // Clear validation errors on input/change
+                    form.addEventListener('input', function(e) {
+                        if (e.target.classList.contains('is-invalid')) {
+                            e.target.classList.remove('is-invalid');
+                        }
+                        validate(false);
+                    });
+                    
+                    form.addEventListener('change', function(e) {
+                        if (e.target.classList.contains('is-invalid')) {
+                            e.target.classList.remove('is-invalid');
+                        }
+                        validate(false);
+                    });
+                    
+                    // Show validation errors on blur
+                    form.addEventListener('blur', function(e) {
+                        if (e.target.willValidate && hasAttemptedSubmit) {
+                            validate(true);
+                        }
+                    }, true);
+                    
+                    // Mark that user has attempted to submit
+                    form.addEventListener('submit', function(e) {
+                        hasAttemptedSubmit = true;
+                        validate(true);
+                        if (!form.checkValidity()) {
+                            e.preventDefault();
+                        }
+                    });
+                    
+                    // Initial validation without showing errors
+                    validate(false);
+                }
+                function scan(){ document.querySelectorAll('.modal form').forEach(wireForm); }
+                document.addEventListener('DOMContentLoaded', scan);
+                window.addEventListener('ajaxPageLoaded', function(){ setTimeout(scan, 50); });
+                document.addEventListener('shown.bs.modal', scan);
             })();
         </script>
     </body>

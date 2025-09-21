@@ -130,7 +130,7 @@ class CategoryController extends Controller
                 $btns = '<div class="btn-group" role="group">';
                 $btns .= '<button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#categoryModal" onclick="openCategoryModal('.$row->id.')">';
                 $btns .= '<i class="fas fa-edit"></i> Edit</button>';
-                $btns .= '<button class="btn btn-sm btn-outline-danger" onclick="deleteCategory('.$row->id.')">';
+                $btns .= '<button class="btn btn-sm btn-outline-danger js-delete" data-delete-url="'.route('admin.categories.destroy', $row->id).'">';
                 $btns .= '<i class="fas fa-trash"></i> Delete</button>';
                 $btns .= '</div>';
                 return $btns;
