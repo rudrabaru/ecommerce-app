@@ -273,7 +273,7 @@
                                                 @if($enableLivewire)
                                                     wire:click="$set('{{ $filter['id'] }}', '{{ $key }}'); $dispatch('resetPage')"
                                                 @else
-                                                    onclick="window.location.href = '{{ $filter['route'] }}?{{ $filter['id'] }}={{ $key }}';"
+                                                    onclick="window.location.href = `{{ $filter['route'] }}?{{ $filter['id'] }}={{ $key }}`;"
                                                 @endif
                                                 @click="open = false"
                                             >
@@ -335,7 +335,7 @@
                                             $sortKey = $header['sortBy'] ?? strtolower(str_replace(' ', '_', $header['title']));
                                             $nextDirection = ($sort === $sortKey && $direction === 'asc') ? 'desc' : 'asc';
                                         @endphp
-                                        onclick="window.location='{{ request()->fullUrlWithQuery(['sort' => $sortKey, 'direction' => $nextDirection]) }}'"
+                                        onclick="window.location=`{{ request()->fullUrlWithQuery(['sort' => $sortKey, 'direction' => $nextDirection]) }}`"
                                     @endif
                                     class="ml-1 focus:outline-none"
                                 >

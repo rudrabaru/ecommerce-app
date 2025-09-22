@@ -4,9 +4,11 @@ use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 
-Route::get('/', function () {
-    return view('welcome');
-})->name('home');
+Route::get('/', [\App\Http\Controllers\MainController::class, 'index'])->name('home');
+Route::get('/cart', [\App\Http\Controllers\MainController::class, 'cart'])->name('cart');
+Route::get('/checkout', [\App\Http\Controllers\MainController::class, 'checkout'])->name('checkout');
+Route::get('/shop', [\App\Http\Controllers\MainController::class, 'shop'])->name('shop');
+Route::get('/shop/{id}', [\App\Http\Controllers\MainController::class, 'singleProduct'])->name('shop.details');
 
 // Provide a common dashboard route for auth flows/tests; redirect by role
 Route::get('/dashboard', function () {
