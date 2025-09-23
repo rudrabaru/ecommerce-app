@@ -15,28 +15,54 @@ class MainController extends Controller
             ->where('is_approved', true)
             ->latest('id')
             ->take(10)
-            ->get(['id', 'title as name', 'slug', 'price', 'image']);
+            ->get(['id', 'title as name', 'price', 'image']);
 
         return view('index', compact('products'));
     }
 
     public function cart()
     {
-        return view('shopping-cart');
+        // For compatibility, redirect to the new cart page that renders session data
+        return redirect()->route('cart.index');
     }
 
     public function checkout()
     {
-        return view('checkout');
+        $cart = session('cart', []);
+        if (empty($cart)) {
+            return redirect()->route('shop')->with('status', 'Your cart is empty.');
+        }
+        $items = collect($cart)->values();
+        $subtotal = $items->reduce(fn($c,$i)=> $c + ($i['price'] * $i['quantity']), 0);
+        return view('checkout', compact('items','subtotal'));
     }
 
     public function shop()
     {
         // Paginated product grid
-        $products = Product::query()
-            ->where('is_approved', true)
-            ->latest('id')
-            ->paginate(12, ['id', 'title as name', 'slug', 'price', 'image']);
+        $query = Product::query()->where('is_approved', true);
+
+        if ($search = request('q')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+
+        if ($categoryId = request('category')) {
+            $query->where('category_id', $categoryId);
+        }
+
+        $sort = request('sort', 'latest');
+        if ($sort === 'price_asc') {
+            $query->orderBy('price', 'asc');
+        } elseif ($sort === 'price_desc') {
+            $query->orderBy('price', 'desc');
+        } else {
+            $query->latest('id');
+        }
+
+        $products = $query->paginate(12, ['id', 'title as name', 'price', 'image']);
 
         return view('shop', compact('products'));
     }

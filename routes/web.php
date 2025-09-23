@@ -8,8 +8,10 @@ Route::get('/', [\App\Http\Controllers\MainController::class, 'index'])->name('h
 Route::get('/cart', [\App\Http\Controllers\MainController::class, 'cart'])->name('cart');
 Route::get('/checkout', [\App\Http\Controllers\MainController::class, 'checkout'])->name('checkout');
 Route::get('/shopping-cart', [\App\Http\Controllers\MainController::class, 'cart'])->name('shopping.cart');
+Route::get('/cart', [\App\Http\Controllers\CartController::class, 'index'])->name('cart.index');
 Route::get('/shop', [\App\Http\Controllers\MainController::class, 'shop'])->name('shop');
 Route::get('/shop/{id}', [\App\Http\Controllers\MainController::class, 'singleProduct'])->name('shop.details');
+Route::post('/cart/add', [\App\Http\Controllers\CartController::class, 'add'])->name('cart.add');
 
 // Provide a common dashboard route for auth flows/tests; redirect by role
 Route::get('/dashboard', function () {

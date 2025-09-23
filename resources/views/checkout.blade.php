@@ -8,8 +8,8 @@
                     <div class="breadcrumb__text">
                         <h4>Check Out</h4>
                         <div class="breadcrumb__links">
-                            <a href="./index.html">Home</a>
-                            <a href="./shop.html">Shop</a>
+                            <a href="{{ route('home') }}">Home</a>
+                            <a href="{{ route('shop') }}">Shop</a>
                             <span>Check Out</span>
                         </div>
                     </div>
@@ -109,14 +109,13 @@
                                 <h4 class="order__title">Your order</h4>
                                 <div class="checkout__order__products">Product <span>Total</span></div>
                                 <ul class="checkout__total__products">
-                                    <li>01. Vanilla salted caramel <span>$ 300.0</span></li>
-                                    <li>02. German chocolate <span>$ 170.0</span></li>
-                                    <li>03. Sweet autumn <span>$ 170.0</span></li>
-                                    <li>04. Cluten free mini dozen <span>$ 110.0</span></li>
+                                    @foreach(($items ?? []) as $idx => $item)
+                                        <li>{{ str_pad($idx+1, 2, '0', STR_PAD_LEFT) }}. {{ $item['name'] }} <span>${{ number_format($item['price'] * $item['quantity'], 2) }}</span></li>
+                                    @endforeach
                                 </ul>
                                 <ul class="checkout__total__all">
-                                    <li>Subtotal <span>$750.99</span></li>
-                                    <li>Total <span>$750.99</span></li>
+                                    <li>Subtotal <span>${{ number_format(($subtotal ?? 0), 2) }}</span></li>
+                                    <li>Total <span>${{ number_format(($subtotal ?? 0), 2) }}</span></li>
                                 </ul>
                                 <div class="checkout__input__checkbox">
                                     <label for="acc-or">

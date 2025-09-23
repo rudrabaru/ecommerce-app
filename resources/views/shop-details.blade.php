@@ -18,25 +18,25 @@
                         <ul class="nav nav-tabs" role="tablist">
                             <li class="nav-item">
                                 <a class="nav-link active" data-toggle="tab" href="#tabs-1" role="tab">
-                                    <div class="product__thumb__pic set-bg" data-setbg="img/shop-details/thumb-1.png">
+                                    <div class="product__thumb__pic set-bg" data-setbg="{{ $product->image ? asset('storage/'.$product->image) : asset('img/shop-details/thumb-1.png') }}">
                                     </div>
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" data-toggle="tab" href="#tabs-2" role="tab">
-                                    <div class="product__thumb__pic set-bg" data-setbg="img/shop-details/thumb-2.png">
+                                    <div class="product__thumb__pic set-bg" data-setbg="{{ asset('img/shop-details/thumb-2.png') }}">
                                     </div>
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" data-toggle="tab" href="#tabs-3" role="tab">
-                                    <div class="product__thumb__pic set-bg" data-setbg="img/shop-details/thumb-3.png">
+                                    <div class="product__thumb__pic set-bg" data-setbg="{{ asset('img/shop-details/thumb-3.png') }}">
                                     </div>
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" data-toggle="tab" href="#tabs-4" role="tab">
-                                    <div class="product__thumb__pic set-bg" data-setbg="img/shop-details/thumb-4.png">
+                                    <div class="product__thumb__pic set-bg" data-setbg="{{ asset('img/shop-details/thumb-4.png') }}">
                                         <i class="fa fa-play"></i>
                                     </div>
                                 </a>
@@ -47,22 +47,22 @@
                         <div class="tab-content">
                             <div class="tab-pane active" id="tabs-1" role="tabpanel">
                                 <div class="product__details__pic__item">
-<img src="{{ $product->image ? asset('storage/'.$product->image) : asset('img/shop-details/product-big.png') }}" alt="">
+                                    <img src="{{ $product->image ? asset('storage/'.$product->image) : asset('img/shop-details/product-big.png') }}" alt="">
                                 </div>
                             </div>
                             <div class="tab-pane" id="tabs-2" role="tabpanel">
                                 <div class="product__details__pic__item">
-                                    <img src="img/shop-details/product-big-3.png" alt="">
+                                    <img src="{{ asset('img/shop-details/product-big-3.png') }}" alt="">
                                 </div>
                             </div>
                             <div class="tab-pane" id="tabs-3" role="tabpanel">
                                 <div class="product__details__pic__item">
-                                    <img src="img/shop-details/product-big.png" alt="">
+                                    <img src="{{ asset('img/shop-details/product-big.png') }}" alt="">
                                 </div>
                             </div>
                             <div class="tab-pane" id="tabs-4" role="tabpanel">
                                 <div class="product__details__pic__item">
-                                    <img src="img/shop-details/product-big-4.png" alt="">
+                                    <img src="{{ asset('img/shop-details/product-big-4.png') }}" alt="">
                                     <a href="https://www.youtube.com/watch?v=8PJ3_p7VqHw&list=RD8PJ3_p7VqHw&start_radio=1" class="video-popup"><i class="fa fa-play"></i></a>
                                 </div>
                             </div>
@@ -76,7 +76,7 @@
                 <div class="row d-flex justify-content-center">
                     <div class="col-lg-8">
                         <div class="product__details__text">
-<h4>{{ $product->title ?? $product->name ?? 'Product' }}</h4>
+                            <h4>{{ $product->title ?? $product->name ?? 'Product' }}</h4>
                             <div class="rating">
                                 <i class="fa fa-star"></i>
                                 <i class="fa fa-star"></i>
@@ -85,10 +85,8 @@
                                 <i class="fa fa-star-o"></i>
                                 <span> - 5 Reviews</span>
                             </div>
-<h3>${{ number_format((float)($product->price ?? 0), 2) }}</h3>
-                            <p>Coat with quilted lining and an adjustable hood. Featuring long sleeves with adjustable
-                                cuff tabs, adjustable asymmetric hem with elastic side tabs and a front zip fastening
-                            with placket.</p>
+                            <h3>${{ number_format((float)($product->price ?? 0), 2) }}</h3>
+                            <p>{{ $product->description ?? '' }}</p>
                             <div class="product__details__option">
                                 <div class="product__details__option__size">
                                     <span>Size:</span>
@@ -125,12 +123,16 @@
                                 </div>
                             </div>
                             <div class="product__details__cart__option">
-                                <div class="quantity">
-                                    <div class="pro-qty">
-                                        <input type="text" value="1">
+                                <form method="post" action="{{ route('cart.add') }}" class="d-flex align-items-center">
+                                    @csrf
+                                    <div class="quantity mr-2">
+                                        <div class="pro-qty">
+                                            <input type="text" name="quantity" value="1">
+                                        </div>
                                     </div>
-                                </div>
-                                <a href="#" class="primary-btn">add to cart</a>
+                                    <input type="hidden" name="product_id" value="{{ $product->id }}">
+                                    <button type="submit" class="primary-btn">add to cart</button>
+                                </form>
                             </div>
                             <div class="product__details__btns__option">
                                 <a href="#"><i class="fa fa-heart"></i> add to wishlist</a>
@@ -138,11 +140,11 @@
                             </div>
                             <div class="product__details__last__option">
                                 <h5><span>Guaranteed Safe Checkout</span></h5>
-                                <img src="img/shop-details/details-payment.png" alt="">
+                                <img src="{{ asset('img/shop-details/details-payment.png') }}" alt="">
                                 <ul>
-                                    <li><span>SKU:</span> 3812912</li>
-                                    <li><span>Categories:</span> Clothes</li>
-                                    <li><span>Tag:</span> Clothes, Skin, Body</li>
+                                    <li><span>SKU:</span> {{ $product->sku ?? $product->id }}</li>
+                                    <li><span>Categories:</span> {{ $product->category->name ?? '—' }}</li>
+                                    <li><span>Tag:</span> —</li>
                                 </ul>
                             </div>
                         </div>
@@ -439,16 +441,16 @@
     <!-- Search End -->
 
     <!-- Js Plugins -->
-    <script src="js/jquery-3.3.1.min.js"></script>
-    <script src="js/bootstrap.min.js"></script>
-    <script src="js/jquery.nice-select.min.js"></script>
-    <script src="js/jquery.nicescroll.min.js"></script>
-    <script src="js/jquery.magnific-popup.min.js"></script>
-    <script src="js/jquery.countdown.min.js"></script>
-    <script src="js/jquery.slicknav.js"></script>
-    <script src="js/mixitup.min.js"></script>
-    <script src="js/owl.carousel.min.js"></script>
-    <script src="js/main.js"></script>
+    <script src="{{ asset('js/jquery-3.3.1.min.js') }}"></script>
+    <script src="{{ asset('js/bootstrap.min.js') }}"></script>
+    <script src="{{ asset('js/jquery.nice-select.min.js') }}"></script>
+    <script src="{{ asset('js/jquery.nicescroll.min.js') }}"></script>
+    <script src="{{ asset('js/jquery.magnific-popup.min.js') }}"></script>
+    <script src="{{ asset('js/jquery.countdown.min.js') }}"></script>
+    <script src="{{ asset('js/jquery.slicknav.js') }}"></script>
+    <script src="{{ asset('js/mixitup.min.js') }}"></script>
+    <script src="{{ asset('js/owl.carousel.min.js') }}"></script>
+    <script src="{{ asset('js/main.js') }}"></script>
 </body>
 
 </html>
