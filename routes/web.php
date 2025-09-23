@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Auth;
 Route::get('/', [\App\Http\Controllers\MainController::class, 'index'])->name('home');
 Route::get('/cart', [\App\Http\Controllers\MainController::class, 'cart'])->name('cart');
 Route::get('/checkout', [\App\Http\Controllers\MainController::class, 'checkout'])->name('checkout');
+Route::get('/shopping-cart', [\App\Http\Controllers\MainController::class, 'cart'])->name('shopping.cart');
 Route::get('/shop', [\App\Http\Controllers\MainController::class, 'shop'])->name('shop');
 Route::get('/shop/{id}', [\App\Http\Controllers\MainController::class, 'singleProduct'])->name('shop.details');
 
