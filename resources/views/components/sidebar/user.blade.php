@@ -1,8 +1,8 @@
 {{-- User/Customer Sidebar Component --}}
 <ul class="nav flex-column">
     <li class="nav-item">
-        <a class="nav-link js-ajax-link {{ request()->routeIs('user.dashboard') ? 'active' : '' }}" 
-           href="{{ route('user.dashboard') }}">
+        <a class="nav-link js-ajax-link" 
+           href="{{ route('home') }}">
             <i class="fas fa-tachometer-alt me-2"></i>
             {{ __('Dashboard') }}
         </a>
@@ -36,8 +36,8 @@
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link js-ajax-link {{ request()->routeIs('user.profile.*') ? 'active' : '' }}" 
-           href="{{ route('user.profile') }}">
+        <a class="nav-link js-ajax-link" 
+           href="{{ route('profile.edit') }}">
             <i class="fas fa-user me-2"></i>
             {{ __('Profile') }}
         </a>

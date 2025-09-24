@@ -5,13 +5,15 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 
 Route::get('/', [\App\Http\Controllers\MainController::class, 'index'])->name('home');
-Route::get('/cart', [\App\Http\Controllers\MainController::class, 'cart'])->name('cart');
 Route::get('/checkout', [\App\Http\Controllers\MainController::class, 'checkout'])->name('checkout');
 Route::get('/shopping-cart', [\App\Http\Controllers\MainController::class, 'cart'])->name('shopping.cart');
 Route::get('/cart', [\App\Http\Controllers\CartController::class, 'index'])->name('cart.index');
 Route::get('/shop', [\App\Http\Controllers\MainController::class, 'shop'])->name('shop');
 Route::get('/shop/{id}', [\App\Http\Controllers\MainController::class, 'singleProduct'])->name('shop.details');
 Route::post('/cart/add', [\App\Http\Controllers\CartController::class, 'add'])->name('cart.add');
+Route::middleware('auth')->group(function () {
+    Route::post('/checkout', [\App\Http\Controllers\CheckoutController::class, 'store'])->name('checkout.store');
+});
 
 // Provide a common dashboard route for auth flows/tests; redirect by role
 Route::get('/dashboard', function () {
@@ -25,7 +27,7 @@ Route::get('/dashboard', function () {
     if ($user->hasRole('provider')) {
         return redirect()->route('provider.dashboard');
     }
-    return redirect()->route('user.dashboard');
+    return redirect()->route('home');
 })->name('dashboard');
 
 // Remove default Breeze dashboard in favor of role-based dashboards

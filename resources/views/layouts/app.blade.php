@@ -82,43 +82,24 @@
         </style>
     </head>
     <body>
+        @auth
         <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
             <div class="container-fluid">
                 <button class="btn btn-outline-light d-lg-none me-2" type="button" id="sidebarToggle" aria-label="Toggle sidebar">
                     <i class="fas fa-bars"></i>
                 </button>
                 <a class="navbar-brand d-lg-none" href="{{ route('home') }}">{{ config('app.name') }}</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#topNavbar" aria-controls="topNavbar" aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse justify-content-end" id="topNavbar">
-                    @auth
-                    <ul class="navbar-nav mb-2 mb-lg-0">
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                {{ Auth::user()->name }}
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                @php
-                                    $profileUrl = route('user.profile');
-                                    if (Auth::user()->hasRole('admin')) { $profileUrl = route('admin.profile'); }
-                                    elseif (Auth::user()->hasRole('provider')) { $profileUrl = route('provider.profile'); }
-                                @endphp
-                                <li><a class="dropdown-item" href="{{ $profileUrl }}">{{ __('Profile') }}</a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li>
-                                    <form method="POST" action="{{ route('logout') }}">
-                                        @csrf
-                                        <button type="submit" class="dropdown-item">{{ __('Log Out') }}</button>
-                                    </form>
-                                </li>
-                            </ul>
-                        </li>
-                    </ul>
-                    @endauth
+                <div class="collapse navbar-collapse" id="topNavbar">
+                    <div class="ms-auto d-flex align-items-center">
+                        <form method="POST" action="{{ route('logout') }}" class="mb-0">
+                            @csrf
+                            <button type="submit" class="btn btn-outline-light">{{ __('Log Out') }}</button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </nav>
+        @endauth
 
         <!-- Sidebar -->
         @include('components.sidebar.main')

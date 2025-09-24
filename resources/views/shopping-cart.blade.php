@@ -91,7 +91,7 @@
                             <li>Subtotal <span>${{ number_format(($subtotal ?? 0), 2) }}</span></li>
                             <li>Total <span>${{ number_format(($subtotal ?? 0), 2) }}</span></li>
                         </ul>
-                        <a href="{{ route('checkout') }}" class="primary-btn">Proceed to checkout</a>
+                        <a href="{{ auth()->check() ? route('checkout') : route('login') }}" class="primary-btn">Proceed to checkout</a>
                     </div>
                 </div>
             </div>

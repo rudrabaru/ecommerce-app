@@ -1,21 +1,14 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Modules\User\Http\Controllers\UserController;
-use Modules\User\Http\Controllers\UserProfileController;
 
 /*
 |--------------------------------------------------------------------------
-| Web Routes
+| Web Routes (User Module)
 |--------------------------------------------------------------------------
 |
-| Here is where you can register web routes for your application. These
-| routes are loaded by the RouteServiceProvider within a group which
-| contains the "web" middleware group. Now create something great!
+| Intentionally left without user dashboard or profile routes.
+| Public profile editing is handled by core routes in routes/web.php.
 |
 */
 
-Route::middleware(['web','auth','ensure_role:user'])->group(function () {
-    Route::get('/user/dashboard', fn () => view('user::dashboard'))->name('user.dashboard');
-    Route::get('/user/profile', [UserProfileController::class, 'edit'])->name('user.profile');
-});

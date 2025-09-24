@@ -25,7 +25,7 @@
                 <nav class="flex items-center justify-end gap-4">
                     @auth
                         @php
-                            $dashUrl = route('user.dashboard');
+                            $dashUrl = route('home');
                             if (Auth::user()->hasRole('admin')) { $dashUrl = route('admin.dashboard'); }
                             elseif (Auth::user()->hasRole('provider')) { $dashUrl = route('provider.dashboard'); }
                         @endphp

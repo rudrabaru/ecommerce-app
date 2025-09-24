@@ -30,72 +30,25 @@
         <div class="loader"></div>
     </div>
 
-    <!-- Offcanvas Menu Begin -->
-    <div class="offcanvas-menu-overlay"></div>
-    <div class="offcanvas-menu-wrapper">
-        <div class="offcanvas__option">
-            <div class="offcanvas__links">
-                @guest
-                    <a href="{{ route('login') }}">Sign in</a>
-                @else
-                    <a href="{{ route('dashboard') }}">Dashboard</a>
-                @endguest
-                <a href="#">FAQs</a>
-            </div>
-            <div class="offcanvas__top__hover">
-                <span>Usd <i class="arrow_carrot-down"></i></span>
-                <ul>
-                    <li>USD</li>
-                    <li>EUR</li>
-                    <li>USD</li>
-                </ul>
-            </div>
-        </div>
-        <div class="offcanvas__nav__option">
-            <a href="#" class="search-switch"><img src="{{ asset('img/icon/search.png') }}" alt=""></a>
-            <a href="#"><img src="{{ asset('img/icon/heart.png') }}" alt=""></a>
-            <a href="{{ route('shopping.cart') }}"><img src="{{ asset('img/icon/cart.png') }}" alt=""> <span>0</span></a>
-            <div class="price">$0.00</div>
-        </div>
-        <div id="mobile-menu-wrap"></div>
-        <div class="offcanvas__text">
-            <p>Free shipping, 30-day return or refund guarantee.</p>
-        </div>
-    </div>
-    <!-- Offcanvas Menu End -->
-
-    <!-- Header Section Begin -->
-    <header class="header">
-        <div class="header__top">
-            <div class="container">
-                <div class="row">
-                    <div class="col-lg-6 col-md-7">
-                        <div class="header__top__left">
-                            <p>Free shipping, 30-day return or refund guarantee.</p>
-                        </div>
-                    </div>
-                    <div class="col-lg-6 col-md-5">
-                        <div class="header__top__right">
-                            <div class="header__top__links">
-                                @guest
-                                    <a href="{{ route('login') }}">Sign in</a>
-                                @else
-                                    <a href="{{ route('dashboard') }}">Dashboard</a>
-                                @endguest
-                            </div>
-                            <div class="header__top__hover">
-                                <span>Usd <i class="arrow_carrot-down"></i></span>
-                                <ul>
-                                    <li>USD</li>
-                                    <li>EUR</li>
-                                    <li>USD</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
+    @auth
+    <!-- Auth Topbar (Black) Begin -->
+    <div class="bg-dark text-white">
+        <div class="container">
+            <div class="row">
+                <div class="col-12 d-flex justify-content-end py-2">
+                    <form method="POST" action="{{ route('logout') }}" class="mb-0">
+                        @csrf
+                        <button type="submit" class="btn btn-light btn-sm">{{ __('Log Out') }}</button>
+                    </form>
                 </div>
             </div>
         </div>
+    </div>
+    <!-- Auth Topbar (Black) End -->
+    @endauth
+
+    <!-- Header Section (White) Begin -->
+    <header class="header">
         <div class="container">
             <div class="row">
                 <div class="col-lg-3 col-md-3">
@@ -118,33 +71,18 @@
                                 </ul>
                             </li>
                             @if (Route::has('login'))
-                                @auth
-                                    <li>
-                                        <a href="{{ route('dashboard') }}">My Dashboard</a>
-                                    </li>
-                                @else
+                                @guest
                                     <li><a href="{{ route('login') }}">Log in</a></li>
                                     @if (Route::has('register'))
                                         <li><a href="{{ route('register') }}">Register</a></li>
                                     @endif
-                                @endauth
+                                @endguest
                             @endif
                         </ul>
                     </nav>
-                </div>
-                <div class="col-lg-3 col-md-3">
-                    <div class="header__nav__option">
-                        <a href="#" class="search-switch"><img src="{{ asset('img/icon/search.png') }}" alt=""></a>
-                        <a href="#"><img src="{{ asset('img/icon/heart.png') }}" alt=""></a>
-                        @php($cart = session('cart', []))
-                        @php($cartCount = collect($cart)->sum('quantity'))
-                        @php($cartTotal = collect($cart)->reduce(fn($c,$i)=>$c + ($i['price']*$i['quantity']), 0))
-                        <a href="{{ route('shopping.cart') }}"><img src="{{ asset('img/icon/cart.png') }}" alt=""> <span>{{ $cartCount }}</span></a>
-                        <div class="price">${{ number_format($cartTotal, 2) }}</div>
-                    </div>
                 </div>
             </div>
             <div class="canvas__open"><i class="fa fa-bars"></i></div>
         </div>
     </header>
-    <!-- Header Section End -->
+    <!-- Header Section (White) End -->
