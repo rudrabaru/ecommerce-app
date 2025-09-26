@@ -208,7 +208,7 @@ function uploadFiles() {
     .then(data => {
         if (data.success) {
             if (window.showToast) {
-                window.showToast('success', '{{ __('Success') }}', data.message);
+                window.showToast('success', "{{ __('Success') }}", data.message);
             }
             location.reload();
         } else {

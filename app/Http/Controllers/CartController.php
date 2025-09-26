@@ -44,7 +44,62 @@ class CartController extends Controller
 
         session()->put('cart', $cart);
 
+        if ($request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Added to cart',
+                'cart_count' => collect($cart)->sum('quantity')
+            ]);
+        }
+
         return Redirect::back()->with('status', 'Added to cart');
+    }
+
+    public function update(Request $request, $productId)
+    {
+        $validated = $request->validate([
+            'quantity' => ['required', 'integer', 'min:1']
+        ]);
+
+        $cart = session('cart', []);
+        
+        if (isset($cart[$productId])) {
+            $cart[$productId]['quantity'] = $validated['quantity'];
+            session()->put('cart', $cart);
+        }
+
+        if ($request->ajax()) {
+            return response()->json(['success' => true]);
+        }
+
+        return redirect()->back();
+    }
+
+    public function remove($productId)
+    {
+        $cart = session('cart', []);
+        
+        if (isset($cart[$productId])) {
+            unset($cart[$productId]);
+            session()->put('cart', $cart);
+        }
+
+        if (request()->ajax()) {
+            return response()->json(['success' => true]);
+        }
+
+        return redirect()->back();
+    }
+
+    public function clear()
+    {
+        session()->forget('cart');
+        
+        if (request()->ajax()) {
+            return response()->json(['success' => true]);
+        }
+
+        return redirect()->back();
     }
 }
 

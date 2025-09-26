@@ -22,20 +22,6 @@
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link js-ajax-link {{ request()->routeIs('provider.inventory.*') ? 'active' : '' }}" 
-           href="{{ Route::has('provider.inventory.index') ? route('provider.inventory.index') : '#' }}">
-            <i class="fas fa-warehouse me-2"></i>
-            {{ __('Inventory') }}
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link js-ajax-link {{ request()->routeIs('provider.analytics.*') ? 'active' : '' }}" 
-           href="{{ Route::has('provider.analytics.index') ? route('provider.analytics.index') : '#' }}">
-            <i class="fas fa-chart-line me-2"></i>
-            {{ __('Analytics') }}
-        </a>
-    </li>
-    <li class="nav-item">
         <a class="nav-link js-ajax-link {{ request()->routeIs('provider.payments.*') ? 'active' : '' }}" 
            href="{{ Route::has('provider.payments.index') ? route('provider.payments.index') : '#' }}">
             <i class="fas fa-credit-card me-2"></i>

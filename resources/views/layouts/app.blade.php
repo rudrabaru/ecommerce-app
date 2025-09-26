@@ -398,6 +398,8 @@
                                 { data: 'id', name: 'id', width: '60px' },
                                 { data: 'name', name: 'name' },
                                 { data: 'parent', name: 'parent.name' },
+                                { data: 'image', name: 'image', orderable: false, searchable: false, width: '70px' },
+                                { data: 'description', name: 'description', width: '30%' },
                                 { 
                                     data: 'products_count', 
                                     name: 'products_count',

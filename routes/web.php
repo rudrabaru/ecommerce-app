@@ -8,9 +8,18 @@ Route::get('/', [\App\Http\Controllers\MainController::class, 'index'])->name('h
 Route::get('/checkout', [\App\Http\Controllers\MainController::class, 'checkout'])->name('checkout');
 Route::get('/shopping-cart', [\App\Http\Controllers\MainController::class, 'cart'])->name('shopping.cart');
 Route::get('/cart', [\App\Http\Controllers\CartController::class, 'index'])->name('cart.index');
-Route::get('/shop', [\App\Http\Controllers\MainController::class, 'shop'])->name('shop');
-Route::get('/shop/{id}', [\App\Http\Controllers\MainController::class, 'singleProduct'])->name('shop.details');
+Route::get('/shop', [\Modules\Products\Http\Controllers\StorefrontProductsController::class, 'shop'])->name('shop');
+Route::get('/shop/{id}', [\Modules\Products\Http\Controllers\StorefrontProductsController::class, 'show'])->name('shop.details');
+// Category browsing (reuse existing module CategoryController)
+Route::get('/categories', [\Modules\Products\Http\Controllers\StorefrontCategoryController::class, 'index'])->name('categories.index');
+Route::get('/categories/{id}', [\Modules\Products\Http\Controllers\StorefrontCategoryController::class, 'show'])->name('categories.show');
+// Friendly category routes
+// Removed duplicate/legacy category routes in favor of categories.show
 Route::post('/cart/add', [\App\Http\Controllers\CartController::class, 'add'])->name('cart.add');
+Route::patch('/cart/{productId}', [\App\Http\Controllers\CartController::class, 'update'])->name('cart.update');
+Route::delete('/cart/{productId}', [\App\Http\Controllers\CartController::class, 'remove'])->name('cart.remove');
+Route::delete('/cart', [\App\Http\Controllers\CartController::class, 'clear'])->name('cart.clear');
+Route::get('/search', [\Modules\Products\Http\Controllers\StorefrontProductsController::class, 'search'])->name('products.search');
 Route::middleware('auth')->group(function () {
     Route::post('/checkout', [\App\Http\Controllers\CheckoutController::class, 'store'])->name('checkout.store');
 });
@@ -40,10 +49,7 @@ Route::middleware('auth')->group(function () {
 
 require __DIR__.'/auth.php';
 
-// Load modular routes if present
-foreach (glob(base_path('Modules/*/Routes/web.php')) as $moduleRoutes) {
-    require $moduleRoutes;
-}
+// Note: Module routes are loaded by their own service providers; no manual glob include here
 
 // OTP verification routes
 Route::middleware('auth')->group(function () {

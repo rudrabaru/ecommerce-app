@@ -18,6 +18,8 @@
                                 <th>ID</th>
                                 <th>Name</th>
                                 <th>Parent</th>
+                                <th>Image</th>
+                                <th>Description</th>
                                 <th>Products</th>
                                 <th>Actions</th>
                             </tr>
@@ -37,7 +39,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form id="categoryForm">
+                    <form id="categoryForm" enctype="multipart/form-data">
                         @csrf
                         <input type="hidden" id="categoryId" name="category_id">
                         <input type="hidden" name="_method" id="categoryMethod" value="POST">
@@ -59,11 +61,24 @@
                             <div class="invalid-feedback"></div>
                             <div class="form-text">Leave blank to create a root category</div>
                         </div>
+
+                        <div class="mb-3">
+                            <label for="image" class="form-label">Image <span class="text-danger">*</span></label>
+                            <input type="file" class="form-control" id="image" name="image" accept="image/*" required>
+                            <div class="invalid-feedback"></div>
+                            <img src="" id="imagePreview" class="img-thumbnail mt-2 d-none" style="max-height: 120px;" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description <span class="text-danger">*</span></label>
+                            <textarea class="form-control" id="description" name="description" rows="3" required></textarea>
+                            <div class="invalid-feedback"></div>
+                        </div>
                     </form>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="saveCategory()">
+                    <button type="button" class="btn btn-primary" id="saveCategoryBtn" onclick="saveCategory()" disabled>
                         <span class="spinner-border spinner-border-sm d-none" id="categorySaveSpinner" role="status" aria-hidden="true"></span>
                         Save Category
                     </button>
@@ -97,6 +112,12 @@
                 .then(data => {
                     $('#name').val(data.name);
                     $('#parent_id').val(data.parent_id || '');
+                    if (data.image) {
+                        $('#imagePreview').attr('src', data.image.startsWith('http') ? data.image : ('/storage/' + data.image)).removeClass('d-none');
+                    } else {
+                        $('#imagePreview').addClass('d-none');
+                    }
+                    $('#description').val(data.description || '');
                     
                     // Trigger validation after prefilling
                     setTimeout(() => {
@@ -232,21 +253,23 @@
         // Form validation for Categories
         function validateCategoryForm() {
             const name = $('#name').val().trim();
-            const parentId = $('#parent_id').val();
-            
-            let isValid = name !== '';
-            
-            // Parent ID validation (if provided, must be valid)
-            if (parentId && parentId !== '') {
-                // Additional validation can be added here if needed
-            }
-            
-            $('#categorySaveSpinner').parent().prop('disabled', !isValid);
+            const desc = $('#description').val().trim();
+            const imageOk = $('#categoryId').val() ? true : ($('#image').get(0).files.length > 0);
+            const isValid = name !== '' && desc !== '' && imageOk;
+            $('#saveCategoryBtn').prop('disabled', !isValid);
         }
         
         // Add event listeners for form validation
         $(document).ready(function() {
-            $('#name, #parent_id').on('input change', validateCategoryForm);
+            $('#name, #parent_id, #image, #description').on('input change', validateCategoryForm);
+            $('#image').on('change', function(){
+                const file = this.files[0];
+                if (file) {
+                    const url = URL.createObjectURL(file);
+                    $('#imagePreview').attr('src', url).removeClass('d-none');
+                }
+                validateCategoryForm();
+            });
         });
     </script>
 </x-app-layout>

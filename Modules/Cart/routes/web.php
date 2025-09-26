@@ -14,6 +14,8 @@ use Modules\Cart\Http\Controllers\CartController;
 |
 */
 
-Route::group([], function () {
-    Route::resource('cart', CartController::class)->names('cart');
-});
+// Disabled to avoid conflicts with core session cart in app/Http/Controllers/CartController
+// If needed later, scope under provider/admin prefixes with proper middleware
+// Route::middleware(['web','auth','ensure_role:provider'])->prefix('provider')->as('provider.')->group(function () {
+//     Route::resource('cart', CartController::class)->names('cart');
+// });

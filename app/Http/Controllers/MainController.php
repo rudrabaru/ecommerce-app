@@ -37,43 +37,5 @@ class MainController extends Controller
         return view('checkout', compact('items','subtotal'));
     }
 
-    public function shop()
-    {
-        // Paginated product grid
-        $query = Product::query()->where('is_approved', true);
-
-        if ($search = request('q')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
-            });
-        }
-
-        if ($categoryId = request('category')) {
-            $query->where('category_id', $categoryId);
-        }
-
-        $sort = request('sort', 'latest');
-        if ($sort === 'price_asc') {
-            $query->orderBy('price', 'asc');
-        } elseif ($sort === 'price_desc') {
-            $query->orderBy('price', 'desc');
-        } else {
-            $query->latest('id');
-        }
-
-        $products = $query->paginate(12, ['id', 'title as name', 'price', 'image']);
-
-        return view('shop', compact('products'));
-    }
-
-    public function singleProduct($idOrSlug)
-    {
-        // Resolve by ID or slug to be flexible
-        $product = is_numeric($idOrSlug)
-            ? Product::query()->where('is_approved', true)->findOrFail($idOrSlug)
-            : Product::query()->where('is_approved', true)->where('slug', $idOrSlug)->firstOrFail();
-
-        return view('shop-details', compact('product'));
-    }
+    // Storefront routes are served by Modules\Products\Http\Controllers\StorefrontProductsController
 }

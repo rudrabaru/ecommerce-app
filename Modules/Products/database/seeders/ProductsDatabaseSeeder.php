@@ -3,7 +3,7 @@
 namespace Modules\Products\Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Modules\Products\App\Models\Category;
+use Modules\Products\Models\Category;
 
 class ProductsDatabaseSeeder extends Seeder
 {
@@ -17,5 +17,7 @@ class ProductsDatabaseSeeder extends Seeder
             Category::create(['name' => 'Clothing']);
             Category::create(['name' => 'Books']);
         }
+
+        $this->call(DemoProductsSeeder::class);
     }
 }

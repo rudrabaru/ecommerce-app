@@ -61,15 +61,7 @@
                         <ul>
                             <li class="{{ request()->routeIs('home') ? 'active' : '' }}"><a href="{{ route('home') }}">Home</a></li>
                             <li class="{{ request()->routeIs('shop*') ? 'active' : '' }}"><a href="{{ route('shop') }}">Shop</a></li>
-                            <li class="{{ request()->fullUrlIs(url('/?categories')) ? 'active' : '' }}"><a href="#">Categories</a>
-                                <ul class="dropdown">
-                                    @isset($headerCategories)
-                                        @foreach($headerCategories as $category)
-                                            <li><a href="{{ route('shop', ['category' => $category->id]) }}">{{ $category->name }}</a></li>
-                                        @endforeach
-                                    @endisset
-                                </ul>
-                            </li>
+                            <li class="{{ request()->routeIs('categories.*') ? 'active' : '' }}"><a href="{{ route('categories.index') }}">Categories</a></li>
                             @if (Route::has('login'))
                                 @guest
                                     <li><a href="{{ route('login') }}">Log in</a></li>

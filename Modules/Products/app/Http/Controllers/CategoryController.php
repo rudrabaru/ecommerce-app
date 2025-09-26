@@ -5,7 +5,9 @@ namespace Modules\Products\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Modules\Products\Models\Category;
+use Modules\Products\Models\Product;
 use Yajra\DataTables\DataTables;
 
 class CategoryController extends Controller
@@ -30,7 +32,9 @@ class CategoryController extends Controller
         try {
             $data = $request->validate([
                 'name' => ['required', 'string', 'max:255'],
-                'parent_id' => ['nullable', 'exists:categories,id']
+                'parent_id' => ['nullable', 'exists:categories,id'],
+                'image' => ['required', 'image'],
+                'description' => ['required', 'string']
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             if ($request->wantsJson() || $request->ajax()) {
@@ -43,6 +47,11 @@ class CategoryController extends Controller
             throw $e;
         }
         
+        if ($request->hasFile('image')) {
+            $path = $request->file('image')->store('categories', 'public');
+            $data['image'] = $path;
+        }
+
         Category::create($data);
         
         if ($request->wantsJson() || $request->ajax()) {
@@ -74,7 +83,9 @@ class CategoryController extends Controller
         try {
             $data = $request->validate([
                 'name' => ['required', 'string', 'max:255'],
-                'parent_id' => ['nullable', 'exists:categories,id']
+                'parent_id' => ['nullable', 'exists:categories,id'],
+                'image' => ['nullable', 'image'],
+                'description' => ['required', 'string']
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             if ($request->wantsJson() || $request->ajax()) {
@@ -87,6 +98,11 @@ class CategoryController extends Controller
             throw $e;
         }
         
+        if ($request->hasFile('image')) {
+            $path = $request->file('image')->store('categories', 'public');
+            $data['image'] = $path;
+        }
+
         $category->update($data);
         
         if ($request->wantsJson() || $request->ajax()) {
@@ -125,6 +141,12 @@ class CategoryController extends Controller
         $query = Category::with(['parent', 'products']);
         return $dataTables->eloquent($query)
             ->addColumn('parent', fn($row) => optional($row->parent)->name)
+            ->addColumn('image', function($row){
+                if (!$row->image) return '';
+                $src = str_starts_with($row->image, 'http') ? $row->image : asset('storage/' . $row->image);
+                return '<img src="'.$src.'" alt="'.$row->name.'" style="height:40px;width:40px;object-fit:cover;border-radius:4px;" />';
+            })
+            ->addColumn('description', fn($row) => e(Str::limit((string)$row->description, 80)))
             ->addColumn('products_count', fn($row) => $row->products->count())
             ->addColumn('actions', function($row){
                 $btns = '<div class="btn-group" role="group">';
@@ -135,9 +157,29 @@ class CategoryController extends Controller
                 $btns .= '</div>';
                 return $btns;
             })
-            ->rawColumns(['actions'])
+            ->rawColumns(['actions','image'])
             ->toJson();
     }
+
+    // Storefront: list all categories as cards
+    public function storefrontIndex()
+    {
+        $categories = Category::orderBy('name')->get(['id','name','image','description']);
+        return view('categories', compact('categories'));
+    }
+
+    // Storefront: show products of a category
+    public function storefrontShow($id)
+    {
+        $category = Category::findOrFail($id);
+        $products = Product::where('is_approved', true)
+            ->where('category_id', $category->id)
+            ->orderByDesc('id')
+            ->paginate(12, ['id','title','price','image']);
+        return view('category-products', compact('category', 'products'));
+    }
+
+    // Note: Admin resource uses index(). Storefront uses dedicated routes/methods above.
 }
 
 

@@ -14,6 +14,7 @@ use Modules\Payments\Http\Controllers\PaymentsController;
 |
 */
 
-Route::group([], function () {
-    Route::resource('payments', PaymentsController::class)->names('payments');
-});
+// Temporarily disabled to avoid exposing placeholder endpoints; gate behind auth when enabled
+// Route::middleware(['web','auth'])->group(function () {
+//     Route::resource('payments', PaymentsController::class)->names('payments');
+// });

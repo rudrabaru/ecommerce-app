@@ -365,7 +365,7 @@
                                                 onclick="copyToClipboard('{{ $item->url ?? asset('storage/media/' . $item->file_name) }}')"
                                                 title="{{ __('Copy URL') }}">
                                                 <iconify-icon icon="lucide:copy" class="text-sm"></iconify-icon>
-                                            </a>
+                                            </button>
                                             @if (auth()->user()->can('media.delete'))
                                                 <button
                                                     class="p-2 bg-red-500/90 backdrop-blur-sm rounded-md text-white hover:bg-red-500 transition-colors shadow-lg"
@@ -666,7 +666,7 @@
                 navigator.clipboard.writeText(text).then(() => {
                     // Show success message
                     if (window.showToast) {
-                        window.showToast('success', '{{ __('Success') }}', '{{ __('URL copied to clipboard') }}');
+                        window.showToast('success', "{{ __('Success') }}", "{{ __('URL copied to clipboard') }}");
                     }
                 });
             }

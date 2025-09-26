@@ -23,15 +23,17 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         View::composer('*', function ($view) {
-            $headerCategories = Category::query()
-                ->when(true, function ($q) {
-                    if (Schema::hasColumn('categories', 'is_active')) {
-                        $q->where('is_active', true);
-                    }
-                })
-                ->orderBy('name')
-                ->take(10)
-                ->get(['id', 'name']);
+            $headerCategories = collect();
+            if (Schema::hasTable('categories')) {
+                $query = Category::query();
+                if (Schema::hasColumn('categories', 'is_active')) {
+                    $query->where('is_active', true);
+                }
+                $headerCategories = $query
+                    ->orderBy('name')
+                    ->take(10)
+                    ->get(['id', 'name']);
+            }
 
             $view->with('headerCategories', $headerCategories);
         });

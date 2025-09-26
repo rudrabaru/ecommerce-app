@@ -19,24 +19,15 @@ class UsersWithRolesSeeder extends Seeder
 
         // Seed default users with credentials
         $defaults = [
-            [
-                'name' => 'Admin',
-                'email' => 'admin@example.com',
-                'password' => 'Admin@123',
-                'role' => 'admin',
-            ],
-            [
-                'name' => 'Provider',
-                'email' => 'provider@example.com',
-                'password' => 'Provider@123',
-                'role' => 'provider',
-            ],
-            [
-                'name' => 'User',
-                'email' => 'user@example.com',
-                'password' => 'User@123',
-                'role' => 'user',
-            ],
+            // 1 admin
+            [ 'name' => 'Admin', 'email' => 'admin@example.com', 'password' => 'Admin@123', 'role' => 'admin' ],
+            // 2 providers
+            [ 'name' => 'Provider One', 'email' => 'provider1@example.com', 'password' => 'Provider@123', 'role' => 'provider' ],
+            [ 'name' => 'Provider Two', 'email' => 'provider2@example.com', 'password' => 'Provider@123', 'role' => 'provider' ],
+            // 3 users
+            [ 'name' => 'User One', 'email' => 'user1@example.com', 'password' => 'User@123', 'role' => 'user' ],
+            [ 'name' => 'User Two', 'email' => 'user2@example.com', 'password' => 'User@123', 'role' => 'user' ],
+            [ 'name' => 'User Three', 'email' => 'user3@example.com', 'password' => 'User@123', 'role' => 'user' ],
         ];
 
         foreach ($defaults as $d) {

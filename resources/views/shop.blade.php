@@ -25,8 +25,8 @@
                 <div class="col-lg-3">
                     <div class="shop__sidebar">
                         <div class="shop__sidebar__search">
-                            <form action="#">
-                                <input type="text" placeholder="Search...">
+                            <form action="{{ route('shop') }}" method="GET">
+                                <input type="text" name="q" placeholder="Search..." value="{{ request('q') }}">
                                 <button type="submit"><span class="icon_search"></span></button>
                             </form>
                         </div>
@@ -40,28 +40,12 @@
                                         <div class="card-body">
                                             <div class="shop__sidebar__categories">
                                                 <ul class="nice-scroll">
-                                                    @isset($headerCategories)
-                                                        @foreach($headerCategories as $category)
-                                                            <li><a href="{{ route('shop', ['category' => $category->id]) }}">{{ $category->name }}</a></li>
+                                                    <li><a href="{{ route('shop') }}" class="{{ !request('category') ? 'active' : '' }}">All Categories</a></li>
+                                                    @isset($categories)
+                                                        @foreach($categories as $category)
+                                                            <li><a href="{{ route('shop', array_merge(request()->query(), ['category' => $category->id])) }}" class="{{ request('category') == $category->id ? 'active' : '' }}">{{ $category->name }}</a></li>
                                                         @endforeach
                                                     @endisset
-                                                </ul>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="card">
-                                    <div class="card-heading">
-                                        <a data-toggle="collapse" data-target="#collapseTwo">Branding</a>
-                                    </div>
-                                    <div id="collapseTwo" class="collapse show" data-parent="#accordionExample">
-                                        <div class="card-body">
-                                            <div class="shop__sidebar__brand">
-                                                <ul>
-                                                    <li><a href="#">Louis Vuitton</a></li>
-                                                    <li><a href="#">Chanel</a></li>
-                                                    <li><a href="#">Hermes</a></li>
-                                                    <li><a href="#">Gucci</a></li>
                                                 </ul>
                                             </div>
                                         </div>
@@ -74,105 +58,20 @@
                                     <div id="collapseThree" class="collapse show" data-parent="#accordionExample">
                                         <div class="card-body">
                                             <div class="shop__sidebar__price">
-                                                <ul>
-                                                    <li><a href="#">$0.00 - $50.00</a></li>
-                                                    <li><a href="#">$50.00 - $100.00</a></li>
-                                                    <li><a href="#">$100.00 - $150.00</a></li>
-                                                    <li><a href="#">$150.00 - $200.00</a></li>
-                                                    <li><a href="#">$200.00 - $250.00</a></li>
-                                                    <li><a href="#">250.00+</a></li>
-                                                </ul>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="card">
-                                    <div class="card-heading">
-                                        <a data-toggle="collapse" data-target="#collapseFour">Size</a>
-                                    </div>
-                                    <div id="collapseFour" class="collapse show" data-parent="#accordionExample">
-                                        <div class="card-body">
-                                            <div class="shop__sidebar__size">
-                                                <label for="xs">xs
-                                                    <input type="radio" id="xs">
-                                                </label>
-                                                <label for="sm">s
-                                                    <input type="radio" id="sm">
-                                                </label>
-                                                <label for="md">m
-                                                    <input type="radio" id="md">
-                                                </label>
-                                                <label for="xl">xl
-                                                    <input type="radio" id="xl">
-                                                </label>
-                                                <label for="2xl">2xl
-                                                    <input type="radio" id="2xl">
-                                                </label>
-                                                <label for="xxl">xxl
-                                                    <input type="radio" id="xxl">
-                                                </label>
-                                                <label for="3xl">3xl
-                                                    <input type="radio" id="3xl">
-                                                </label>
-                                                <label for="4xl">4xl
-                                                    <input type="radio" id="4xl">
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="card">
-                                    <div class="card-heading">
-                                        <a data-toggle="collapse" data-target="#collapseFive">Colors</a>
-                                    </div>
-                                    <div id="collapseFive" class="collapse show" data-parent="#accordionExample">
-                                        <div class="card-body">
-                                            <div class="shop__sidebar__color">
-                                                <label class="c-1" for="sp-1">
-                                                    <input type="radio" id="sp-1">
-                                                </label>
-                                                <label class="c-2" for="sp-2">
-                                                    <input type="radio" id="sp-2">
-                                                </label>
-                                                <label class="c-3" for="sp-3">
-                                                    <input type="radio" id="sp-3">
-                                                </label>
-                                                <label class="c-4" for="sp-4">
-                                                    <input type="radio" id="sp-4">
-                                                </label>
-                                                <label class="c-5" for="sp-5">
-                                                    <input type="radio" id="sp-5">
-                                                </label>
-                                                <label class="c-6" for="sp-6">
-                                                    <input type="radio" id="sp-6">
-                                                </label>
-                                                <label class="c-7" for="sp-7">
-                                                    <input type="radio" id="sp-7">
-                                                </label>
-                                                <label class="c-8" for="sp-8">
-                                                    <input type="radio" id="sp-8">
-                                                </label>
-                                                <label class="c-9" for="sp-9">
-                                                    <input type="radio" id="sp-9">
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="card">
-                                    <div class="card-heading">
-                                        <a data-toggle="collapse" data-target="#collapseSix">Tags</a>
-                                    </div>
-                                    <div id="collapseSix" class="collapse show" data-parent="#accordionExample">
-                                        <div class="card-body">
-                                            <div class="shop__sidebar__tags">
-                                                <a href="#">Product</a>
-                                                <a href="#">Bags</a>
-                                                <a href="#">Shoes</a>
-                                                <a href="#">Fashio</a>
-                                                <a href="#">Clothing</a>
-                                                <a href="#">Hats</a>
-                                                <a href="#">Accessories</a>
+                                                <form action="{{ route('shop') }}" method="GET" id="priceFilter">
+                                                    <input type="hidden" name="q" value="{{ request('q') }}">
+                                                    <input type="hidden" name="category" value="{{ request('category') }}">
+                                                    <input type="hidden" name="sort" value="{{ request('sort') }}">
+                                                    <div class="row">
+                                                        <div class="col-6">
+                                                            <input type="number" name="min_price" placeholder="Min" value="{{ request('min_price') }}" class="form-control" min="0" step="0.01">
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <input type="number" name="max_price" placeholder="Max" value="{{ request('max_price') }}" class="form-control" min="0" step="0.01">
+                                                        </div>
+                                                    </div>
+                                                    <button type="submit" class="btn btn-primary btn-sm mt-2">Filter</button>
+                                                </form>
                                             </div>
                                         </div>
                                     </div>
@@ -193,31 +92,39 @@
                             </div>
                             <div class="col-lg-6 col-md-6 col-sm-6">
                                 <div class="shop__product__option__right">
-                                    <p>Sort by Price:</p>
-                                    <select>
-                                        <option value="">Low To High</option>
-                                        <option value="">$0 - $55</option>
-                                        <option value="">$55 - $100</option>
-                                    </select>
+                                    <p>Sort by:</p>
+                                    <form action="{{ route('shop') }}" method="GET" id="sortForm">
+                                        <input type="hidden" name="q" value="{{ request('q') }}">
+                                        <input type="hidden" name="category" value="{{ request('category') }}">
+                                        <input type="hidden" name="min_price" value="{{ request('min_price') }}">
+                                        <input type="hidden" name="max_price" value="{{ request('max_price') }}">
+                                        <select name="sort" onchange="document.getElementById('sortForm').submit()">
+                                            <option value="latest" {{ request('sort') == 'latest' ? 'selected' : '' }}>Latest</option>
+                                            <option value="price_asc" {{ request('sort') == 'price_asc' ? 'selected' : '' }}>Price: Low to High</option>
+                                            <option value="price_desc" {{ request('sort') == 'price_desc' ? 'selected' : '' }}>Price: High to Low</option>
+                                            <option value="name_asc" {{ request('sort') == 'name_asc' ? 'selected' : '' }}>Name: A to Z</option>
+                                            <option value="name_desc" {{ request('sort') == 'name_desc' ? 'selected' : '' }}>Name: Z to A</option>
+                                        </select>
+                                    </form>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div class="row">
                         @isset($products)
-                            @foreach($products as $p)
+                            @forelse($products as $p)
                             <div class="col-lg-4 col-md-6 col-sm-6">
                                 <div class="product__item">
                                     <div class="product__item__pic set-bg" data-setbg="{{ $p->image ? asset('storage/'.$p->image) : asset('img/product/product-1.jpg') }}">
                                         <ul class="product__hover">
                                             <li><a href="#"><img src="{{ asset('img/icon/heart.png') }}" alt=""></a></li>
                                             <li><a href="#"><img src="{{ asset('img/icon/compare.png') }}" alt=""> <span>Compare</span></a></li>
-                                            <li><a href="{{ route('shop.details', ['id' => $p->id]) }}"><img src="{{ asset('img/icon/search.png') }}" alt=""></a></li>
+                                            <li><a href="{{ route('shop.details', $p->id) }}"><img src="{{ asset('img/icon/search.png') }}" alt=""></a></li>
                                         </ul>
                                     </div>
                                     <div class="product__item__text">
-                                        <h6>{{ $p->name }}</h6>
-                                        <a href="{{ route('shop.details', ['id' => $p->id]) }}" class="add-cart">View Details</a>
+                                        <h6>{{ $p->title }}</h6>
+                                        <a href="{{ route('shop.details', $p->id) }}" class="add-cart">View Details</a>
                                         <div class="rating">
                                             <i class="fa fa-star-o"></i>
                                             <i class="fa fa-star-o"></i>
@@ -226,16 +133,24 @@
                                             <i class="fa fa-star-o"></i>
                                         </div>
                                         <h5>${{ number_format((float)$p->price, 2) }}</h5>
-                                        <form method="post" action="{{ route('cart.add') }}">
+                                        <form method="post" action="{{ route('cart.add') }}" class="add-to-cart-form">
                                             @csrf
                                             <input type="hidden" name="product_id" value="{{ $p->id }}">
                                             <input type="hidden" name="quantity" value="1">
-                                            <button type="submit" class="btn btn-sm btn-outline-dark mt-2">+ Add To Cart</button>
+                                            <button type="submit" class="btn btn-sm btn-outline-dark mt-2 add-to-cart-btn">+ Add To Cart</button>
                                         </form>
                                     </div>
                                 </div>
                             </div>
-                            @endforeach
+                            @empty
+                            <div class="col-12">
+                                <div class="text-center py-5">
+                                    <h4>No products found</h4>
+                                    <p>Try adjusting your search or filter criteria.</p>
+                                    <a href="{{ route('shop') }}" class="btn btn-primary">View All Products</a>
+                                </div>
+                            </div>
+                            @endforelse
                         @endisset
                     </div>
                     <div class="row">
@@ -265,8 +180,8 @@
     <!-- Search End -->
 
     <!-- Js Plugins -->
-    <script src="js/jquery-3.3.1.min.js"></script>
-    <script src="js/bootstrap.min.js"></script>
+    <script src="{{ asset('js/jquery-3.3.1.min.js') }}"></script>
+    <script src="{{ asset('js/bootstrap.min.js') }}"></script>
     <script src="js/jquery.nice-select.min.js"></script>
     <script src="js/jquery.nicescroll.min.js"></script>
     <script src="js/jquery.magnific-popup.min.js"></script>
@@ -275,6 +190,8 @@
     <script src="js/mixitup.min.js"></script>
     <script src="js/owl.carousel.min.js"></script>
     <script src="js/main.js"></script>
+    
+    @include('components.cart-script')
 </body>
 
 </html>
