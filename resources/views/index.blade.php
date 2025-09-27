@@ -125,11 +125,11 @@
                                     <i class="fa fa-star-o"></i>
                                 </div>
                                 <h5>${{ number_format((float)($p->price ?? 0), 2) }}</h5>
-                                <form method="post" action="{{ route('cart.add') }}">
+                                <form method="post" action="{{ route('cart.add') }}" class="add-to-cart-form">
                                     @csrf
                                     <input type="hidden" name="product_id" value="{{ $p->id }}">
                                     <input type="hidden" name="quantity" value="1">
-                                    <button type="submit" class="btn btn-sm btn-outline-dark mt-2">+ Add To Cart</button>
+                                    <button type="submit" class="btn btn-sm btn-outline-dark mt-2 add-to-cart-btn">+ Add To Cart</button>
                                 </form>
                             </div>
                         </div>

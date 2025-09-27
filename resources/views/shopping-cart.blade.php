@@ -49,7 +49,9 @@
                                     <td class="quantity__item">
                                         <div class="quantity">
                                             <div class="pro-qty-2">
-                                                <input type="number" value="{{ $item['quantity'] }}" min="1" class="quantity-input" data-product-id="{{ $item['product_id'] }}">
+                                                <button type="button" class="qtybtn dec">-</button>
+                                                <input type="number" value="{{ $item['quantity'] }}" min="1" class="quantity-input" data-product-id="{{ $item['product_id'] }}" readonly>
+                                                <button type="button" class="qtybtn inc">+</button>
                                             </div>
                                         </div>
                                     </td>
@@ -65,7 +67,6 @@
                                     <td colspan="4" class="text-center py-5">
                                         <h4>Your cart is empty</h4>
                                         <p>Add some products to get started!</p>
-                                        <a href="{{ route('shop') }}" class="btn btn-primary">Continue Shopping</a>
                                     </td>
                                 </tr>
                                 @endforelse
@@ -92,26 +93,24 @@
                         <h6>Discount codes</h6>
                         <form id="discount-form">
                             @csrf
-                            <input type="text" name="discount_code" id="discount_code" placeholder="Coupon code" value="{{ session('cart_discount_code', '') }}">
+                            <input type="text" name="discount_code" id="discount_code" placeholder="Coupon code" value="{{ $discountCode }}">
                             <button type="submit" id="apply-discount">Apply</button>
                         </form>
-                        @if(session('cart_discount_code') || (isset($discountAmount) && $discountAmount > 0))
-                            <div class="mt-2">
-                                <small class="text-success">
-                                    Applied: {{ session('cart_discount_code') ?? 'BARU20' }} 
-                                    <a href="#" id="remove-discount" class="text-danger">Remove</a>
-                                </small>
-                            </div>
-                        @endif
+                        <div class="mt-2 applied-discount" style="{{ ($discountAmount > 0) ? '' : 'display: none;' }}">
+                            <small class="text-success">
+                                Applied: {{ $discountCode }} 
+                                <a href="#" id="remove-discount" class="text-danger">Remove</a>
+                            </small>
+                        </div>
                     </div>
                     <div class="cart__total">
                         <h6>Cart total</h6>
                         <ul>
-                            <li>Subtotal <span>${{ number_format(($subtotal ?? 0), 2) }}</span></li>
-                            @if(($discountAmount ?? 0) > 0)
-                                <li class="text-success">Discount <span>-${{ number_format($discountAmount, 2) }}</span></li>
-                            @endif
-                            <li>Total <span>${{ number_format(($total ?? $subtotal ?? 0), 2) }}</span></li>
+                            <li>Subtotal <span class="subtotal-amount">${{ number_format(($subtotal ?? 0), 2) }}</span></li>
+                            <li class="text-success discount-row" style="{{ ($discountAmount ?? 0) > 0 ? '' : 'display: none;' }}">
+                                Discount <span class="discount-amount">-${{ number_format($discountAmount ?? 0, 2) }}</span>
+                            </li>
+                            <li>Total <span class="total-amount">${{ number_format(($total ?? $subtotal ?? 0), 2) }}</span></li>
                         </ul>
                         <a href="{{ auth()->check() ? route('checkout') : route('login') }}" class="primary-btn">Proceed to checkout</a>
                     </div>
@@ -146,28 +145,115 @@
     <script src="{{ asset('js/owl.carousel.min.js') }}"></script>
     <script src="{{ asset('js/main.js') }}"></script>
     
+    <style>
+        /* Custom quantity selector styles */
+        .pro-qty, .pro-qty-2 {
+            display: flex;
+            align-items: center;
+            border: 1px solid #e5e5e5;
+            border-radius: 4px;
+            overflow: hidden;
+            width: 120px;
+        }
+        
+        .pro-qty input, .pro-qty-2 input {
+            border: none !important;
+            text-align: center;
+            flex: 1;
+            padding: 8px 0;
+            background: white;
+            font-weight: 600;
+        }
+        
+        .pro-qty .qtybtn, .pro-qty-2 .qtybtn {
+            background: #f8f9fa;
+            border: none;
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 35px;
+            transition: all 0.2s;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        .pro-qty .qtybtn:hover, .pro-qty-2 .qtybtn:hover {
+            background: #e7ab3c;
+            color: white;
+        }
+        
+        .pro-qty .qtybtn.dec, .pro-qty-2 .qtybtn.dec {
+            border-right: 1px solid #e5e5e5;
+        }
+        
+        .pro-qty .qtybtn.inc, .pro-qty-2 .qtybtn.inc {
+            border-left: 1px solid #e5e5e5;
+        }
+    </style>
+    
     <script>
+        // Helper function to update cart item price in real-time
+        function updateCartItemPrice($row, quantity) {
+            const priceText = $row.find('.product__cart__item__text h5').text().replace('$', '').replace(',', '');
+            const price = parseFloat(priceText);
+            const total = price * quantity;
+            $row.find('.cart__price').text('$' + total.toFixed(2));
+        }
+        
+        // Helper function to update cart quantity via AJAX
+        function updateCartQuantity(productId, quantity) {
+            $.ajax({
+                url: '/cart/' + productId,
+                method: 'PATCH',
+                data: {
+                    quantity: quantity,
+                    _token: $('meta[name="csrf-token"]').attr('content')
+                },
+                success: function(response) {
+                    updateCartCount(response.cart_count);
+                    updateCartTotals();
+                },
+                error: function() {
+                    Swal.fire('Error', 'Error updating quantity', 'error');
+                }
+            });
+        }
+        
+        // Helper function to update cart totals
+        function updateCartTotals() {
+            let subtotal = 0;
+            $('tbody tr').each(function() {
+                const priceText = $(this).find('.product__cart__item__text h5').text().replace('$', '').replace(',', '');
+                const quantity = parseInt($(this).find('.quantity-input').val());
+                const price = parseFloat(priceText);
+                if (!isNaN(price) && !isNaN(quantity)) {
+                    subtotal += price * quantity;
+                }
+            });
+            
+            let discountAmount = 0;
+            if ($('.discount-row').is(':visible')) {
+                const discountText = $('.discount-amount').text().replace('-$', '').replace('$', '').replace(',', '');
+                discountAmount = parseFloat(discountText) || 0;
+            }
+            
+            const total = subtotal - discountAmount;
+            
+            $('.subtotal-amount').text('$' + subtotal.toFixed(2));
+            $('.total-amount').text('$' + total.toFixed(2));
+        }
+
         $(document).ready(function() {
-            // Update quantity
+            // Update quantity on direct input change
             $('.quantity-input').on('change', function() {
                 const productId = $(this).data('product-id');
                 const quantity = $(this).val();
+                const $row = $(this).closest('tr');
                 
-                $.ajax({
-                    url: '/cart/' + productId,
-                    method: 'PATCH',
-                    data: {
-                        quantity: quantity,
-                        _token: $('meta[name="csrf-token"]').attr('content')
-                    },
-                    success: function(response) {
-                        updateCartCount(response.cart_count);
-                        location.reload();
-                    },
-                    error: function() {
-                        Swal.fire('Error', 'Error updating quantity', 'error');
-                    }
-                });
+                updateCartItemPrice($row, quantity);
+                updateCartQuantity(productId, quantity);
             });
             
             // Remove item
@@ -193,10 +279,15 @@
                             success: function(response) {
                                 updateCartCount(response.cart_count);
                                 Swal.fire('Removed!', 'Item has been removed from cart.', 'success');
-                                location.reload();
+                                // Remove the item from the table without page reload
+                                $('tr[data-product-id="' + productId + '"]').fadeOut(300, function() {
+                                    $(this).remove();
+                                    updateCartTotals();
+                                });
                             },
-                            error: function() {
-                                Swal.fire('Error', 'Error removing item', 'error');
+                            error: function(xhr) {
+                                const response = xhr.responseJSON;
+                                Swal.fire('Error', response.message || 'Error removing item', 'error');
                             }
                         });
                     }
@@ -224,10 +315,15 @@
                             success: function(response) {
                                 updateCartCount(response.cart_count);
                                 Swal.fire('Cleared!', 'Your cart has been cleared.', 'success');
-                                location.reload();
+                                // Clear the cart table without page reload
+                                $('tbody tr').fadeOut(300, function() {
+                                    $(this).remove();
+                                    updateCartTotals();
+                                });
                             },
-                            error: function() {
-                                Swal.fire('Error', 'Error clearing cart', 'error');
+                            error: function(xhr) {
+                                const response = xhr.responseJSON;
+                                Swal.fire('Error', response.message || 'Error clearing cart', 'error');
                             }
                         });
                     }
@@ -252,8 +348,14 @@
                         _token: $('meta[name="csrf-token"]').attr('content')
                     },
                     success: function(response) {
+                        console.log('Discount apply response:', response);
                         Swal.fire('Success', response.message, 'success');
-                        location.reload();
+                        // Update discount display without page reload
+                        updateDiscountDisplay(response.discount_amount || 0);
+                        // Update discount code input
+                        if (response.discount_code) {
+                            $('#discount_code').val(response.discount_code);
+                        }
                     },
                     error: function(xhr) {
                         const response = xhr.responseJSON;
@@ -273,11 +375,14 @@
                         _token: $('meta[name="csrf-token"]').attr('content')
                     },
                     success: function(response) {
+                        console.log('Discount remove response:', response);
                         Swal.fire('Success', response.message, 'success');
-                        location.reload();
+                        // Update discount display without page reload
+                        updateDiscountDisplay(0);
                     },
-                    error: function() {
-                        Swal.fire('Error', 'Error removing discount code', 'error');
+                    error: function(xhr) {
+                        const response = xhr.responseJSON;
+                        Swal.fire('Error', response.message || 'Error removing discount code', 'error');
                     }
                 });
             });
@@ -285,6 +390,53 @@
             // Function to update cart count in navbar
             function updateCartCount(count) {
                 $('#cart-count').text(count);
+            }
+
+            // Function to update cart totals dynamically
+            function updateCartTotals() {
+                let subtotal = 0;
+                $('tbody tr').each(function() {
+                    const priceText = $(this).find('.cart__price').text().replace('$', '').replace(',', '');
+                    const price = parseFloat(priceText);
+                    if (!isNaN(price)) {
+                        subtotal += price;
+                    }
+                });
+                
+                // Get discount amount from the discount row
+                let discountAmount = 0;
+                if ($('.discount-row').is(':visible')) {
+                    const discountText = $('.discount-amount').text().replace('-$', '').replace('$', '').replace(',', '');
+                    discountAmount = parseFloat(discountText) || 0;
+                }
+                
+                const total = subtotal - discountAmount;
+                
+                // Update the display
+                $('.subtotal-amount').text('$' + subtotal.toFixed(2));
+                $('.total-amount').text('$' + total.toFixed(2));
+                
+                console.log('Cart totals updated:', { subtotal, discountAmount, total });
+            }
+
+            // Function to update discount display
+            function updateDiscountDisplay(discountAmount) {
+                console.log('Updating discount display:', discountAmount);
+                
+                if (discountAmount > 0) {
+                    $('.discount-amount').text('-$' + discountAmount.toFixed(2));
+                    $('.discount-row').show();
+                    $('#discount_code').val('BARU20');
+                    $('.applied-discount').show();
+                } else {
+                    $('.discount-amount').text('$0.00');
+                    $('.discount-row').hide();
+                    $('#discount_code').val('');
+                    $('.applied-discount').hide();
+                }
+                
+                // Update totals after discount change
+                updateCartTotals();
             }
         });
     </script>

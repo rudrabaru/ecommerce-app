@@ -1,11 +1,20 @@
 <script>
 $(document).ready(function() {
-    // Add to cart functionality
-    $('.add-to-cart').on('click', function(e) {
+    // Add to cart functionality for both .add-to-cart and .add-to-cart-btn classes
+    $('.add-to-cart, .add-to-cart-btn').on('click', function(e) {
         e.preventDefault();
         
-        const productId = $(this).data('product-id');
-        const quantity = $(this).closest('form').find('input[name="quantity"]').val() || 1;
+        const form = $(this).closest('form');
+        const productId = form.find('input[name="product_id"]').val();
+        const quantity = form.find('input[name="quantity"]').val() || 1;
+        
+        // Debug logging
+        console.log('Add to cart clicked:', { productId, quantity });
+        
+        // Show loading state
+        const button = $(this);
+        const originalText = button.text();
+        button.prop('disabled', true).text('Adding...');
         
         $.ajax({
             url: '/cart/add',
@@ -16,12 +25,44 @@ $(document).ready(function() {
                 _token: $('meta[name="csrf-token"]').attr('content')
             },
             success: function(response) {
-                updateCartCount(response.cart_count);
-                Swal.fire('Success', response.message, 'success');
+                if (response.success) {
+                    updateCartCount(response.cart_count);
+                    Swal.fire({
+                        title: 'Success!',
+                        text: response.message || 'Added to cart successfully',
+                        icon: 'success',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    Swal.fire({
+                        title: 'Error!',
+                        text: response.message || 'Error adding to cart',
+                        icon: 'error',
+                        confirmButtonText: 'OK'
+                    });
+                }
             },
             error: function(xhr) {
-                const response = xhr.responseJSON;
-                Swal.fire('Error', response.message || 'Error adding to cart', 'error');
+                let errorMessage = 'Error adding to cart';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage = xhr.responseJSON.message;
+                } else if (xhr.status === 422) {
+                    errorMessage = 'Validation error. Please check your input.';
+                } else if (xhr.status === 500) {
+                    errorMessage = 'Server error. Please try again later.';
+                }
+                
+                Swal.fire({
+                    title: 'Error!',
+                    text: errorMessage,
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                });
+            },
+            complete: function() {
+                // Reset button state
+                button.prop('disabled', false).text(originalText);
             }
         });
     });

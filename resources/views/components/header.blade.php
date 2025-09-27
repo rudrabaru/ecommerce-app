@@ -7,6 +7,7 @@
     <meta name="keywords" content="Male_Fashion, unica, creative, html">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ config('app.name', 'E-Commerce') }}</title>
 
     <!-- Google Font -->
@@ -104,12 +105,7 @@
                 </div>
                 <div class="col-lg-3 col-md-3">
                     <div class="header__right">
-                        <div class="header__right__cart">
-                            <a href="{{ route('cart.index') }}" class="cart-icon">
-                                <i class="fa fa-shopping-cart"></i>
-                                <span class="cart-count" id="cart-count">{{ \App\Http\Controllers\CartController::getCartCount() }}</span>
-                            </a>
-                        </div>
+                        {{-- Cart icon will be positioned absolutely at extreme right --}}
                     </div>
                 </div>
             </div>
@@ -117,3 +113,6 @@
         </div>
     </header>
     <!-- Header Section (White) End -->
+    
+    {{-- Cart Icon - Always positioned at extreme right --}}
+    @include('components.cart-icon')

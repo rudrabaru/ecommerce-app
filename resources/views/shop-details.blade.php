@@ -15,33 +15,6 @@
                 </div>
                 <div class="row">
                     <div class="col-lg-3 col-md-3">
-                        <ul class="nav nav-tabs" role="tablist">
-                            <li class="nav-item">
-                                <a class="nav-link active" data-toggle="tab" href="#tabs-1" role="tab">
-                                    <div class="product__thumb__pic set-bg" data-setbg="{{ $product->image ? asset('storage/'.$product->image) : asset('img/shop-details/thumb-1.png') }}">
-                                    </div>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" data-toggle="tab" href="#tabs-2" role="tab">
-                                    <div class="product__thumb__pic set-bg" data-setbg="{{ asset('img/shop-details/thumb-2.png') }}">
-                                    </div>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" data-toggle="tab" href="#tabs-3" role="tab">
-                                    <div class="product__thumb__pic set-bg" data-setbg="{{ asset('img/shop-details/thumb-3.png') }}">
-                                    </div>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" data-toggle="tab" href="#tabs-4" role="tab">
-                                    <div class="product__thumb__pic set-bg" data-setbg="{{ asset('img/shop-details/thumb-4.png') }}">
-                                        <i class="fa fa-play"></i>
-                                    </div>
-                                </a>
-                            </li>
-                        </ul>
                     </div>
                     <div class="col-lg-6 col-md-9">
                         <div class="tab-content">
@@ -136,7 +109,9 @@
                                     @csrf
                                     <div class="quantity mr-2">
                                         <div class="pro-qty">
-                                            <input type="number" name="quantity" value="1" min="1" max="{{ $product->stock }}">
+                                            <button type="button" class="qtybtn dec">-</button>
+                                            <input type="number" name="quantity" value="1" min="1" max="{{ $product->stock }}" class="quantity-input" readonly>
+                                            <button type="button" class="qtybtn inc">+</button>
                                         </div>
                                     </div>
                                     <input type="hidden" name="product_id" value="{{ $product->id }}">
@@ -316,7 +291,7 @@
                                 <i class="fa fa-star-o"></i>
                                 <i class="fa fa-star-o"></i>
                             </div>
-                            <h5>${{ number_format((float)$related->price, 2) }}</h5>
+                            <h5>${{ number_format((float)$related->price, 1) }}</h5>
                             <form method="post" action="{{ route('cart.add') }}" class="add-to-cart-form">
                                 @csrf
                                 <input type="hidden" name="product_id" value="{{ $related->id }}">
@@ -362,6 +337,54 @@
     <script src="{{ asset('js/mixitup.min.js') }}"></script>
     <script src="{{ asset('js/owl.carousel.min.js') }}"></script>
     <script src="{{ asset('js/main.js') }}"></script>
+    
+    <style>
+        /* Custom quantity selector styles */
+        .pro-qty {
+            display: flex;
+            align-items: center;
+            border: 1px solid #e5e5e5;
+            border-radius: 4px;
+            overflow: hidden;
+            width: 120px;
+        }
+        
+        .pro-qty input {
+            border: none !important;
+            text-align: center;
+            flex: 1;
+            padding: 8px 0;
+            background: white;
+            font-weight: 600;
+        }
+        
+        .pro-qty .qtybtn {
+            background: #f8f9fa;
+            border: none;
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 35px;
+            transition: all 0.2s;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        .pro-qty .qtybtn:hover {
+            background: #e7ab3c;
+            color: white;
+        }
+        
+        .pro-qty .qtybtn.dec {
+            border-right: 1px solid #e5e5e5;
+        }
+        
+        .pro-qty .qtybtn.inc {
+            border-left: 1px solid #e5e5e5;
+        }
+    </style>
     
     @include('components.cart-script')
 </body>

@@ -160,42 +160,44 @@
     /*-------------------
 		Quantity change
 	--------------------- */
-    var proQty = $('.pro-qty');
-    proQty.prepend('<span class="fa fa-angle-up dec qtybtn"></span>');
-    proQty.append('<span class="fa fa-angle-down inc qtybtn"></span>');
-    proQty.on('click', '.qtybtn', function () {
+    // Product details page quantity selector
+    $('.pro-qty').on('click', '.qtybtn', function () {
         var $button = $(this);
-        var oldValue = $button.parent().find('input').val();
+        var $input = $button.parent().find('input');
+        var oldValue = parseFloat($input.val()) || 1;
+        var maxValue = parseFloat($input.attr('max')) || 999;
+        var minValue = parseFloat($input.attr('min')) || 1;
+        
         if ($button.hasClass('inc')) {
-            var newVal = parseFloat(oldValue) + 1;
+            var newVal = Math.min(oldValue + 1, maxValue);
         } else {
-            // Don't allow decrementing below zero
-            if (oldValue > 0) {
-                var newVal = parseFloat(oldValue) - 1;
-            } else {
-                newVal = 0;
-            }
+            var newVal = Math.max(oldValue - 1, minValue);
         }
-        $button.parent().find('input').val(newVal);
+        $input.val(newVal);
     });
 
-    var proQty = $('.pro-qty-2');
-    proQty.prepend('<span class="fa fa-angle-left dec qtybtn"></span>');
-    proQty.append('<span class="fa fa-angle-right inc qtybtn"></span>');
-    proQty.on('click', '.qtybtn', function () {
+    // Cart table quantity selector with real-time price updates
+    $('.pro-qty-2').on('click', '.qtybtn', function () {
         var $button = $(this);
-        var oldValue = $button.parent().find('input').val();
+        var $input = $button.parent().find('input');
+        var $row = $button.closest('tr');
+        var oldValue = parseFloat($input.val()) || 1;
+        var maxValue = parseFloat($input.attr('max')) || 999;
+        var minValue = parseFloat($input.attr('min')) || 1;
+        
         if ($button.hasClass('inc')) {
-            var newVal = parseFloat(oldValue) + 1;
+            var newVal = Math.min(oldValue + 1, maxValue);
         } else {
-            // Don't allow decrementing below zero
-            if (oldValue > 0) {
-                var newVal = parseFloat(oldValue) - 1;
-            } else {
-                newVal = 0;
-            }
+            var newVal = Math.max(oldValue - 1, minValue);
         }
-        $button.parent().find('input').val(newVal);
+        
+        $input.val(newVal);
+        
+        // Update price in real-time
+        updateCartItemPrice($row, newVal);
+        
+        // Update cart via AJAX
+        updateCartQuantity($input.data('product-id'), newVal);
     });
 
     /*------------------
