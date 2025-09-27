@@ -19,6 +19,8 @@ Route::post('/cart/add', [\App\Http\Controllers\CartController::class, 'add'])->
 Route::patch('/cart/{productId}', [\App\Http\Controllers\CartController::class, 'update'])->name('cart.update');
 Route::delete('/cart/{productId}', [\App\Http\Controllers\CartController::class, 'remove'])->name('cart.remove');
 Route::delete('/cart', [\App\Http\Controllers\CartController::class, 'clear'])->name('cart.clear');
+Route::post('/cart/discount/apply', [\App\Http\Controllers\CartController::class, 'applyDiscount'])->name('cart.discount.apply');
+Route::delete('/cart/discount', [\App\Http\Controllers\CartController::class, 'removeDiscount'])->name('cart.discount.remove');
 Route::get('/search', [\Modules\Products\Http\Controllers\StorefrontProductsController::class, 'search'])->name('products.search');
 Route::middleware('auth')->group(function () {
     Route::post('/checkout', [\App\Http\Controllers\CheckoutController::class, 'store'])->name('checkout.store');

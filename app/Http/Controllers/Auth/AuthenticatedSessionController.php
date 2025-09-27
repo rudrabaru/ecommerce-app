@@ -30,6 +30,9 @@ class AuthenticatedSessionController extends Controller
 
         $user = $request->user();
 
+        // Merge guest cart into user's database cart
+        $this->mergeGuestCart($user);
+
         if ($user->hasRole('admin')) {
             return redirect()->intended(route('admin.dashboard'));
         }
@@ -41,6 +44,45 @@ class AuthenticatedSessionController extends Controller
         }
 
         return redirect()->intended(route('dashboard', absolute: false));
+    }
+
+    private function mergeGuestCart($user)
+    {
+        $guestCart = session('cart', []);
+        if (empty($guestCart)) {
+            return;
+        }
+
+        // Get or create user's cart
+        $userCart = \App\Models\Cart::firstOrCreate(['user_id' => $user->id]);
+
+        foreach ($guestCart as $productId => $item) {
+            $existingItem = $userCart->items()->where('product_id', $productId)->first();
+            
+            if ($existingItem) {
+                // If item exists, add quantities
+                $existingItem->quantity += $item['quantity'];
+                $existingItem->save();
+            } else {
+                // Create new cart item
+                $userCart->items()->create([
+                    'product_id' => $productId,
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $item['price'],
+                ]);
+            }
+        }
+
+        // Merge discount if exists
+        if (session()->has('cart_discount_code')) {
+            $userCart->update([
+                'discount_code' => session('cart_discount_code'),
+                'discount_amount' => session('cart_discount', 0)
+            ]);
+        }
+
+        // Clear guest cart
+        session()->forget(['cart', 'cart_discount_code', 'cart_discount']);
     }
 
     /**

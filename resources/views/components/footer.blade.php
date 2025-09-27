@@ -87,6 +87,13 @@
     <script src="{{ asset('js/mixitup.min.js') }}"></script>
     <script src="{{ asset('js/owl.carousel.min.js') }}"></script>
     <script src="{{ asset('js/main.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        // Function to update cart count in navbar
+        function updateCartCount(count) {
+            $('#cart-count').text(count);
+        }
+    </script>
 </body>
 
 </html>

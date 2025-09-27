@@ -90,16 +90,28 @@
                 <div class="col-lg-4">
                     <div class="cart__discount">
                         <h6>Discount codes</h6>
-                        <form action="#">
-                            <input type="text" placeholder="Coupon code">
-                            <button type="submit">Apply</button>
+                        <form id="discount-form">
+                            @csrf
+                            <input type="text" name="discount_code" id="discount_code" placeholder="Coupon code" value="{{ session('cart_discount_code', '') }}">
+                            <button type="submit" id="apply-discount">Apply</button>
                         </form>
+                        @if(session('cart_discount_code') || (isset($discountAmount) && $discountAmount > 0))
+                            <div class="mt-2">
+                                <small class="text-success">
+                                    Applied: {{ session('cart_discount_code') ?? 'BARU20' }} 
+                                    <a href="#" id="remove-discount" class="text-danger">Remove</a>
+                                </small>
+                            </div>
+                        @endif
                     </div>
                     <div class="cart__total">
                         <h6>Cart total</h6>
                         <ul>
                             <li>Subtotal <span>${{ number_format(($subtotal ?? 0), 2) }}</span></li>
-                            <li>Total <span>${{ number_format(($subtotal ?? 0), 2) }}</span></li>
+                            @if(($discountAmount ?? 0) > 0)
+                                <li class="text-success">Discount <span>-${{ number_format($discountAmount, 2) }}</span></li>
+                            @endif
+                            <li>Total <span>${{ number_format(($total ?? $subtotal ?? 0), 2) }}</span></li>
                         </ul>
                         <a href="{{ auth()->check() ? route('checkout') : route('login') }}" class="primary-btn">Proceed to checkout</a>
                     </div>
@@ -149,10 +161,11 @@
                         _token: $('meta[name="csrf-token"]').attr('content')
                     },
                     success: function(response) {
+                        updateCartCount(response.cart_count);
                         location.reload();
                     },
                     error: function() {
-                        alert('Error updating quantity');
+                        Swal.fire('Error', 'Error updating quantity', 'error');
                     }
                 });
             });
@@ -161,41 +174,118 @@
             $('.remove-item').on('click', function() {
                 const productId = $(this).data('product-id');
                 
-                if (confirm('Are you sure you want to remove this item?')) {
-                    $.ajax({
-                        url: '/cart/' + productId,
-                        method: 'DELETE',
-                        data: {
-                            _token: $('meta[name="csrf-token"]').attr('content')
-                        },
-                        success: function(response) {
-                            location.reload();
-                        },
-                        error: function() {
-                            alert('Error removing item');
-                        }
-                    });
-                }
+                Swal.fire({
+                    title: 'Are you sure?',
+                    text: "You won't be able to revert this!",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#3085d6',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'Yes, remove it!'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        $.ajax({
+                            url: '/cart/' + productId,
+                            method: 'DELETE',
+                            data: {
+                                _token: $('meta[name="csrf-token"]').attr('content')
+                            },
+                            success: function(response) {
+                                updateCartCount(response.cart_count);
+                                Swal.fire('Removed!', 'Item has been removed from cart.', 'success');
+                                location.reload();
+                            },
+                            error: function() {
+                                Swal.fire('Error', 'Error removing item', 'error');
+                            }
+                        });
+                    }
+                });
             });
             
             // Clear cart
             $('#clear-cart').on('click', function() {
-                if (confirm('Are you sure you want to clear your cart?')) {
-                    $.ajax({
-                        url: '/cart',
-                        method: 'DELETE',
-                        data: {
-                            _token: $('meta[name="csrf-token"]').attr('content')
-                        },
-                        success: function(response) {
-                            location.reload();
-                        },
-                        error: function() {
-                            alert('Error clearing cart');
-                        }
-                    });
-                }
+                Swal.fire({
+                    title: 'Are you sure?',
+                    text: "This will clear all items from your cart!",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#3085d6',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'Yes, clear cart!'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        $.ajax({
+                            url: '/cart',
+                            method: 'DELETE',
+                            data: {
+                                _token: $('meta[name="csrf-token"]').attr('content')
+                            },
+                            success: function(response) {
+                                updateCartCount(response.cart_count);
+                                Swal.fire('Cleared!', 'Your cart has been cleared.', 'success');
+                                location.reload();
+                            },
+                            error: function() {
+                                Swal.fire('Error', 'Error clearing cart', 'error');
+                            }
+                        });
+                    }
+                });
             });
+
+            // Apply discount code
+            $('#discount-form').on('submit', function(e) {
+                e.preventDefault();
+                const discountCode = $('#discount_code').val().trim();
+                
+                if (!discountCode) {
+                    Swal.fire('Error', 'Please enter a discount code', 'error');
+                    return;
+                }
+
+                $.ajax({
+                    url: '/cart/discount/apply',
+                    method: 'POST',
+                    data: {
+                        discount_code: discountCode,
+                        _token: $('meta[name="csrf-token"]').attr('content')
+                    },
+                    success: function(response) {
+                        Swal.fire('Success', response.message, 'success');
+                        location.reload();
+                    },
+                    error: function(xhr) {
+                        const response = xhr.responseJSON;
+                        Swal.fire('Error', response.message || 'Invalid discount code', 'error');
+                    }
+                });
+            });
+
+            // Remove discount code
+            $('#remove-discount').on('click', function(e) {
+                e.preventDefault();
+                
+                $.ajax({
+                    url: '/cart/discount',
+                    method: 'DELETE',
+                    data: {
+                        _token: $('meta[name="csrf-token"]').attr('content')
+                    },
+                    success: function(response) {
+                        Swal.fire('Success', response.message, 'success');
+                        location.reload();
+                    },
+                    error: function() {
+                        Swal.fire('Error', 'Error removing discount code', 'error');
+                    }
+                });
+            });
+
+            // Function to update cart count in navbar
+            function updateCartCount(count) {
+                $('#cart-count').text(count);
+            }
         });
     </script>
 </body>

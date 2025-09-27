@@ -22,6 +22,35 @@
     <link rel="stylesheet" href="{{ asset('css/owl.carousel.min.css') }}" type="text/css">
     <link rel="stylesheet" href="{{ asset('css/slicknav.min.css') }}" type="text/css">
     <link rel="stylesheet" href="{{ asset('css/style.css') }}" type="text/css">
+    <style>
+        .header__right__cart {
+            position: relative;
+        }
+        .cart-icon {
+            color: #111111;
+            font-size: 18px;
+            text-decoration: none;
+            position: relative;
+        }
+        .cart-icon:hover {
+            color: #e7ab3c;
+        }
+        .cart-count {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #e7ab3c;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+    </style>
 </head>
 
 <body>
@@ -72,6 +101,16 @@
                             @endif
                         </ul>
                     </nav>
+                </div>
+                <div class="col-lg-3 col-md-3">
+                    <div class="header__right">
+                        <div class="header__right__cart">
+                            <a href="{{ route('cart.index') }}" class="cart-icon">
+                                <i class="fa fa-shopping-cart"></i>
+                                <span class="cart-count" id="cart-count">{{ \App\Http\Controllers\CartController::getCartCount() }}</span>
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="canvas__open"><i class="fa fa-bars"></i></div>

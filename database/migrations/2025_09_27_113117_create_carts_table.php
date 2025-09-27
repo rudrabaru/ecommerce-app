@@ -6,23 +6,29 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    /**
+     * Run the migrations.
+     */
     public function up(): void
     {
         Schema::create('carts', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->nullable()->constrained()->cascadeOnDelete();
-            $table->foreignUuid('session_id')->nullable()->index();
-            $table->foreignId('product_id')->constrained()->cascadeOnDelete();
-            $table->integer('quantity')->default(1);
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->string('session_id')->nullable();
+            $table->string('discount_code')->nullable();
+            $table->decimal('discount_amount', 10, 2)->default(0.00);
             $table->timestamps();
-            $table->index(['user_id', 'session_id']);
+            
+            $table->index('user_id');
+            $table->index('session_id');
         });
     }
 
+    /**
+     * Reverse the migrations.
+     */
     public function down(): void
     {
         Schema::dropIfExists('carts');
     }
 };
-
-
