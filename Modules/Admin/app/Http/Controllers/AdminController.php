@@ -174,7 +174,50 @@ class AdminController extends Controller
 
     public function data(DataTables $dataTables)
     {
-        $query = User::with('roles');
+        // Users (role = user)
+        $userRoleId = \Spatie\Permission\Models\Role::where('name', 'user')->value('id');
+        $query = User::with('roles')
+            ->when($userRoleId, function($q) use ($userRoleId) { $q->where('role_id', $userRoleId); });
+        return $dataTables->eloquent($query)
+            ->addColumn('role', function($row){
+                $badges = $row->roles->map(function($role){
+                    $map = [
+                        'admin' => 'primary',
+                        'provider' => 'warning',
+                        'user' => 'secondary',
+                        'customer' => 'info'
+                    ];
+                    $variant = $map[strtolower($role->name)] ?? 'secondary';
+                    return '<span class="badge bg-' . $variant . '">' . ucfirst($role->name) . '</span>';
+                });
+                return $badges->implode(' ');
+            })
+            ->addColumn('actions', function($row){
+                $btns = '<div class="btn-group" role="group">';
+                $btns .= '<button class="btn btn-sm btn-outline-primary edit-user" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#userModal" onclick="openUserModal('.$row->id.')">';
+                $btns .= '<i class="fas fa-edit"></i> Edit</button>';
+                if (!$row->hasRole('admin')) {
+                    $btns .= '<button class="btn btn-sm btn-outline-danger delete-user js-delete" data-id="'.$row->id.'" data-delete-url="'.route('admin.users.destroy', $row->id).'">';
+                    $btns .= '<i class="fas fa-trash"></i> Delete</button>';
+                }
+                $btns .= '</div>';
+                return $btns;
+            })
+            ->rawColumns(['actions','role'])
+            ->toJson();
+    }
+
+    public function providersIndex(): View
+    {
+        return view('admin::providers');
+    }
+
+    public function providersData(DataTables $dataTables)
+    {
+        // Providers (role = provider)
+        $providerRoleId = \Spatie\Permission\Models\Role::where('name', 'provider')->value('id');
+        $query = User::with('roles')
+            ->when($providerRoleId, function($q) use ($providerRoleId) { $q->where('role_id', $providerRoleId); });
         return $dataTables->eloquent($query)
             ->addColumn('role', function($row){
                 $badges = $row->roles->map(function($role){
