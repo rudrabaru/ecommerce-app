@@ -160,45 +160,67 @@
     /*-------------------
 		Quantity change
 	--------------------- */
-    // Product details page quantity selector
-    $('.pro-qty').on('click', '.qtybtn', function () {
-        var $button = $(this);
-        var $input = $button.parent().find('input');
-        var oldValue = parseFloat($input.val()) || 1;
-        var maxValue = parseFloat($input.attr('max')) || 999;
-        var minValue = parseFloat($input.attr('min')) || 1;
-        
-        if ($button.hasClass('inc')) {
-            var newVal = Math.min(oldValue + 1, maxValue);
-        } else {
-            var newVal = Math.max(oldValue - 1, minValue);
-        }
-        $input.val(newVal);
-    });
+    // Product details page quantity selector (global, single-bound)
+    $(document)
+        .off('click', '.pro-qty .qtybtn')
+        .on('click', '.pro-qty .qtybtn', function () {
+            var $button = $(this);
+            var $input = $button.parent().find('input');
+            var oldValue = parseFloat($input.val()) || 1;
+            var maxValue = parseFloat($input.attr('max')) || 999;
+            var minValue = parseFloat($input.attr('min')) || 1;
 
-    // Cart table quantity selector with real-time price updates
-    $('.pro-qty-2').on('click', '.qtybtn', function () {
-        var $button = $(this);
-        var $input = $button.parent().find('input');
-        var $row = $button.closest('tr');
-        var oldValue = parseFloat($input.val()) || 1;
-        var maxValue = parseFloat($input.attr('max')) || 999;
-        var minValue = parseFloat($input.attr('min')) || 1;
-        
-        if ($button.hasClass('inc')) {
-            var newVal = Math.min(oldValue + 1, maxValue);
-        } else {
-            var newVal = Math.max(oldValue - 1, minValue);
-        }
-        
-        $input.val(newVal);
-        
-        // Update price in real-time
-        updateCartItemPrice($row, newVal);
-        
-        // Update cart via AJAX
-        updateCartQuantity($input.data('product-id'), newVal);
-    });
+            var newVal;
+            if ($button.hasClass('inc')) {
+                newVal = Math.min(oldValue + 1, maxValue);
+            } else {
+                newVal = Math.max(oldValue - 1, minValue);
+            }
+            $input.val(newVal).trigger('change');
+        });
+
+    // Cart table quantity selector with real-time price updates (global, single-bound)
+    $(document)
+        .off('click', '.pro-qty-2 .qtybtn')
+        .on('click', '.pro-qty-2 .qtybtn', function () {
+            var $button = $(this);
+            var $input = $button.parent().find('input');
+            var $row = $button.closest('tr');
+            var oldValue = parseFloat($input.val()) || 1;
+            var maxValue = parseFloat($input.attr('max')) || 999;
+            var minValue = parseFloat($input.attr('min')) || 1;
+
+            var newVal;
+            if ($button.hasClass('inc')) {
+                newVal = Math.min(oldValue + 1, maxValue);
+            } else {
+                newVal = Math.max(oldValue - 1, minValue);
+            }
+
+            $input.val(newVal).trigger('change');
+
+            // Update price in real-time if helpers exist on this page
+            if (typeof updateCartItemPrice === 'function') {
+                updateCartItemPrice($row, newVal);
+            }
+            // Update cart via AJAX if helper exists
+            if (typeof updateCartQuantity === 'function') {
+                updateCartQuantity($input.data('product-id'), newVal);
+            }
+        });
+
+    // Normalize manual input globally
+    $(document)
+        .off('change', 'input.quantity-input')
+        .on('change', 'input.quantity-input', function () {
+            var $input = $(this);
+            var maxValue = parseFloat($input.attr('max')) || 999;
+            var minValue = parseFloat($input.attr('min')) || 1;
+            var val = parseInt($input.val(), 10);
+            if (isNaN(val) || val < minValue) val = minValue;
+            if (val > maxValue) val = maxValue;
+            $input.val(val);
+        });
 
     /*------------------
         Achieve Counter
