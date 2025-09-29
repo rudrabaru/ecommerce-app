@@ -45,10 +45,14 @@ class RegisteredUserController extends Controller
             'password' => Hash::make($request->password),
         ]);
 
-        // Ensure default role exists and assign to user
-        Role::firstOrCreate(['name' => 'user', 'guard_name' => 'web']);
+        // Ensure default role exists and assign to user; also persist role_id
+        $role = Role::firstOrCreate(['name' => 'user', 'guard_name' => 'web']);
         if (! $user->hasRole('user')) {
             $user->assignRole('user');
+        }
+        if ($role && $role->id) {
+            $user->role_id = $role->id;
+            $user->save();
         }
 
         event(new Registered($user));

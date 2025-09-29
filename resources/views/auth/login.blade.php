@@ -1,8 +1,10 @@
 <x-guest-layout>
+    <h2 class="text-xl font-semibold mb-4">{{ $portal === 'admin' ? 'Admin / Provider Login' : 'User Login' }}</h2>
     <!-- Session Status -->
     <x-auth-session-status class="mb-4" :status="session('status')" />
 
-    <form method="POST" action="{{ route('login') }}">
+    @php($portal = $portal ?? 'user')
+    <form method="POST" action="{{ $portal === 'admin' ? route('admin.login.submit') : route('login.submit') }}">
         @csrf
 
         <!-- Email Address -->
@@ -40,8 +42,13 @@
             @endif
 
             <x-primary-button class="ms-3">
-                {{ __('Log in') }}
+                {{ $portal === 'admin' ? __('Admin/Provider Login') : __('Log in') }}
             </x-primary-button>
         </div>
+        @if ($portal === 'user')
+            <div class="mt-4 text-right">
+                <a class="underline text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100" href="{{ route('admin.login') }}">Admin Portal</a>
+            </div>
+        @endif
     </form>
 </x-guest-layout>

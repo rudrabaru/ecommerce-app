@@ -3,7 +3,7 @@
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
-
+use App\Http\Controllers\CartController;
 Route::get('/', [\App\Http\Controllers\MainController::class, 'index'])->name('home');
 Route::get('/checkout', [\App\Http\Controllers\MainController::class, 'checkout'])->name('checkout');
 Route::get('/shopping-cart', [\App\Http\Controllers\MainController::class, 'cart'])->name('shopping.cart');
@@ -51,6 +51,17 @@ Route::middleware('auth')->group(function () {
 });
 
 require __DIR__.'/auth.php';
+
+// Separate login portals
+Route::middleware('guest')->group(function () {
+    // User portal
+    Route::get('/login', [\App\Http\Controllers\Auth\PortalLoginController::class, 'showUserLogin'])->name('login');
+    Route::post('/login', [\App\Http\Controllers\Auth\PortalLoginController::class, 'userLogin'])->name('login.submit');
+
+    // Admin/Provider portal
+    Route::get('/admin/login', [\App\Http\Controllers\Auth\PortalLoginController::class, 'showAdminLogin'])->name('admin.login');
+    Route::post('/admin/login', [\App\Http\Controllers\Auth\PortalLoginController::class, 'adminLogin'])->name('admin.login.submit');
+});
 
 // Note: Module routes are loaded by their own service providers; no manual glob include here
 

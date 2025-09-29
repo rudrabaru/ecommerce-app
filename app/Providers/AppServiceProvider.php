@@ -5,6 +5,7 @@ namespace App\Providers;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Route;
 use Modules\Products\Models\Category;
 
 class AppServiceProvider extends ServiceProvider
@@ -37,5 +38,8 @@ class AppServiceProvider extends ServiceProvider
 
             $view->with('headerCategories', $headerCategories);
         });
+
+        // Protect /admin/* paths globally (excluding /admin/login)
+        Route::pushMiddlewareToGroup('web', \App\Http\Middleware\ProtectAdminPaths::class);
     }
 }
