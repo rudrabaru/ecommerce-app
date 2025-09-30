@@ -26,24 +26,34 @@
                         </tr>
                     </thead>
                     </table>
+                    @push('scripts')
                     <script>
-                    $(function () {
-                        $('#users-table').DataTable({
-                            processing: true,
-                            serverSide: true,
-                            ajax: $('#users-table').data('dt-url'),
-                            pageLength: $('#users-table').data('dt-page-length'),
-                            order: JSON.parse($('#users-table').attr('data-dt-order')),
-                            columns: [
-                                { data: "id", name: "id", width: "60px" },
-                                { data: "name", name: "name" },
-                                { data: "email", name: "email" },
-                                { data: "created_at", name: "created_at" },
-                                { data: "actions", name: "actions", orderable: false, searchable: false }
-                            ]
-                        });
-                    });
+                    (function initUsersTableWhenReady(){
+                        function start(){
+                            var $table = $('#users-table');
+                            if (!$table.length || !$.fn || !$.fn.dataTable) { return setTimeout(start, 50); }
+                            if ($.fn.dataTable.isDataTable($table)) { return; }
+                            window.DataTableInstances = window.DataTableInstances || {};
+                            window.DataTableInstances['users-table'] = $table.DataTable({
+                                processing: true,
+                                serverSide: true,
+                                ajax: $table.data('dt-url'),
+                                pageLength: $table.data('dt-page-length'),
+                                order: JSON.parse($table.attr('data-dt-order')),
+                                columns: [
+                                    { data: 'id', name: 'id', width: '60px' },
+                                    { data: 'name', name: 'name' },
+                                    { data: 'email', name: 'email' },
+                                    { data: 'created_at', name: 'created_at' },
+                                    { data: 'actions', name: 'actions', orderable: false, searchable: false }
+                                ]
+                            });
+                        }
+                        if (window.jQuery) { start(); }
+                        else { window.addEventListener('load', start); }
+                    })();
                     </script>
+                    @endpush
                 </div>
             </div>
         </div>

@@ -56,6 +56,7 @@
     </div>
 </div>
 
+@push('scripts')
 <script>
     function reloadCurrentTable() {
         try {
@@ -257,9 +258,13 @@
         $('#saveUserBtn').prop('disabled', !isValid);
     }
     
-    $(document).ready(function() {
-        $('#name, #email, #password, #role').on('input change', validateForm);
-    });
+    (function bindValidationWhenReady(){
+        function start(){
+            if (!window.jQuery) { return setTimeout(start, 50); }
+            $('#name, #email, #password, #role').off('input change').on('input change', validateForm);
+        }
+        start();
+    })();
     
     $(document).on('click', '.edit-user', function() {
         const userId = $(this).data('id');
@@ -271,3 +276,4 @@
         deleteUser(userId);
     });
 </script>
+@endpush

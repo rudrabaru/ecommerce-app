@@ -8,6 +8,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Yajra\DataTables\DataTables;
+use Spatie\Permission\Models\Role;
 
 class AdminController extends Controller
 {
@@ -58,6 +59,13 @@ class AdminController extends Controller
         ]);
 
         $user->assignRole($validated['role']);
+
+        // Keep role_id column in sync with Spatie role pivot
+        $roleId = Role::where('name', $validated['role'])->value('id');
+        if ($roleId) {
+            $user->role_id = $roleId;
+            $user->save();
+        }
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
@@ -132,6 +140,13 @@ class AdminController extends Controller
 
         $user->syncRoles([$validated['role']]);
 
+        // Keep role_id column in sync with Spatie role pivot
+        $roleId = Role::where('name', $validated['role'])->value('id');
+        if ($roleId) {
+            $user->role_id = $roleId;
+            $user->save();
+        }
+
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
@@ -174,10 +189,11 @@ class AdminController extends Controller
 
     public function data(DataTables $dataTables)
     {
-        // Users (role = user)
+        // Users (role = user) — filter by role_id to ensure consistency
+        $userRoleId = Role::where('name', 'user')->value('id');
         $query = User::with('roles')
-            ->whereHas('roles', function ($q) {
-                $q->where('name', 'user');
+            ->when($userRoleId, function ($q) use ($userRoleId) {
+                $q->where('role_id', $userRoleId);
             });
 
         return $dataTables->eloquent($query)
@@ -206,10 +222,11 @@ class AdminController extends Controller
 
     public function providersData(DataTables $dataTables)
     {
-        // Providers (role = provider)
+        // Providers (role = provider) — filter by role_id to ensure consistency
+        $providerRoleId = Role::where('name', 'provider')->value('id');
         $query = User::with('roles')
-            ->whereHas('roles', function ($q) {
-                $q->where('name', 'provider');
+            ->when($providerRoleId, function ($q) use ($providerRoleId) {
+                $q->where('role_id', $providerRoleId);
             });
 
         return $dataTables->eloquent($query)
@@ -237,6 +254,11 @@ class AdminController extends Controller
             return back()->withErrors(['user' => 'Cannot change admin role.']);
         }
         $user->syncRoles(['provider']);
+        $providerRoleId = Role::where('name', 'provider')->value('id');
+        if ($providerRoleId) {
+            $user->role_id = $providerRoleId;
+            $user->save();
+        }
         return back()->with('status', 'User promoted to provider.');
     }
 }

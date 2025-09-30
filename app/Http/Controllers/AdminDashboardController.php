@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Modules\Products\Models\Product;
 use Modules\Products\Models\Category;
+use Spatie\Permission\Models\Role;
 
 class AdminDashboardController extends Controller
 {
@@ -14,9 +15,13 @@ class AdminDashboardController extends Controller
     {
         $this->authorizeAdmin();
         
+        // Count strictly by role_id to stay in sync with DB
+        $userRoleId = Role::where('name', 'user')->value('id');
+        $providerRoleId = Role::where('name', 'provider')->value('id');
+        
         $stats = [
-            'total_users' => User::count(),
-            'total_providers' => User::role('provider')->count(),
+            'total_users' => $userRoleId ? User::where('role_id', $userRoleId)->count() : 0,
+            'total_providers' => $providerRoleId ? User::where('role_id', $providerRoleId)->count() : 0,
             'total_categories' => Category::count(),
             'total_products' => Product::count(),
         ];

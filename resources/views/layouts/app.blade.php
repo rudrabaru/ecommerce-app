@@ -209,8 +209,10 @@
                             
                             // Re-initialize global components
                             setTimeout(() => {
-                                // Re-scan and wire forms
-                                document.querySelectorAll('.modal form').forEach(wireForm);
+                            // Re-scan and wire forms (guard if function not yet defined)
+                            if (typeof window.wireForm === 'function') {
+                                document.querySelectorAll('.modal form').forEach(window.wireForm);
+                            }
                                 
                                 // Re-initialize tooltips
                                 if (window.bootstrap && bootstrap.Tooltip) {
@@ -435,7 +437,36 @@
                                 { data: 'id', name: 'id', width: '60px' },
                                 { data: 'name', name: 'name' },
                                 { data: 'email', name: 'email' },
-                                { data: 'role', name: 'role', orderable: false, searchable: false },
+                                { data: 'created_at', name: 'created_at', width: '120px' },
+                                { data: 'actions', name: 'actions', orderable: false, searchable: false, width: '150px' }
+                            ],
+                            order: [[0, 'desc']],
+                            pageLength: 25,
+                            responsive: true,
+                            language: {
+                                processing: "Loading...",
+                                emptyTable: "No data available",
+                                info: "Showing _START_ to _END_ of _TOTAL_ entries",
+                                infoEmpty: "Showing 0 to 0 of 0 entries",
+                                infoFiltered: "(filtered from _MAX_ total entries)",
+                                lengthMenu: "Show _MENU_ entries",
+                                search: "Search:",
+                                zeroRecords: "No matching records found"
+                            }
+                        });
+                    }
+                    
+                    // Initialize Providers DataTable
+                    if ($('#providers-table').length && !$.fn.DataTable.isDataTable('#providers-table')) {
+                        window.DataTableInstances['providers-table'] = $('#providers-table').DataTable({
+                            processing: true,
+                            serverSide: true,
+                            ajax: '/admin/providers/data',
+                            columns: [
+                                { data: 'id', name: 'id', width: '60px' },
+                                { data: 'name', name: 'name' },
+                                { data: 'email', name: 'email' },
+                                { data: 'created_at', name: 'created_at', width: '120px' },
                                 { data: 'actions', name: 'actions', orderable: false, searchable: false, width: '150px' }
                             ],
                             order: [[0, 'desc']],
