@@ -65,9 +65,30 @@ Route::middleware('guest')->group(function () {
 
 // Note: Module routes are loaded by their own service providers; no manual glob include here
 
-// OTP verification routes
-Route::middleware('auth')->group(function () {
-    Route::get('/verify-otp', [\App\Http\Controllers\Auth\EmailOtpController::class, 'show'])->name('verification.otp.notice');
-    Route::get('/verify-otp/send', [\App\Http\Controllers\Auth\EmailOtpController::class, 'send'])->name('verification.otp.send');
-    Route::post('/verify-otp', [\App\Http\Controllers\Auth\EmailOtpController::class, 'verify'])->name('verification.otp.verify');
-});
+// OTP verification routes (guest flow using session 'pending_user_id')
+Route::get('/verify-otp', [\App\Http\Controllers\Auth\EmailOtpController::class, 'show'])->name('verification.otp.notice');
+Route::get('/verify-otp/send', [\App\Http\Controllers\Auth\EmailOtpController::class, 'send'])->name('verification.otp.send');
+Route::post('/verify-otp', [\App\Http\Controllers\Auth\EmailOtpController::class, 'verify'])->name('verification.otp.verify');
+
+// Link-based verification
+Route::get('/verify-email/link/{token}', function(string $token) {
+    $otp = \App\Models\EmailOtp::where('link_token', $token)->where('used', false)->first();
+    if (!$otp || ($otp->expires_at && $otp->expires_at->isPast())) {
+        abort(403, 'Invalid or expired verification link.');
+    }
+    $user = \App\Models\User::where('id', $otp->user_id)->where('email', $otp->email)->first();
+    if (!$user) {
+        abort(404);
+    }
+    $userRoleId = \Spatie\Permission\Models\Role::where('name','user')->value('id');
+    if ($userRoleId && (int)$user->role_id === (int)$userRoleId) {
+        $user->status = 'verified';
+        $user->save();
+    }
+    if (method_exists($user, 'markEmailAsVerified')) {
+        $user->markEmailAsVerified();
+    }
+    $otp->used = true;
+    $otp->save();
+    return redirect()->route('login')->with('status', 'Email verified. Please login.');
+})->name('verification.link');

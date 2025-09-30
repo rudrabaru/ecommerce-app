@@ -194,11 +194,20 @@ class AdminController extends Controller
         $query = User::with('roles')
             ->when($userRoleId, function ($q) use ($userRoleId) {
                 $q->where('role_id', $userRoleId);
-            });
+            })
+            // Normalize status for existing users: verified if email_verified_at not null
+            ->select('*');
 
         return $dataTables->eloquent($query)
             ->editColumn('created_at', function ($row) {
                 return optional($row->created_at)->format('Y-m-d H:i');
+            })
+            ->addColumn('status', function($row){
+                // Backfill: if status is null but email is verified, treat as verified
+                if (empty($row->status) && !empty($row->email_verified_at)) {
+                    return 'verified';
+                }
+                return $row->status ?: 'unverified';
             })
             ->addColumn('actions', function($row){
                 $btns = '<div class="btn-group" role="group">';

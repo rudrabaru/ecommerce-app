@@ -45,4 +45,19 @@ class User extends Authenticatable implements MustVerifyEmail
             'password' => 'hashed',
         ];
     }
+    
+    // Ensure providers/admins keep status null
+    protected static function booted(): void
+    {
+        static::saving(function (User $user) {
+            try {
+                $userRoleId = \Spatie\Permission\Models\Role::where('name','user')->value('id');
+                if ($userRoleId && (int)$user->role_id !== (int)$userRoleId) {
+                    $user->status = null;
+                }
+            } catch (\Throwable $e) {
+                // Ignore during early migrations / seeding
+            }
+        });
+    }
 }

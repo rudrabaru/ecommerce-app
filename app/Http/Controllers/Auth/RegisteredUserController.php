@@ -57,17 +57,34 @@ class RegisteredUserController extends Controller
 
         event(new Registered($user));
 
+        // For role user (role_id = 3), set status and require OTP before login
+        if ($user->role_id) {
+            // Try to resolve 'user' role id dynamically
+            $userRoleId = $role->id ?? \Spatie\Permission\Models\Role::where('name', 'user')->value('id');
+            if ($userRoleId && (int)$user->role_id === (int)$userRoleId) {
+                // Set unverified; do not log in yet
+                $user->status = 'unverified';
+                $user->save();
+
+                // Generate and send OTP + link in one email
+                $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+                $linkToken = bin2hex(random_bytes(20));
+                EmailOtp::updateOrCreate(
+                    ['user_id' => $user->id, 'email' => $user->email, 'used' => false],
+                    ['code' => $code, 'link_token' => $linkToken, 'expires_at' => now()->addMinutes(15)]
+                );
+                $verifyUrl = url('/verify-email/link/'.$linkToken);
+                Mail::to($user->email)->send(new VerifyOtpMail($code, $verifyUrl));
+
+                // Store pending user id for guest-based OTP flow
+                $request->session()->put('pending_user_id', $user->id);
+                return redirect()->route('verification.otp.notice')->with('status', 'Verification code sent.');
+            }
+        }
+
+        // Admins/Providers: proceed normally
         Auth::login($user);
         $request->session()->regenerate();
-
-        // Generate and send OTP for first-time email verification
-        $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        EmailOtp::updateOrCreate(
-            ['user_id' => $user->id, 'email' => $user->email, 'used' => false],
-            ['code' => $code, 'expires_at' => now()->addMinutes(10)]
-        );
-        Mail::to($user->email)->send(new VerifyOtpMail($code));
-
-        return redirect()->route('verification.otp.notice')->with('status', 'Verification code sent.');
+        return redirect()->intended(route('dashboard'));
     }
 }
