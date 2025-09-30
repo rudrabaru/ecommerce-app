@@ -33,7 +33,7 @@
                         <div class="form-text">Leave blank when editing to keep current password</div>
                     </div>
                     
-                    <div class="mb-3">
+                    <div class="mb-3" id="roleGroup">
                         <label for="role" class="form-label">Role <span class="text-danger">*</span></label>
                         <select class="form-select" id="role" name="role" required>
                             <option value="">Select Role</option>
@@ -79,6 +79,13 @@
         }
     }
 
+    function isProvidersPage() {
+        return window.location && window.location.pathname && window.location.pathname.indexOf('/admin/providers') === 0;
+    }
+    function defaultRoleForPage() {
+        return isProvidersPage() ? 'provider' : 'user';
+    }
+
     function openUserModal(userId = null) {
         // Reset form
         $('#userForm')[0].reset();
@@ -92,6 +99,7 @@
             $('#userId').val(userId);
             $('#password').prop('required', false);
             $('#password').next('.form-text').show();
+            $('#roleGroup').show();
             
             // Load user data
             fetch(`/admin/users/${userId}/edit`, {
@@ -104,7 +112,14 @@
             .then(data => {
                 $('#name').val(data.user.name);
                 $('#email').val(data.user.email);
-                $('#role').val(data.user.roles[0]?.name || '');
+                const currentRole = data.user.roles[0]?.name || '';
+                $('#role').val(currentRole);
+                // Update title contextually
+                if (currentRole === 'provider') {
+                    $('#userModalLabel').text('Edit Provider');
+                } else {
+                    $('#userModalLabel').text('Edit User');
+                }
                 // Trigger validation after prefilling
                 setTimeout(() => {
                     validateForm();
@@ -117,7 +132,10 @@
             });
         } else {
             // Create mode
-            $('#userModalLabel').text('Create User');
+            const defRole = defaultRoleForPage();
+            $('#role').val(defRole);
+            $('#roleGroup').hide(); // hide role selector for create
+            $('#userModalLabel').text(defRole === 'provider' ? 'Create Provider' : 'Create User');
             $('#userMethod').val('POST');
             $('#userId').val('');
             $('#password').prop('required', true);
@@ -157,7 +175,7 @@
             if (data.success) {
                 $('#userModal').modal('hide');
                 reloadCurrentTable();
-                Swal.fire('Success', data.message || 'User saved successfully!', 'success');
+                Swal.fire('Success', data.message || 'Saved successfully!', 'success');
             } else {
                 if (data.errors) {
                     Object.keys(data.errors).forEach(field => {
