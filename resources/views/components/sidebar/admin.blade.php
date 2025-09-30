@@ -15,6 +15,13 @@
         </a>
     </li>
     <li class="nav-item">
+        <a class="nav-link js-ajax-link {{ request()->routeIs('admin.providers.*') ? 'active' : '' }}" 
+           href="{{ route('admin.providers.index') }}">
+            <i class="fas fa-user-tie me-2"></i>
+            {{ __('Providers') }}
+        </a>
+    </li>
+    <li class="nav-item">
         <a class="nav-link js-ajax-link {{ request()->routeIs('admin.products.*') ? 'active' : '' }}" 
            href="{{ route('admin.products.index') }}">
             <i class="fas fa-box me-2"></i>

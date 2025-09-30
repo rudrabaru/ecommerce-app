@@ -21,7 +21,7 @@
                             <th>ID</th>
                             <th>Name</th>
                             <th>Email</th>
-                            <th>Role</th>
+                            <th>Created At</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -38,7 +38,7 @@
                                 { data: "id", name: "id", width: "60px" },
                                 { data: "name", name: "name" },
                                 { data: "email", name: "email" },
-                                { data: "role", name: "role", orderable: false, searchable: false },
+                                { data: "created_at", name: "created_at" },
                                 { data: "actions", name: "actions", orderable: false, searchable: false }
                             ]
                         });
@@ -49,7 +49,5 @@
         </div>
     </div>
 
-    @include('admin::users', ['hideWrapper' => true])
+    @include('admin::partials.user-modal')
 </x-app-layout>
-
- 

@@ -175,22 +175,14 @@ class AdminController extends Controller
     public function data(DataTables $dataTables)
     {
         // Users (role = user)
-        $userRoleId = \Spatie\Permission\Models\Role::where('name', 'user')->value('id');
         $query = User::with('roles')
-            ->when($userRoleId, function($q) use ($userRoleId) { $q->where('role_id', $userRoleId); });
+            ->whereHas('roles', function ($q) {
+                $q->where('name', 'user');
+            });
+
         return $dataTables->eloquent($query)
-            ->addColumn('role', function($row){
-                $badges = $row->roles->map(function($role){
-                    $map = [
-                        'admin' => 'primary',
-                        'provider' => 'warning',
-                        'user' => 'secondary',
-                        'customer' => 'info'
-                    ];
-                    $variant = $map[strtolower($role->name)] ?? 'secondary';
-                    return '<span class="badge bg-' . $variant . '">' . ucfirst($role->name) . '</span>';
-                });
-                return $badges->implode(' ');
+            ->editColumn('created_at', function ($row) {
+                return optional($row->created_at)->format('Y-m-d H:i');
             })
             ->addColumn('actions', function($row){
                 $btns = '<div class="btn-group" role="group">';
@@ -203,7 +195,7 @@ class AdminController extends Controller
                 $btns .= '</div>';
                 return $btns;
             })
-            ->rawColumns(['actions','role'])
+            ->rawColumns(['actions'])
             ->toJson();
     }
 
@@ -215,22 +207,14 @@ class AdminController extends Controller
     public function providersData(DataTables $dataTables)
     {
         // Providers (role = provider)
-        $providerRoleId = \Spatie\Permission\Models\Role::where('name', 'provider')->value('id');
         $query = User::with('roles')
-            ->when($providerRoleId, function($q) use ($providerRoleId) { $q->where('role_id', $providerRoleId); });
+            ->whereHas('roles', function ($q) {
+                $q->where('name', 'provider');
+            });
+
         return $dataTables->eloquent($query)
-            ->addColumn('role', function($row){
-                $badges = $row->roles->map(function($role){
-                    $map = [
-                        'admin' => 'primary',
-                        'provider' => 'warning',
-                        'user' => 'secondary',
-                        'customer' => 'info'
-                    ];
-                    $variant = $map[strtolower($role->name)] ?? 'secondary';
-                    return '<span class="badge bg-' . $variant . '">' . ucfirst($role->name) . '</span>';
-                });
-                return $badges->implode(' ');
+            ->editColumn('created_at', function ($row) {
+                return optional($row->created_at)->format('Y-m-d H:i');
             })
             ->addColumn('actions', function($row){
                 $btns = '<div class="btn-group" role="group">';
@@ -243,7 +227,7 @@ class AdminController extends Controller
                 $btns .= '</div>';
                 return $btns;
             })
-            ->rawColumns(['actions','role'])
+            ->rawColumns(['actions'])
             ->toJson();
     }
 
