@@ -45,6 +45,7 @@
                                     { data: 'id', name: 'id', width: '60px' },
                                     { data: 'name', name: 'name' },
                                     { data: 'email', name: 'email' },
+                                    { data: 'status', name: 'status', width: '100px' },
                                     { data: 'created_at', name: 'created_at' },
                                     { data: 'actions', name: 'actions', orderable: false, searchable: false }
                                 ]
