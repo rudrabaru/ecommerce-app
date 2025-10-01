@@ -92,3 +92,14 @@ Route::get('/verify-email/link/{token}', function(string $token) {
     $otp->save();
     return redirect()->route('login')->with('status', 'Email verified. Please login.');
 })->name('verification.link');
+
+// Admin - Discount Codes
+Route::middleware(['web','auth','ensure_role:admin'])->group(function () {
+    Route::get('/admin/discount-codes', [\App\Http\Controllers\Admin\DiscountCodeController::class, 'index'])->name('admin.discounts.index');
+    Route::get('/admin/discount-codes/data', [\App\Http\Controllers\Admin\DiscountCodeController::class, 'data'])->name('admin.discounts.data');
+    Route::get('/admin/discount-codes/create', [\App\Http\Controllers\Admin\DiscountCodeController::class, 'create'])->name('admin.discounts.create');
+    Route::post('/admin/discount-codes', [\App\Http\Controllers\Admin\DiscountCodeController::class, 'store'])->name('admin.discounts.store');
+    Route::get('/admin/discount-codes/{discount_code}/edit', [\App\Http\Controllers\Admin\DiscountCodeController::class, 'edit'])->name('admin.discounts.edit');
+    Route::put('/admin/discount-codes/{discount_code}', [\App\Http\Controllers\Admin\DiscountCodeController::class, 'update'])->name('admin.discounts.update');
+    Route::delete('/admin/discount-codes/{discount_code}', [\App\Http\Controllers\Admin\DiscountCodeController::class, 'destroy'])->name('admin.discounts.destroy');
+});

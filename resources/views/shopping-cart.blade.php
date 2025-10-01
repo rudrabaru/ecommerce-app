@@ -414,7 +414,7 @@
                 if (discountAmount > 0) {
                     $('.discount-amount').text('-$' + discountAmount.toFixed(2));
                     $('.discount-row').show();
-                    $('#discount_code').val('BARU20');
+                    // Keep user-entered code in the input, do not force static code
                     $('.applied-discount').show();
                 } else {
                     $('.discount-amount').text('$0.00');

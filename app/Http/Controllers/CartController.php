@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Auth;
 use Modules\Products\Models\Product;
 use App\Models\Cart;
 use App\Models\CartItem;
+use App\Services\DiscountService;
+use Modules\Products\Models\Product as ProductModel;
 
 class CartController extends Controller
 {
@@ -237,19 +239,40 @@ class CartController extends Controller
         ]);
 
         $discountCode = strtoupper(trim($validated['discount_code']));
-        $discountAmount = 0;
+        $service = new DiscountService();
 
-        // Validate discount code
-        if ($discountCode === 'BARU20') {
-            $discountAmount = 20.00;
+        // Build cart items and category IDs
+        if (Auth::check()) {
+            $cart = Cart::where('user_id', Auth::id())->with('items.product')->first();
+            $items = $cart ? $cart->items->map(fn($i) => [
+                'product_id' => $i->product_id,
+                'quantity' => $i->quantity,
+                'price' => (float)$i->unit_price,
+                'category_id' => optional($i->product)->category_id,
+            ]) : collect();
         } else {
+            $sessionCart = session('cart', []);
+            $ids = array_column($sessionCart, 'product_id');
+            $categories = ProductModel::whereIn('id', $ids)->pluck('category_id', 'id');
+            $items = collect($sessionCart)->map(function ($i) use ($categories) {
+                return [
+                    'product_id' => $i['product_id'],
+                    'quantity' => $i['quantity'],
+                    'price' => (float)$i['price'],
+                    'category_id' => $categories[$i['product_id']] ?? null,
+                ];
+            });
+        }
+
+        $subtotal = $items->reduce(fn($c,$i)=> $c + ($i['price'] * $i['quantity']), 0.0);
+        $categoryIds = $items->pluck('category_id')->filter()->unique()->values()->all();
+
+        [$ok, $message, $discountAmount, $discount] = $service->validateAndCalculate($discountCode, $items->all(), $categoryIds, $subtotal);
+        if (!$ok) {
             if ($request->ajax()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Invalid discount code'
-                ], 400);
+                return response()->json(['success' => false, 'message' => $message], 400);
             }
-            return redirect()->back()->with('error', 'Invalid discount code');
+            return redirect()->back()->with('error', $message);
         }
 
         if (Auth::check()) {
@@ -268,7 +291,7 @@ class CartController extends Controller
         if ($request->ajax()) {
             return response()->json([
                 'success' => true,
-                'message' => 'Discount code applied successfully',
+                'message' => $message,
                 'discount_amount' => $discountAmount,
                 'discount_code' => $discountCode
             ]);

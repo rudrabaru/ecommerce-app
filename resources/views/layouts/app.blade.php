@@ -457,6 +457,30 @@
                         });
                     }
                     
+                    // Initialize Discount Codes DataTable
+                    if ($('#discounts-table').length && !$.fn.DataTable.isDataTable('#discounts-table')) {
+                        window.DataTableInstances['discounts-table'] = $('#discounts-table').DataTable({
+                            processing: true,
+                            serverSide: true,
+                            ajax: $('#discounts-table').data('dt-url'),
+                            pageLength: $('#discounts-table').data('dt-page-length') || 25,
+                            order: JSON.parse($('#discounts-table').attr('data-dt-order') || '[[0, "desc"]]'),
+                            columns: [
+                                { data: 'id', name: 'id', width: '60px' },
+                                { data: 'code', name: 'code' },
+                                { data: 'discount_type', name: 'discount_type' },
+                                { data: 'discount_value', name: 'discount_value' },
+                                { data: 'is_active', name: 'is_active' },
+                                { data: 'categories', name: 'categories', orderable: false, searchable: false },
+                                { data: 'valid_from', name: 'valid_from' },
+                                { data: 'valid_until', name: 'valid_until' },
+                                { data: 'actions', name: 'actions', orderable: false, searchable: false }
+                            ],
+                            pageSave: true,
+                            responsive: true
+                        });
+                    }
+
                     // Initialize Providers DataTable
                     if ($('#providers-table').length && !$.fn.DataTable.isDataTable('#providers-table')) {
                         window.DataTableInstances['providers-table'] = $('#providers-table').DataTable({

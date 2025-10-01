@@ -36,6 +36,13 @@
         </a>
     </li>
     <li class="nav-item">
+        <a class="nav-link js-ajax-link {{ request()->routeIs('admin.discounts.*') ? 'active' : '' }}" 
+           href="{{ route('admin.discounts.index') }}">
+            <i class="fas fa-ticket-alt me-2"></i>
+            {{ __('Discount Codes') }}
+        </a>
+    </li>
+    <li class="nav-item">
         <a class="nav-link js-ajax-link {{ request()->routeIs('admin.orders.*') ? 'active' : '' }}" 
            href="{{ Route::has('admin.orders.index') ? route('admin.orders.index') : '#' }}">
             <i class="fas fa-shopping-cart me-2"></i>
