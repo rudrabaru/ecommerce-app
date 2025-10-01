@@ -1,8 +1,9 @@
 <?php
 
-namespace App\Http\Requests;
+namespace App\Http\Requests; 
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateDiscountCodeRequest extends FormRequest
 {
@@ -23,9 +24,16 @@ class UpdateDiscountCodeRequest extends FormRequest
 
     public function rules(): array
     {
-        $id = $this->route('discount_code');
+        $routeParam = $this->route('discount_code');
+        $id = is_object($routeParam) ? ($routeParam->id ?? null) : $routeParam;
         return [
-            'code' => ['required','string','max:50','regex:/^[A-Z0-9_-]+$/','unique:discount_codes,code,'.$id],
+            'code' => [
+                'required',
+                'string',
+                'max:50',
+                'regex:/^[A-Z0-9_-]+$/',
+                Rule::unique('discount_codes', 'code')->ignore($id)
+            ],
             'discount_type' => ['required','in:fixed,percentage'],
             'discount_value' => ['required','numeric','min:1'],
             'minimum_order_amount' => ['nullable','numeric','min:0'],

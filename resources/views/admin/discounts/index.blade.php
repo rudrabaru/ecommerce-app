@@ -73,7 +73,8 @@
                     fetch('/admin/discount-codes/'+id+'/edit', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                         .then(r=>r.json())
                         .then(data => {
-                            fillCategories(data.categories, (data.discount.categories||[]).map(c=>c.id));
+                            const selected = (data.discount.category_id) ? data.discount.category_id : ((data.discount.categories||[]).map(c=>c.id)[0]||null);
+                            fillCategories(data.categories, selected);
                             fillForm(data.discount);
                             $('#discountModal').modal('show');
                         })

@@ -25,6 +25,9 @@ class DiscountService
 
         // Eligible subtotal: only items in allowed categories
         $allowedCategoryIds = $discount->categories()->pluck('categories.id')->all();
+        if (empty($allowedCategoryIds) && $discount->category_id) {
+            $allowedCategoryIds = [$discount->category_id];
+        }
         $eligibleSubtotal = $subtotal;
         if (!empty($allowedCategoryIds)) {
             $eligibleSubtotal = 0.0;

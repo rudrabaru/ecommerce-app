@@ -49,6 +49,9 @@ class DiscountCodeController extends Controller
         // Sync both single category_id and pivot for future extensibility
         $categoryId = $data['category_id'];
         $discount = DiscountCode::create($data);
+        // Persist primary category_id as well as pivot for compatibility
+        $discount->category_id = $categoryId;
+        $discount->save();
         $discount->categories()->sync([$categoryId]);
         if (request()->wantsJson() || request()->ajax()) {
             return response()->json(['success' => true, 'message' => 'Discount code created']);
@@ -70,6 +73,9 @@ class DiscountCodeController extends Controller
         $data = $request->validated();
         $categoryId = $data['category_id'];
         $discount_code->update($data);
+        // Update primary category_id and pivot
+        $discount_code->category_id = $categoryId;
+        $discount_code->save();
         $discount_code->categories()->sync([$categoryId]);
         if (request()->wantsJson() || request()->ajax()) {
             return response()->json(['success' => true, 'message' => 'Discount code updated']);
@@ -79,7 +85,13 @@ class DiscountCodeController extends Controller
 
     public function destroy(DiscountCode $discount_code)
     {
-        $discount_code->delete();
+        // Detach pivots then hard delete so it is removed from DB as requested
+        try {
+            $discount_code->categories()->detach();
+        } catch (\Throwable $e) {
+            // ignore if not set
+        }
+        $discount_code->forceDelete();
         if (request()->ajax()) {
             return response()->json(['success' => true, 'message' => 'Deleted']);
         }

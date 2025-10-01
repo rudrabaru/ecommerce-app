@@ -23,6 +23,7 @@ class DiscountCode extends Model
         'valid_from',
         'valid_until',
         'is_active',
+        'category_id',
     ];
 
     protected $casts = [
@@ -75,6 +76,9 @@ class DiscountCode extends Model
     public function appliesToCategoryIds(array $categoryIds): bool
     {
         $allowed = $this->categories()->pluck('categories.id')->all();
+        if (empty($allowed) && $this->category_id) {
+            $allowed = [$this->category_id];
+        }
         if (empty($allowed)) return true; // if none selected, applies to all
         return count(array_intersect($allowed, $categoryIds)) > 0;
     }
