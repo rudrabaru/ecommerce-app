@@ -9,12 +9,24 @@ class DiscountService
 {
     public function validateAndCalculate(string $code, array $cartItems, array $cartCategoryIds, float $subtotal): array
     {
-        $discount = DiscountCode::active()->validNow()->whereRaw('upper(code) = ?', [strtoupper($code)])->first();
+        // Fetch by code first to provide precise error messages
+        $discount = DiscountCode::whereRaw('upper(code) = ?', [strtoupper($code)])->first();
         if (!$discount) {
-            return [false, 'Invalid or inactive discount code', 0.0, null];
+            return [false, 'Invalid discount code', 0.0, null];
+        }
+        if (!$discount->is_active) {
+            return [false, 'Inactive discount code', 0.0, $discount];
+        }
+        if (!$discount->isWithinDateRange()) {
+            // Not yet active or expired
+            $now = now();
+            if ($discount->valid_from && $now->lt($discount->valid_from)) {
+                return [false, 'Discount code not yet active', 0.0, $discount];
+            }
+            return [false, 'Discount code expired', 0.0, $discount];
         }
         if (!$discount->hasRemainingUses()) {
-            return [false, 'Discount usage limit reached', 0.0, null];
+            return [false, 'Discount usage limit reached', 0.0, $discount];
         }
         if (!$discount->appliesToCategoryIds($cartCategoryIds)) {
             return [false, 'This code is not applicable to your cart items', 0.0, $discount];

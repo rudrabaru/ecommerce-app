@@ -182,6 +182,10 @@
     </style>
     
     <script>
+        // Defer binding until jQuery is available to avoid "$ is not defined"
+        (function waitForjQuery(){
+            if (!window.jQuery || !$.fn) { return setTimeout(waitForjQuery, 50); }
+
         // Helper function to update cart item price in real-time
         function updateCartItemPrice($row, quantity) {
             const priceText = $row.find('.product__cart__item__text h5').text().replace('$', '').replace(',', '');
@@ -321,7 +325,7 @@
             // Apply discount code
             $('#discount-form').on('submit', function(e) {
                 e.preventDefault();
-                const discountCode = $('#discount_code').val().trim();
+                const discountCode = $('#discount_code').val().trim().toUpperCase();
                 
                 if (!discountCode) {
                     Swal.fire('Error', 'Please enter a discount code', 'error');
@@ -346,8 +350,14 @@
                         }
                     },
                     error: function(xhr) {
-                        const response = xhr.responseJSON;
-                        Swal.fire('Error', response.message || 'Invalid discount code', 'error');
+                        try {
+                            const response = xhr.responseJSON || JSON.parse(xhr.responseText);
+                            console.error('Discount apply error response:', response);
+                            Swal.fire('Error', (response && response.message) || 'Invalid discount code', 'error');
+                        } catch(e) {
+                            console.error('Discount apply error raw:', xhr.responseText);
+                            Swal.fire('Error', 'Invalid discount code', 'error');
+                        }
                     }
                 });
             });
@@ -427,7 +437,9 @@
                 updateCartTotals();
             }
         });
+
+        })();
     </script>
-</body>
+ </body>
 
 </html>

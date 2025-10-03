@@ -14,6 +14,16 @@ class StoreDiscountCodeRequest extends FormRequest
         if ($this->has('is_active')) {
             $this->merge(['is_active' => (bool)$this->input('is_active')]);
         }
+        // Normalize datetime-local values to Y-m-d H:i:s in app timezone
+        foreach (['valid_from','valid_until'] as $key) {
+            if ($this->filled($key)) {
+                $raw = (string)$this->input($key);
+                try {
+                    $dt = \Carbon\Carbon::parse(str_replace('T', ' ', $raw), config('app.timezone'));
+                    $this->merge([$key => $dt->format('Y-m-d H:i:s')]);
+                } catch (\Throwable $e) {}
+            }
+        }
     }
 
     public function authorize(): bool
