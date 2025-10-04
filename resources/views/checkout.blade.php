@@ -24,10 +24,10 @@
         <div class="container">
             <div class="row">
                 <div class="col-lg-8">
-                    <div class="checkout__form">
+            <div class="checkout__form">
                         <h4>Billing Details</h4>
-                        <form method="post" action="{{ route('checkout.store') }}">
-                            @csrf
+                <form method="post" action="{{ route('checkout.store') }}">
+                    @csrf
                             
                             <!-- Address Selection -->
                             <div class="checkout__input">
@@ -99,7 +99,7 @@
                             </div>
 
                             <!-- Order Notes -->
-                            <div class="checkout__input">
+                    <div class="checkout__input">
                                 <p>Order Notes</p>
                                 <textarea name="notes" placeholder="Notes about your order (optional)" 
                                           class="form-control" rows="3">{{ old('notes') }}</textarea>
@@ -167,9 +167,9 @@
                         </ul>
                         <div class="checkout__order__subtotal">Subtotal <span>${{ number_format($subtotal, 2) }}</span></div>
                         @if($discountAmount > 0)
-                            <div class="checkout__order__discount" style="color: #28a745;">Discount <span style="color: #dc3545;">-${{ number_format($discountAmount, 2) }}</span></div>
+                            <div class="checkout__order__discount">Discount <span>-${{ number_format($discountAmount, 2) }}</span></div>
                         @endif
-                        <div class="checkout__order__total">Total <span style="color: #e7ab3c;">${{ number_format($subtotal - $discountAmount, 2) }}</span></div>
+                        <div class="checkout__order__total">Total <span>${{ number_format($subtotal - $discountAmount, 2) }}</span></div>
                     </div>
                 </div>
             </div>
@@ -181,40 +181,214 @@
 
     @include('partials.address-modal')
 
+    <!-- Search Begin -->
+    <div class="search-model">
+        <div class="h-100 d-flex align-items-center justify-content-center">
+            <div class="search-close-switch">+</div>
+            <form class="search-model-form">
+                <input type="text" id="search-input" placeholder="Search here.....">
+            </form>
+        </div>
+    </div>
+    <!-- Search End -->
+
+    <!-- Js Plugins -->
+    <script src="{{ asset('js/jquery-3.3.1.min.js') }}" onerror="loadJQueryFromCDN()"></script>
     <script>
-    $(document).ready(function() {
-        // Address modal functionality for checkout page
-        window.openAddressModal = function(id) {
-            resetAddressForm();
-            if (id) {
-                $('#addressModalLabel').text('Edit Address');
-                $('#addressMethod').val('PUT');
-                $('#addressId').val(id);
-                
-                // Fetch address data
-                $.ajax({
-                    url: '/addresses/' + id + '/edit',
-                    method: 'GET',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            fillAddressForm(response.address);
-                            $('#addressModal').modal('show');
-                        }
-                    },
-                    error: function() {
-                        alert('Failed to load address data');
-                    }
-                });
-            } else {
-                $('#addressModalLabel').text('Add New Address');
-                $('#addressMethod').val('POST');
-                $('#addressId').val('');
-                $('#addressModal').modal('show');
+        // Test jQuery loading
+        console.log('jQuery test - typeof $:', typeof $);
+        console.log('jQuery test - typeof jQuery:', typeof jQuery);
+        if (typeof $ !== 'undefined') {
+            console.log('jQuery version:', $.fn.jquery);
+        }
+        
+        // Fallback function to load jQuery from CDN
+        function loadJQueryFromCDN() {
+            console.log('Local jQuery failed, loading from CDN...');
+            var script = document.createElement('script');
+            script.src = 'https://code.jquery.com/jquery-3.3.1.min.js';
+            script.onload = function() {
+                console.log('jQuery loaded from CDN successfully');
+            };
+            script.onerror = function() {
+                console.error('Failed to load jQuery from CDN as well');
+            };
+            document.head.appendChild(script);
+        }
+    </script>
+    <script src="{{ asset('js/bootstrap.min.js') }}"></script>
+    <script src="{{ asset('js/jquery.nice-select.min.js') }}"></script>
+    <script src="{{ asset('js/jquery.nicescroll.min.js') }}"></script>
+    <script src="{{ asset('js/jquery.magnific-popup.min.js') }}"></script>
+    <script src="{{ asset('js/jquery.countdown.min.js') }}"></script>
+    <script src="{{ asset('js/jquery.slicknav.js') }}"></script>
+    <script src="{{ asset('js/mixitup.min.js') }}"></script>
+    <script src="{{ asset('js/owl.carousel.min.js') }}"></script>
+    <script src="{{ asset('js/main.js') }}"></script>
+
+    <!-- Address Modal JavaScript -->
+    <script>
+    // Make openAddressModal available immediately
+    window.openAddressModal = function(id) {
+        console.log('openAddressModal called with id:', id);
+        // Check if jQuery is available
+        if (typeof jQuery === 'undefined') {
+            console.error('jQuery not available yet, please wait...');
+            return;
+        }
+        
+        // If jQuery is available, proceed with the modal
+        if (typeof window.initializeAddressModal === 'function') {
+            // Use the existing function
+            window.initializeAddressModal();
+        } else {
+            console.log('Initializing address modal on demand...');
+            // Initialize on demand
+            initializeAddressModal();
+        }
+        
+        // Show the modal
+        $('#addressModal').modal('show');
+    };
+    
+    // Wait for everything to be loaded
+    window.addEventListener('load', function() {
+        console.log('Page fully loaded, checking jQuery...');
+        
+        // Function to initialize address modal functionality
+        function initializeAddressModal() {
+        console.log('Initializing address modal functionality...');
+        
+        // State and city data
+        const locationData = {
+            'India': {
+                'states': {
+                    'Delhi': ['New Delhi', 'Central Delhi', 'East Delhi', 'North Delhi', 'South Delhi', 'West Delhi'],
+                    'Maharashtra': ['Mumbai', 'Pune', 'Nagpur', 'Nashik', 'Aurangabad', 'Solapur'],
+                    'Karnataka': ['Bangalore', 'Mysore', 'Hubli', 'Mangalore', 'Belgaum', 'Gulbarga'],
+                    'Tamil Nadu': ['Chennai', 'Coimbatore', 'Madurai', 'Tiruchirappalli', 'Salem', 'Tirunelveli'],
+                    'Gujarat': ['Ahmedabad', 'Surat', 'Vadodara', 'Rajkot', 'Bhavnagar', 'Jamnagar']
+                }
+            },
+            'United States': {
+                'states': {
+                    'California': ['Los Angeles', 'San Francisco', 'San Diego', 'San Jose', 'Fresno', 'Sacramento'],
+                    'New York': ['New York City', 'Buffalo', 'Rochester', 'Yonkers', 'Syracuse', 'Albany'],
+                    'Texas': ['Houston', 'San Antonio', 'Dallas', 'Austin', 'Fort Worth', 'El Paso'],
+                    'Florida': ['Miami', 'Tampa', 'Orlando', 'Jacksonville', 'St. Petersburg', 'Hialeah']
+                }
+            },
+            'United Kingdom': {
+                'states': {
+                    'England': ['London', 'Birmingham', 'Manchester', 'Liverpool', 'Leeds', 'Sheffield'],
+                    'Scotland': ['Edinburgh', 'Glasgow', 'Aberdeen', 'Dundee', 'Stirling', 'Perth'],
+                    'Wales': ['Cardiff', 'Swansea', 'Newport', 'Wrexham', 'Barry', 'Caerphilly']
+                }
             }
+        };
+
+        // Country change handler
+        $(document).on('change', '#country', function() {
+            const country = $(this).val();
+            const stateSelect = $('#state');
+            const citySelect = $('#city');
+            
+            // Clear state and city options
+            stateSelect.html('<option value="">Select State</option>');
+            citySelect.html('<option value="">Select City</option>');
+            
+            if (country && locationData[country]) {
+                // Populate states
+                Object.keys(locationData[country].states).forEach(function(state) {
+                    stateSelect.append(`<option value="${state}">${state}</option>`);
+                });
+            }
+            
+            validateAddressForm();
+        });
+
+        // State change handler
+        $(document).on('change', '#state', function() {
+            const country = $('#country').val();
+            const state = $(this).val();
+            const citySelect = $('#city');
+            
+            // Clear city options
+            citySelect.html('<option value="">Select City</option>');
+            
+            if (country && state && locationData[country] && locationData[country].states[state]) {
+                // Populate cities
+                locationData[country].states[state].forEach(function(city) {
+                    citySelect.append(`<option value="${city}">${city}</option>`);
+                });
+            }
+            
+            validateAddressForm();
+        });
+
+        // City change handler
+        $(document).on('change', '#city', function() {
+            validateAddressForm();
+        });
+
+        // Phone number formatting
+        $(document).on('input', '#phone', function() {
+            let value = $(this).val().replace(/\D/g, '');
+            const countryCode = $('#country_code').val();
+            
+            // Format based on country code
+            if (countryCode === '+91' && value.length > 10) {
+                value = value.substring(0, 10);
+            } else if (countryCode === '+1' && value.length > 10) {
+                value = value.substring(0, 10);
+            }
+            
+            $(this).val(value);
+            validateAddressForm();
+        });
+
+        // Country code change handler
+        $(document).on('change', '#country_code', function() {
+            validateAddressForm();
+        });
+
+        // Store the function globally for reuse
+        window.initializeAddressModal = function() {
+            console.log('Setting up address modal functionality...');
+            
+            // Address modal functionality for checkout page
+            window.openAddressModal = function(id) {
+                resetAddressForm();
+                if (id) {
+                    $('#addressModalLabel').text('Edit Address');
+                    $('#addressMethod').val('PUT');
+                    $('#addressId').val(id);
+                    
+                    // Fetch address data
+                    $.ajax({
+                        url: '/addresses/' + id + '/edit',
+                        method: 'GET',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                fillAddressForm(response.address);
+                                $('#addressModal').modal('show');
+                            }
+                        },
+                        error: function() {
+                            alert('Failed to load address data');
+                        }
+                    });
+                } else {
+                    $('#addressModalLabel').text('Add New Address');
+                    $('#addressMethod').val('POST');
+                    $('#addressId').val('');
+                    $('#addressModal').modal('show');
+                }
+            };
         };
 
         function fillAddressForm(address) {
@@ -333,31 +507,68 @@
             $('.is-invalid').removeClass('is-invalid');
             $('.invalid-feedback').text('');
         });
+    }
+
+        // Initialize when jQuery is ready
+        if (typeof jQuery !== 'undefined') {
+            console.log('jQuery is available, initializing...');
+            $(document).ready(function() {
+                console.log('DOM is ready, initializing address modal...');
+                window.initializeAddressModal();
+            });
+        } else {
+            console.error('jQuery is not available!');
+        }
     });
     </script>
 
-    <!-- Search Begin -->
-    <div class="search-model">
-        <div class="h-100 d-flex align-items-center justify-content-center">
-            <div class="search-close-switch">+</div>
-            <form class="search-model-form">
-                <input type="text" id="search-input" placeholder="Search here.....">
-            </form>
-        </div>
-    </div>
-    <!-- Search End -->
+    <style>
+    /* Order Summary Alignment Fix */
+    .checkout__order__subtotal,
+    .checkout__order__discount,
+    .checkout__order__total {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid #f0f0f0;
+    }
 
-    <!-- Js Plugins -->
-    <script src="js/jquery-3.3.1.min.js"></script>
-    <script src="js/bootstrap.min.js"></script>
-    <script src="js/jquery.nice-select.min.js"></script>
-    <script src="js/jquery.nicescroll.min.js"></script>
-    <script src="js/jquery.magnific-popup.min.js"></script>
-    <script src="js/jquery.countdown.min.js"></script>
-    <script src="js/jquery.slicknav.js"></script>
-    <script src="js/mixitup.min.js"></script>
-    <script src="js/owl.carousel.min.js"></script>
-    <script src="js/main.js"></script>
+    .checkout__order__discount {
+        color: #28a745;
+        font-weight: 500;
+    }
+
+    .checkout__order__discount span {
+        color: #dc3545;
+        font-weight: 600;
+    }
+
+    .checkout__order__total {
+        font-weight: 700;
+        font-size: 18px;
+        color: #e7ab3c;
+        border-bottom: 2px solid #e7ab3c;
+        margin-top: 10px;
+    }
+
+    .checkout__order__total span {
+        color: #e7ab3c;
+    }
+
+    /* Address Modal Dropdown Fix */
+    .form-control {
+        appearance: auto !important;
+        -webkit-appearance: menulist !important;
+        -moz-appearance: menulist !important;
+    }
+
+    .form-control:focus {
+        border-color: #e7ab3c !important;
+        box-shadow: 0 0 0 0.2rem rgba(231, 171, 60, 0.25) !important;
+        outline: none !important;
+    }
+    </style>
 </body>
 
 </html>

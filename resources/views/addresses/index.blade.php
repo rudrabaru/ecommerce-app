@@ -286,6 +286,99 @@ $(document).ready(function() {
         }
     };
 
+    // State and city data
+    const locationData = {
+        'India': {
+            'states': {
+                'Delhi': ['New Delhi', 'Central Delhi', 'East Delhi', 'North Delhi', 'South Delhi', 'West Delhi'],
+                'Maharashtra': ['Mumbai', 'Pune', 'Nagpur', 'Nashik', 'Aurangabad', 'Solapur'],
+                'Karnataka': ['Bangalore', 'Mysore', 'Hubli', 'Mangalore', 'Belgaum', 'Gulbarga'],
+                'Tamil Nadu': ['Chennai', 'Coimbatore', 'Madurai', 'Tiruchirappalli', 'Salem', 'Tirunelveli'],
+                'Gujarat': ['Ahmedabad', 'Surat', 'Vadodara', 'Rajkot', 'Bhavnagar', 'Jamnagar']
+            }
+        },
+        'United States': {
+            'states': {
+                'California': ['Los Angeles', 'San Francisco', 'San Diego', 'San Jose', 'Fresno', 'Sacramento'],
+                'New York': ['New York City', 'Buffalo', 'Rochester', 'Yonkers', 'Syracuse', 'Albany'],
+                'Texas': ['Houston', 'San Antonio', 'Dallas', 'Austin', 'Fort Worth', 'El Paso'],
+                'Florida': ['Miami', 'Tampa', 'Orlando', 'Jacksonville', 'St. Petersburg', 'Hialeah']
+            }
+        },
+        'United Kingdom': {
+            'states': {
+                'England': ['London', 'Birmingham', 'Manchester', 'Liverpool', 'Leeds', 'Sheffield'],
+                'Scotland': ['Edinburgh', 'Glasgow', 'Aberdeen', 'Dundee', 'Stirling', 'Perth'],
+                'Wales': ['Cardiff', 'Swansea', 'Newport', 'Wrexham', 'Barry', 'Caerphilly']
+            }
+        }
+    };
+
+    // Country change handler
+    $(document).on('change', '#country', function() {
+        const country = $(this).val();
+        const stateSelect = $('#state');
+        const citySelect = $('#city');
+        
+        // Clear state and city options
+        stateSelect.html('<option value="">Select State</option>');
+        citySelect.html('<option value="">Select City</option>');
+        
+        if (country && locationData[country]) {
+            // Populate states
+            Object.keys(locationData[country].states).forEach(function(state) {
+                stateSelect.append(`<option value="${state}">${state}</option>`);
+            });
+        }
+        
+        validateAddressForm();
+    });
+
+    // State change handler
+    $(document).on('change', '#state', function() {
+        const country = $('#country').val();
+        const state = $(this).val();
+        const citySelect = $('#city');
+        
+        // Clear city options
+        citySelect.html('<option value="">Select City</option>');
+        
+        if (country && state && locationData[country] && locationData[country].states[state]) {
+            // Populate cities
+            locationData[country].states[state].forEach(function(city) {
+                citySelect.append(`<option value="${city}">${city}</option>`);
+            });
+        }
+        
+        validateAddressForm();
+    });
+
+    // City change handler
+    $(document).on('change', '#city', function() {
+        validateAddressForm();
+    });
+
+    // Phone number formatting
+    $(document).on('input', '#phone', function() {
+        let value = $(this).val().replace(/\D/g, '');
+        const countryCode = $('#country_code').val();
+        
+        // Format based on country code
+        if (countryCode === '+91' && value.length > 10) {
+            value = value.substring(0, 10);
+        } else if (countryCode === '+1' && value.length > 10) {
+            value = value.substring(0, 10);
+        }
+        
+        $(this).val(value);
+        validateAddressForm();
+    });
+
+    // Country code change handler
+    $(document).on('change', '#country_code', function() {
+        validateAddressForm();
+    });
+
     // Form validation on input change
     $(document).on('input change', '#addressForm input, #addressForm select', function() {
         validateAddressForm();
