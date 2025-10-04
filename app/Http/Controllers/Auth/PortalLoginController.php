@@ -30,9 +30,13 @@ class PortalLoginController extends Controller
             return back()->withErrors(['email' => 'Invalid credentials'])->withInput();
         }
 
+        $user = Auth::user();
+        
+        // Merge guest cart into user's database cart BEFORE session regeneration
+        $this->mergeGuestCart($user);
+
         $request->session()->regenerate();
 
-        $user = Auth::user();
         if ($user->hasRole('admin') || $user->hasRole('provider')) {
             Auth::logout();
             $request->session()->invalidate();
@@ -87,6 +91,68 @@ class PortalLoginController extends Controller
         throw ValidationException::withMessages([
             'email' => __('auth.throttle', ['seconds' => RateLimiter::availableIn($this->throttleKey($request))]),
         ]);
+    }
+
+    private function mergeGuestCart($user)
+    {
+        $guestCart = session('cart', []);
+        
+        // Debug logging
+        \Log::info('Cart merge attempt', [
+            'user_id' => $user->id,
+            'guest_cart_count' => count($guestCart),
+            'guest_cart' => $guestCart
+        ]);
+        
+        if (empty($guestCart)) {
+            \Log::info('No guest cart items to merge');
+            return;
+        }
+
+        // Get or create user's cart
+        $userCart = \App\Models\Cart::firstOrCreate(['user_id' => $user->id]);
+
+        foreach ($guestCart as $productId => $item) {
+            $existingItem = $userCart->items()->where('product_id', $productId)->first();
+            
+            if ($existingItem) {
+                // If item exists, add quantities
+                $existingItem->quantity += $item['quantity'];
+                $existingItem->save();
+                \Log::info('Updated existing cart item', [
+                    'product_id' => $productId,
+                    'new_quantity' => $existingItem->quantity
+                ]);
+            } else {
+                // Create new cart item
+                $cartItem = $userCart->items()->create([
+                    'product_id' => $productId,
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $item['price'],
+                ]);
+                \Log::info('Created new cart item', [
+                    'product_id' => $productId,
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $item['price']
+                ]);
+            }
+        }
+
+        // Merge discount if exists
+        if (session()->has('cart_discount_code')) {
+            $userCart->update([
+                'discount_code' => session('cart_discount_code'),
+                'discount_amount' => session('cart_discount', 0)
+            ]);
+            \Log::info('Merged discount code', [
+                'discount_code' => session('cart_discount_code'),
+                'discount_amount' => session('cart_discount', 0)
+            ]);
+        }
+
+        // Clear guest cart
+        session()->forget(['cart', 'cart_discount_code', 'cart_discount']);
+        \Log::info('Guest cart cleared after merge');
     }
 }
 

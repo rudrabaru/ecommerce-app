@@ -26,12 +26,12 @@ class AuthenticatedSessionController extends Controller
     {
         $request->authenticate();
 
-        $request->session()->regenerate();
-
         $user = $request->user();
 
-        // Merge guest cart into user's database cart
+        // Merge guest cart into user's database cart BEFORE session regeneration
         $this->mergeGuestCart($user);
+
+        $request->session()->regenerate();
 
         if ($user->hasRole('admin')) {
             return redirect()->intended(route('admin.dashboard'));
@@ -49,7 +49,16 @@ class AuthenticatedSessionController extends Controller
     private function mergeGuestCart($user)
     {
         $guestCart = session('cart', []);
+        
+        // Debug logging
+        \Log::info('Cart merge attempt', [
+            'user_id' => $user->id,
+            'guest_cart_count' => count($guestCart),
+            'guest_cart' => $guestCart
+        ]);
+        
         if (empty($guestCart)) {
+            \Log::info('No guest cart items to merge');
             return;
         }
 
@@ -63,12 +72,21 @@ class AuthenticatedSessionController extends Controller
                 // If item exists, add quantities
                 $existingItem->quantity += $item['quantity'];
                 $existingItem->save();
+                \Log::info('Updated existing cart item', [
+                    'product_id' => $productId,
+                    'new_quantity' => $existingItem->quantity
+                ]);
             } else {
                 // Create new cart item
-                $userCart->items()->create([
+                $cartItem = $userCart->items()->create([
                     'product_id' => $productId,
                     'quantity' => $item['quantity'],
                     'unit_price' => $item['price'],
+                ]);
+                \Log::info('Created new cart item', [
+                    'product_id' => $productId,
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $item['price']
                 ]);
             }
         }
@@ -79,10 +97,15 @@ class AuthenticatedSessionController extends Controller
                 'discount_code' => session('cart_discount_code'),
                 'discount_amount' => session('cart_discount', 0)
             ]);
+            \Log::info('Merged discount code', [
+                'discount_code' => session('cart_discount_code'),
+                'discount_amount' => session('cart_discount', 0)
+            ]);
         }
 
         // Clear guest cart
         session()->forget(['cart', 'cart_discount_code', 'cart_discount']);
+        \Log::info('Guest cart cleared after merge');
     }
 
     /**

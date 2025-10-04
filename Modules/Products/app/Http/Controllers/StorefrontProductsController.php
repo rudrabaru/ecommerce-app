@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Modules\Products\Models\Product;
 use Modules\Products\Models\Category;
+use App\Models\DiscountCode;
 
 class StorefrontProductsController extends Controller
 {
@@ -77,7 +78,28 @@ class StorefrontProductsController extends Controller
             ->take(4)
             ->get();
 
-        return view('shop-details', compact('product', 'relatedProducts'));
+        // Get available discount codes for this product's category
+        $discountCodes = $this->getAvailableDiscountCodes($product->category_id);
+
+        return view('shop-details', compact('product', 'relatedProducts', 'discountCodes'));
+    }
+
+    /**
+     * Get available discount codes for a specific category
+     */
+    private function getAvailableDiscountCodes($categoryId)
+    {
+        return DiscountCode::active()
+            ->validNow()
+            ->notExceededUsage()
+            ->where(function ($query) use ($categoryId) {
+                $query->where('category_id', $categoryId)
+                      ->orWhereHas('categories', function ($q) use ($categoryId) {
+                          $q->where('categories.id', $categoryId);
+                      });
+            })
+            ->orderBy('discount_value', 'desc')
+            ->get();
     }
 
     /**

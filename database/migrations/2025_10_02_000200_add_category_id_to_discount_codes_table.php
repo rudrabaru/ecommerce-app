@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (!Schema::hasColumn('discount_codes', 'category_id')) {
+        if (Schema::hasTable('discount_codes') && !Schema::hasColumn('discount_codes', 'category_id')) {
             Schema::table('discount_codes', function (Blueprint $table) {
                 $table->unsignedBigInteger('category_id')->nullable()->after('is_active');
                 $table->foreign('category_id')->references('id')->on('categories')->nullOnDelete();

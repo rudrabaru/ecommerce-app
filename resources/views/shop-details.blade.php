@@ -134,6 +134,9 @@
                                     <li><span>Provider:</span> {{ $product->provider->name ?? '—' }}</li>
                                 </ul>
                             </div>
+                            
+                            <!-- Discount Codes Section -->
+                            <x-discount-codes :discountCodes="$discountCodes" />
                         </div>
                     </div>
                 </div>

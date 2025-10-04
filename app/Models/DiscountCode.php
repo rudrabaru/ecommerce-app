@@ -59,6 +59,14 @@ class DiscountCode extends Model
         });
     }
 
+    public function scopeNotExceededUsage($q)
+    {
+        return $q->where(function ($q) {
+            $q->whereNull('usage_limit')
+              ->orWhereRaw('usage_count < usage_limit');
+        });
+    }
+
     public function isWithinDateRange(): bool
     {
         $now = now();
