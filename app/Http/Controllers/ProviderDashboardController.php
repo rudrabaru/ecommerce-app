@@ -49,7 +49,7 @@ class ProviderDashboardController extends Controller
                     'product_name' => $order->product->title,
                     'total_amount' => $order->total_amount,
                     'status' => $order->status,
-                    'created_at' => $order->created_at->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s'),
+                    'created_at' => $order->created_at,
                 ];
             });
         
@@ -76,7 +76,7 @@ class ProviderDashboardController extends Controller
                     'stock' => $product->stock,
                     'is_approved' => $product->is_approved,
                     'status' => '<span class="badge bg-' . $statusClass . '">' . $statusText . '</span>',
-                    'created_at' => $product->created_at->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s'),
+                    'created_at' => $product->created_at,
                 ];
             });
         

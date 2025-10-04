@@ -91,7 +91,6 @@
         // Reset form
         $('#userForm')[0].reset();
         $('.form-control').removeClass('is-invalid');
-        $('.invalid-feedback').text('');
         $('#saveUserBtn').prop('disabled', true);
         
         if (userId) {
@@ -143,9 +142,6 @@
             $('#password').prop('required', true);
             $('#password').next('.form-text').hide();
         }
-        
-        // Show modal immediately
-        $('#userModal').modal('show');
     }
     
     function saveUser() {
@@ -244,56 +240,18 @@
         const role = $('#role').val();
         const isEdit = $('#userId').val() !== '';
         
-        // Clear previous validation states
-        $('.form-control').removeClass('is-invalid');
-        $('.invalid-feedback').text('');
+        let isValid = name !== '' && email !== '' && role !== '';
         
-        let isValid = true;
-        
-        // Name validation
-        if (name === '') {
-            $('#name').addClass('is-invalid');
-            $('#name').siblings('.invalid-feedback').text('Name is required');
-            isValid = false;
-        } else if (name.length < 2) {
-            $('#name').addClass('is-invalid');
-            $('#name').siblings('.invalid-feedback').text('Name must be at least 2 characters');
-            isValid = false;
-        }
-        
-        // Email validation
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (email === '') {
-            $('#email').addClass('is-invalid');
-            $('#email').siblings('.invalid-feedback').text('Email is required');
-            isValid = false;
-        } else if (!emailRegex.test(email)) {
-            $('#email').addClass('is-invalid');
-            $('#email').siblings('.invalid-feedback').text('Please enter a valid email address');
-            isValid = false;
-        }
-        
-        // Password validation
         if (!isEdit) {
-            if (password === '') {
-                $('#password').addClass('is-invalid');
-                $('#password').siblings('.invalid-feedback').text('Password is required');
-                isValid = false;
-            } else if (password.length < 8) {
-                $('#password').addClass('is-invalid');
-                $('#password').siblings('.invalid-feedback').text('Password must be at least 8 characters');
-                isValid = false;
-            }
-        } else if (password !== '' && password.length < 8) {
-            $('#password').addClass('is-invalid');
-            $('#password').siblings('.invalid-feedback').text('Password must be at least 8 characters');
+            isValid = isValid && password !== '';
+        }
+        
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (email && !emailRegex.test(email)) {
             isValid = false;
         }
         
-        // Role validation (only for edit mode)
-        if (isEdit && role === '') {
-            $('#role').addClass('is-invalid');
-            $('#role').siblings('.invalid-feedback').text('Role is required');
+        if ((!isEdit || password !== '') && password.length < 8) {
             isValid = false;
         }
         

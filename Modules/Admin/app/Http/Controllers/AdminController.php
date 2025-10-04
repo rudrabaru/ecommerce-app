@@ -200,7 +200,7 @@ class AdminController extends Controller
 
         return $dataTables->eloquent($query)
             ->editColumn('created_at', function ($row) {
-                return optional($row->created_at)->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s');
+                return optional($row->created_at)->format('Y-m-d H:i');
             })
             ->addColumn('status', function($row){
                 // Backfill: if status is null but email is verified, treat as verified
@@ -240,7 +240,7 @@ class AdminController extends Controller
 
         return $dataTables->eloquent($query)
             ->editColumn('created_at', function ($row) {
-                return optional($row->created_at)->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s');
+                return optional($row->created_at)->format('Y-m-d H:i');
             })
             ->addColumn('actions', function($row){
                 $btns = '<div class="btn-group" role="group">';

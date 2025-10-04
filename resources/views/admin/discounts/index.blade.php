@@ -85,15 +85,9 @@
                     $('#discountId').val('');
                     fetch('/admin/discount-codes/create', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                         .then(r=>r.json())
-                        .then(data => { 
-                            fillCategories(data.categories, []); 
-                            $('#discountModal').modal('show');
-                        })
+                        .then(data => { fillCategories(data.categories, []); $('#discountModal').modal('show'); })
                         .catch(()=> window.Swal && Swal.fire('Error','Failed to load categories','error'));
                 }
-                
-                // Show modal immediately
-                $('#discountModal').modal('show');
             }
 
             function fillCategories(list, selected){

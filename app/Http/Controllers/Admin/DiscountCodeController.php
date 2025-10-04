@@ -26,15 +26,6 @@ class DiscountCodeController extends Controller
                 return $row->categories->pluck('name')->implode(', ');
             })
             ->editColumn('is_active', fn($r) => $r->is_active ? 'Active' : 'Inactive')
-            ->editColumn('valid_from', function ($row) {
-                return optional($row->valid_from)->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s');
-            })
-            ->editColumn('valid_until', function ($row) {
-                return optional($row->valid_until)->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s');
-            })
-            ->editColumn('created_at', function ($row) {
-                return optional($row->created_at)->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s');
-            })
             ->addColumn('actions', function($row){
                 $del = route('admin.discounts.destroy', $row->id);
                 return '<div class="btn-group" role="group">'
