@@ -26,9 +26,9 @@
                 <div class="checkout__form">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h4>Shipping Addresses</h4>
-                        <a href="{{ route('addresses.create') }}" class="site-btn">
+                        <button type="button" class="site-btn" onclick="openAddressModal()">
                             <i class="fa fa-plus"></i> Add New Address
-                        </a>
+                        </button>
                     </div>
 
                     @if(session('success'))
@@ -61,25 +61,17 @@
                                             <p><strong>Phone:</strong> {{ $address->phone }}</p>
                                         </div>
                                         <div class="address-actions">
-                                            <a href="{{ route('addresses.edit', $address) }}" class="btn btn-sm btn-outline-primary">
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="openAddressModal({{ $address->id }})">
                                                 <i class="fa fa-edit"></i> Edit
-                                            </a>
+                                            </button>
                                             @if(!$address->is_default)
-                                                <form method="POST" action="{{ route('addresses.set-default', $address) }}" class="d-inline">
-                                                    @csrf
-                                                    <button type="submit" class="btn btn-sm btn-outline-success">
-                                                        <i class="fa fa-star"></i> Set Default
-                                                    </button>
-                                                </form>
-                                            @endif
-                                            <form method="POST" action="{{ route('addresses.destroy', $address) }}" class="d-inline" 
-                                                  onsubmit="return confirm('Are you sure you want to delete this address?')">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                    <i class="fa fa-trash"></i> Delete
+                                                <button type="button" class="btn btn-sm btn-outline-success" onclick="setDefaultAddress({{ $address->id }})">
+                                                    <i class="fa fa-star"></i> Set Default
                                                 </button>
-                                            </form>
+                                            @endif
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteAddress({{ $address->id }})">
+                                                <i class="fa fa-trash"></i> Delete
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -91,9 +83,9 @@
                                 <i class="fa fa-map-marker-alt fa-3x text-muted mb-3"></i>
                                 <h5>No addresses found</h5>
                                 <p class="text-muted">You haven't added any shipping addresses yet.</p>
-                                <a href="{{ route('addresses.create') }}" class="site-btn">
+                                <button type="button" class="site-btn" onclick="openAddressModal()">
                                     <i class="fa fa-plus"></i> Add Your First Address
-                                </a>
+                                </button>
                             </div>
                         </div>
                     @endif
@@ -105,6 +97,207 @@
 <!-- Addresses Section End -->
 
 <x-footer />
+
+@include('partials.address-modal')
+
+<script>
+$(document).ready(function() {
+    // Address modal functionality
+    window.openAddressModal = function(id) {
+        resetAddressForm();
+        if (id) {
+            $('#addressModalLabel').text('Edit Address');
+            $('#addressMethod').val('PUT');
+            $('#addressId').val(id);
+            
+            // Fetch address data
+            $.ajax({
+                url: '/addresses/' + id + '/edit',
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                },
+                success: function(response) {
+                    if (response.success) {
+                        fillAddressForm(response.address);
+                        $('#addressModal').modal('show');
+                    }
+                },
+                error: function() {
+                    alert('Failed to load address data');
+                }
+            });
+        } else {
+            $('#addressModalLabel').text('Add New Address');
+            $('#addressMethod').val('POST');
+            $('#addressId').val('');
+            $('#addressModal').modal('show');
+        }
+    };
+
+    function fillAddressForm(address) {
+        $('#first_name').val(address.first_name || '');
+        $('#last_name').val(address.last_name || '');
+        $('#company').val(address.company || '');
+        $('#address_line_1').val(address.address_line_1 || '');
+        $('#address_line_2').val(address.address_line_2 || '');
+        $('#city').val(address.city || '');
+        $('#state').val(address.state || '');
+        $('#postal_code').val(address.postal_code || '');
+        $('#country').val(address.country || '');
+        $('#phone').val(address.phone || '');
+        $('#is_default').prop('checked', address.is_default || false);
+        
+        validateAddressForm();
+    }
+
+    function resetAddressForm() {
+        $('#addressForm')[0].reset();
+        $('#addressMethod').val('POST');
+        $('#addressId').val('');
+        $('#addressSpinner').addClass('d-none');
+        $('.invalid-feedback').text('');
+        $('.form-control').removeClass('is-invalid');
+        validateAddressForm();
+    }
+
+    function validateAddressForm() {
+        const firstName = $('#first_name').val().trim();
+        const lastName = $('#last_name').val().trim();
+        const phone = $('#phone').val().trim();
+        const country = $('#country').val();
+        const state = $('#state').val();
+        const city = $('#city').val();
+        const postalCode = $('#postal_code').val().trim();
+        const addressLine1 = $('#address_line_1').val().trim();
+
+        let isValid = true;
+
+        if (!firstName) isValid = false;
+        if (!lastName) isValid = false;
+        if (!phone) isValid = false;
+        if (!country) isValid = false;
+        if (!state) isValid = false;
+        if (!city) isValid = false;
+        if (!postalCode) isValid = false;
+        if (!addressLine1) isValid = false;
+
+        $('#addressSaveBtn').prop('disabled', !isValid);
+    }
+
+    // Initialize dropdown functionality when modal is shown
+    $('#addressModal').on('shown.bs.modal', function() {
+        // Trigger validation to set initial state
+        validateAddressForm();
+    });
+
+    window.saveAddress = function() {
+        const form = document.getElementById('addressForm');
+        const id = $('#addressId').val();
+        const method = $('#addressMethod').val();
+        const url = id ? '/addresses/' + id : '/addresses';
+
+        const formData = new FormData(form);
+        if (id) {
+            formData.append('_method', method);
+        }
+
+        $('#addressSpinner').removeClass('d-none');
+        $('#addressSaveBtn').prop('disabled', true);
+
+        $.ajax({
+            url: url,
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+            },
+            success: function(response) {
+                if (response.success) {
+                    $('#addressModal').modal('hide');
+                    location.reload(); // Reload to show updated addresses
+                }
+            },
+            error: function(xhr) {
+                const response = xhr.responseJSON;
+                if (response && response.errors) {
+                    Object.keys(response.errors).forEach(function(key) {
+                        const input = $('input[name="' + key + '"], select[name="' + key + '"]');
+                        input.addClass('is-invalid');
+                        input.siblings('.invalid-feedback').text(response.errors[key][0]);
+                    });
+                } else {
+                    alert('An error occurred. Please try again.');
+                }
+            },
+            complete: function() {
+                $('#addressSpinner').addClass('d-none');
+                validateAddressForm();
+            }
+        });
+    };
+
+    window.setDefaultAddress = function(id) {
+        if (confirm('Set this address as default?')) {
+            $.ajax({
+                url: '/addresses/' + id + '/set-default',
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                },
+                success: function(response) {
+                    if (response.success) {
+                        location.reload();
+                    }
+                },
+                error: function() {
+                    alert('Failed to set default address');
+                }
+            });
+        }
+    };
+
+    window.deleteAddress = function(id) {
+        if (confirm('Are you sure you want to delete this address?')) {
+            $.ajax({
+                url: '/addresses/' + id,
+                method: 'POST',
+                data: {
+                    _method: 'DELETE',
+                    _token: $('meta[name="csrf-token"]').attr('content')
+                },
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        location.reload();
+                    }
+                },
+                error: function() {
+                    alert('Failed to delete address');
+                }
+            });
+        }
+    };
+
+    // Form validation on input change
+    $(document).on('input change', '#addressForm input, #addressForm select', function() {
+        validateAddressForm();
+    });
+
+    // Clear validation errors when modal is closed
+    $('#addressModal').on('hidden.bs.modal', function() {
+        $('.is-invalid').removeClass('is-invalid');
+        $('.invalid-feedback').text('');
+    });
+});
+</script>
 
 <style>
 .address-card {

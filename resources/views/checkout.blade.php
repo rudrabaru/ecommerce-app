@@ -56,16 +56,16 @@
                                         @endforeach
                                     </div>
                                     <div class="mt-3">
-                                        <a href="{{ route('addresses.create') }}" class="btn btn-outline-primary btn-sm">
+                                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="openAddressModal()">
                                             <i class="fa fa-plus"></i> Add New Address
-                                        </a>
+                                        </button>
                                     </div>
                                 @else
                                     <div class="alert alert-info">
                                         <p>No addresses found. Please add a shipping address first.</p>
-                                        <a href="{{ route('addresses.create') }}" class="btn btn-primary">
+                                        <button type="button" class="btn btn-primary" onclick="openAddressModal()">
                                             Add Address
-                                        </a>
+                                        </button>
                                     </div>
                                 @endif
                                 @error('shipping_address_id')
@@ -120,25 +120,56 @@
                         <div class="checkout__order__products">Products <span>Total</span></div>
                         <ul>
                             @php
-                                $cart = session('cart', []);
+                                $user = Auth::user();
                                 $subtotal = 0;
+                                $discountAmount = 0;
+                                
+                                if ($user) {
+                                    // For logged-in users, get cart from database
+                                    $cart = \App\Models\Cart::where('user_id', $user->id)->first();
+                                    if ($cart) {
+                                        $cartItems = $cart->items()->with('product')->get();
+                                        $discountAmount = (float) ($cart->discount_amount ?? 0);
+                                    } else {
+                                        $cartItems = collect();
+                                    }
+                                } else {
+                                    // For guests, get cart from session
+                                    $sessionCart = session('cart', []);
+                                    $cartItems = collect($sessionCart);
+                                    $discountAmount = (float) session('cart_discount', 0);
+                                }
                             @endphp
-                            @foreach($cart as $item)
+                            @foreach($cartItems as $item)
                                 @php
-                                    $product = \Modules\Products\Models\Product::find($item['product_id']);
+                                    if ($user) {
+                                        // Database cart item
+                                        $product = $item->product;
+                                        $itemPrice = $item->unit_price;
+                                        $itemQuantity = $item->quantity;
+                                    } else {
+                                        // Session cart item
+                                        $product = \Modules\Products\Models\Product::find($item['product_id']);
+                                        $itemPrice = $item['price'];
+                                        $itemQuantity = $item['quantity'];
+                                    }
+                                    
                                     if ($product) {
-                                        $subtotal += $product->price * $item['quantity'];
+                                        $subtotal += $itemPrice * $itemQuantity;
                                     }
                                 @endphp
                                 @if($product)
-                                    <li>{{ $product->title }} x{{ $item['quantity'] }} 
-                                        <span>${{ number_format($product->price * $item['quantity'], 2) }}</span>
+                                    <li>{{ $product->title }} x{{ $itemQuantity }} 
+                                        <span>${{ number_format($itemPrice * $itemQuantity, 2) }}</span>
                                     </li>
                                 @endif
                             @endforeach
                         </ul>
                         <div class="checkout__order__subtotal">Subtotal <span>${{ number_format($subtotal, 2) }}</span></div>
-                        <div class="checkout__order__total">Total <span>${{ number_format($subtotal, 2) }}</span></div>
+                        @if($discountAmount > 0)
+                            <div class="checkout__order__discount" style="color: #28a745;">Discount <span style="color: #dc3545;">-${{ number_format($discountAmount, 2) }}</span></div>
+                        @endif
+                        <div class="checkout__order__total">Total <span style="color: #e7ab3c;">${{ number_format($subtotal - $discountAmount, 2) }}</span></div>
                     </div>
                 </div>
             </div>
@@ -147,6 +178,163 @@
     <!-- Checkout Section End -->
 
     <x-footer />
+
+    @include('partials.address-modal')
+
+    <script>
+    $(document).ready(function() {
+        // Address modal functionality for checkout page
+        window.openAddressModal = function(id) {
+            resetAddressForm();
+            if (id) {
+                $('#addressModalLabel').text('Edit Address');
+                $('#addressMethod').val('PUT');
+                $('#addressId').val(id);
+                
+                // Fetch address data
+                $.ajax({
+                    url: '/addresses/' + id + '/edit',
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            fillAddressForm(response.address);
+                            $('#addressModal').modal('show');
+                        }
+                    },
+                    error: function() {
+                        alert('Failed to load address data');
+                    }
+                });
+            } else {
+                $('#addressModalLabel').text('Add New Address');
+                $('#addressMethod').val('POST');
+                $('#addressId').val('');
+                $('#addressModal').modal('show');
+            }
+        };
+
+        function fillAddressForm(address) {
+            $('#first_name').val(address.first_name || '');
+            $('#last_name').val(address.last_name || '');
+            $('#company').val(address.company || '');
+            $('#address_line_1').val(address.address_line_1 || '');
+            $('#address_line_2').val(address.address_line_2 || '');
+            $('#city').val(address.city || '');
+            $('#state').val(address.state || '');
+            $('#postal_code').val(address.postal_code || '');
+            $('#country').val(address.country || '');
+            $('#phone').val(address.phone || '');
+            $('#is_default').prop('checked', address.is_default || false);
+            
+            validateAddressForm();
+        }
+
+        function resetAddressForm() {
+            $('#addressForm')[0].reset();
+            $('#addressMethod').val('POST');
+            $('#addressId').val('');
+            $('#addressSpinner').addClass('d-none');
+            $('.invalid-feedback').text('');
+            $('.form-control').removeClass('is-invalid');
+            validateAddressForm();
+        }
+
+        function validateAddressForm() {
+            const firstName = $('#first_name').val().trim();
+            const lastName = $('#last_name').val().trim();
+            const phone = $('#phone').val().trim();
+            const country = $('#country').val();
+            const state = $('#state').val();
+            const city = $('#city').val();
+            const postalCode = $('#postal_code').val().trim();
+            const addressLine1 = $('#address_line_1').val().trim();
+
+            let isValid = true;
+
+            if (!firstName) isValid = false;
+            if (!lastName) isValid = false;
+            if (!phone) isValid = false;
+            if (!country) isValid = false;
+            if (!state) isValid = false;
+            if (!city) isValid = false;
+            if (!postalCode) isValid = false;
+            if (!addressLine1) isValid = false;
+
+            $('#addressSaveBtn').prop('disabled', !isValid);
+        }
+
+        // Initialize dropdown functionality when modal is shown
+        $('#addressModal').on('shown.bs.modal', function() {
+            // Trigger validation to set initial state
+            validateAddressForm();
+        });
+
+        window.saveAddress = function() {
+            const form = document.getElementById('addressForm');
+            const id = $('#addressId').val();
+            const method = $('#addressMethod').val();
+            const url = id ? '/addresses/' + id : '/addresses';
+
+            const formData = new FormData(form);
+            if (id) {
+                formData.append('_method', method);
+            }
+
+            $('#addressSpinner').removeClass('d-none');
+            $('#addressSaveBtn').prop('disabled', true);
+
+            $.ajax({
+                url: url,
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                },
+                success: function(response) {
+                    if (response.success) {
+                        $('#addressModal').modal('hide');
+                        // Reload the checkout page to refresh address list
+                        location.reload();
+                    }
+                },
+                error: function(xhr) {
+                    const response = xhr.responseJSON;
+                    if (response && response.errors) {
+                        Object.keys(response.errors).forEach(function(key) {
+                            const input = $('input[name="' + key + '"], select[name="' + key + '"]');
+                            input.addClass('is-invalid');
+                            input.siblings('.invalid-feedback').text(response.errors[key][0]);
+                        });
+                    } else {
+                        alert('An error occurred. Please try again.');
+                    }
+                },
+                complete: function() {
+                    $('#addressSpinner').addClass('d-none');
+                    validateAddressForm();
+                }
+            });
+        };
+
+        // Form validation on input change
+        $(document).on('input change', '#addressForm input, #addressForm select', function() {
+            validateAddressForm();
+        });
+
+        // Clear validation errors when modal is closed
+        $('#addressModal').on('hidden.bs.modal', function() {
+            $('.is-invalid').removeClass('is-invalid');
+            $('.invalid-feedback').text('');
+        });
+    });
+    </script>
 
     <!-- Search Begin -->
     <div class="search-model">

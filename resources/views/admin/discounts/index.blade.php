@@ -85,9 +85,15 @@
                     $('#discountId').val('');
                     fetch('/admin/discount-codes/create', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                         .then(r=>r.json())
-                        .then(data => { fillCategories(data.categories, []); $('#discountModal').modal('show'); })
+                        .then(data => { 
+                            fillCategories(data.categories, []); 
+                            $('#discountModal').modal('show');
+                        })
                         .catch(()=> window.Swal && Swal.fire('Error','Failed to load categories','error'));
                 }
+                
+                // Show modal immediately
+                $('#discountModal').modal('show');
             }
 
             function fillCategories(list, selected){
@@ -108,16 +114,60 @@
                 const validFrom = $('#valid_from').val();
                 const validUntil = $('#valid_until').val();
                 const isActive = $('#is_active').val();
-                const categories = $('#category_ids').val() || [];
+                const categories = $('#category_ids').val();
 
                 let ok = true;
                 const codeRegex = /^[A-Z0-9_-]+$/;
-                if (!code || !codeRegex.test(code)) ok = false;
-                if (!type || (type!=='fixed' && type!=='percentage')) ok = false;
-                if (isNaN(value) || value < 1) ok = false;
-                if (!validFrom || !validUntil || (new Date(validUntil) <= new Date(validFrom))) ok = false;
-                if (isActive !== '0' && isActive !== '1') ok = false;
-                if (categories.length < 1) ok = false;
+                
+                // Clear previous validation states
+                $('.form-control, .form-select').removeClass('is-invalid');
+                $('.invalid-feedback').text('');
+                
+                if (!code || !codeRegex.test(code)) {
+                    $('#code').addClass('is-invalid');
+                    $('#code').siblings('.invalid-feedback').text('Code must contain only uppercase letters, numbers, hyphens, and underscores');
+                    ok = false;
+                }
+                
+                if (!type || (type!=='fixed' && type!=='percentage')) {
+                    $('#discount_type').addClass('is-invalid');
+                    $('#discount_type').siblings('.invalid-feedback').text('Please select a valid discount type');
+                    ok = false;
+                }
+                
+                if (isNaN(value) || value < 0.01) {
+                    $('#discount_value').addClass('is-invalid');
+                    $('#discount_value').siblings('.invalid-feedback').text('Value must be greater than 0');
+                    ok = false;
+                }
+                
+                if (!validFrom || !validUntil) {
+                    if (!validFrom) {
+                        $('#valid_from').addClass('is-invalid');
+                        $('#valid_from').siblings('.invalid-feedback').text('Valid from date is required');
+                    }
+                    if (!validUntil) {
+                        $('#valid_until').addClass('is-invalid');
+                        $('#valid_until').siblings('.invalid-feedback').text('Valid until date is required');
+                    }
+                    ok = false;
+                } else if (new Date(validUntil) <= new Date(validFrom)) {
+                    $('#valid_until').addClass('is-invalid');
+                    $('#valid_until').siblings('.invalid-feedback').text('Valid until must be after valid from date');
+                    ok = false;
+                }
+                
+                if (isActive !== '0' && isActive !== '1') {
+                    $('#is_active').addClass('is-invalid');
+                    $('#is_active').siblings('.invalid-feedback').text('Please select a valid status');
+                    ok = false;
+                }
+                
+                if (!categories || categories === '') {
+                    $('#category_ids').addClass('is-invalid');
+                    $('#category_ids').siblings('.invalid-feedback').text('Please select at least one category');
+                    ok = false;
+                }
 
                 $('#discountSaveBtn').prop('disabled', !ok);
             }

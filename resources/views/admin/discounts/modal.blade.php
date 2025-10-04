@@ -12,20 +12,21 @@
                     <input type="hidden" id="discountMethod" value="POST">
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label">Code</label>
+                            <label class="form-label">Code <span class="text-danger">*</span></label>
                             <input type="text" id="code" name="code" class="form-control" required>
                             <div class="invalid-feedback"></div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Type</label>
+                            <label class="form-label">Type <span class="text-danger">*</span></label>
                             <select id="discount_type" name="discount_type" class="form-select" required>
+                                <option value="">Select Type</option>
                                 <option value="fixed">Fixed</option>
                                 <option value="percentage">Percentage</option>
                             </select>
                             <div class="invalid-feedback"></div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Value</label>
+                            <label class="form-label">Value <span class="text-danger">*</span></label>
                             <input type="number" id="discount_value" name="discount_value" step="0.01" min="0.01" class="form-control" required>
                             <div class="invalid-feedback"></div>
                         </div>
@@ -47,13 +48,13 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Valid From</label>
-                            <input type="datetime-local" id="valid_from" name="valid_from" class="form-control">
+                            <label class="form-label">Valid From <span class="text-danger">*</span></label>
+                            <input type="datetime-local" id="valid_from" name="valid_from" class="form-control" required>
                             <div class="invalid-feedback"></div>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Valid Until</label>
-                            <input type="datetime-local" id="valid_until" name="valid_until" class="form-control">
+                            <label class="form-label">Valid Until <span class="text-danger">*</span></label>
+                            <input type="datetime-local" id="valid_until" name="valid_until" class="form-control" required>
                             <div class="invalid-feedback"></div>
                         </div>
                         <div class="col-12">

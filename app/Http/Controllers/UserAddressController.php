@@ -16,7 +16,11 @@ class UserAddressController extends Controller
 
     public function create()
     {
-        return view('addresses.create');
+        // Return empty form data for modal
+        return response()->json([
+            'success' => true,
+            'address' => new UserAddress()
+        ]);
     }
 
     public function store(Request $request)
@@ -38,10 +42,13 @@ class UserAddressController extends Controller
         $validated['user_id'] = Auth::id();
         $validated['type'] = 'shipping';
 
-        UserAddress::create($validated);
+        $address = UserAddress::create($validated);
 
-        return redirect()->route('addresses.index')
-            ->with('success', 'Address created successfully.');
+        return response()->json([
+            'success' => true,
+            'message' => 'Address created successfully.',
+            'address' => $address
+        ]);
     }
 
     public function edit(UserAddress $address)
@@ -50,7 +57,10 @@ class UserAddressController extends Controller
             abort(403);
         }
 
-        return view('addresses.edit', compact('address'));
+        return response()->json([
+            'success' => true,
+            'address' => $address
+        ]);
     }
 
     public function update(Request $request, UserAddress $address)
@@ -75,8 +85,11 @@ class UserAddressController extends Controller
 
         $address->update($validated);
 
-        return redirect()->route('addresses.index')
-            ->with('success', 'Address updated successfully.');
+        return response()->json([
+            'success' => true,
+            'message' => 'Address updated successfully.',
+            'address' => $address
+        ]);
     }
 
     public function destroy(UserAddress $address)
@@ -87,8 +100,10 @@ class UserAddressController extends Controller
 
         $address->delete();
 
-        return redirect()->route('addresses.index')
-            ->with('success', 'Address deleted successfully.');
+        return response()->json([
+            'success' => true,
+            'message' => 'Address deleted successfully.'
+        ]);
     }
 
     public function setDefault(UserAddress $address)

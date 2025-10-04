@@ -38,4 +38,13 @@ Route::middleware(['web','auth','ensure_role:admin'])->group(function () {
     // Providers management (role=provider)
     Route::get('/admin/providers', [AdminController::class, 'providersIndex'])->name('admin.providers.index');
     Route::get('/admin/providers/data', [AdminController::class, 'providersData'])->name('admin.providers.data');
+    
+    // Products management
+    Route::get('/admin/products', [\App\Http\Controllers\Admin\ProductController::class, 'index'])->name('admin.products.index');
+    Route::get('/admin/products/data', [\App\Http\Controllers\Admin\ProductController::class, 'data'])->name('admin.products.data');
+    Route::get('/admin/products/create', [\App\Http\Controllers\Admin\ProductController::class, 'create'])->name('admin.products.create');
+    Route::post('/admin/products', [\App\Http\Controllers\Admin\ProductController::class, 'store'])->name('admin.products.store');
+    Route::get('/admin/products/{product}/edit', [\App\Http\Controllers\Admin\ProductController::class, 'edit'])->name('admin.products.edit');
+    Route::put('/admin/products/{product}', [\App\Http\Controllers\Admin\ProductController::class, 'update'])->name('admin.products.update');
+    Route::delete('/admin/products/{product}', [\App\Http\Controllers\Admin\ProductController::class, 'destroy'])->name('admin.products.destroy');
 });
