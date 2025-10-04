@@ -47,6 +47,44 @@ class PortalLoginController extends Controller
         return redirect()->intended(route('home'));
     }
 
+    public function ajaxUserLogin(Request $request)
+    {
+        $this->validateLogin($request);
+        $this->ensureIsNotRateLimited($request);
+
+        if (! Auth::attempt($request->only('email', 'password'), $request->boolean('remember'))) {
+            RateLimiter::hit($this->throttleKey($request));
+            return response()->json([
+                'success' => false,
+                'errors' => ['email' => 'Invalid credentials']
+            ], 422);
+        }
+
+        $user = Auth::user();
+        
+        // Check if user is admin/provider (not allowed in user portal)
+        if ($user->hasRole('admin') || $user->hasRole('provider')) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            return response()->json([
+                'success' => false,
+                'errors' => ['email' => 'Unauthorized: Only users can log in here.']
+            ], 422);
+        }
+        
+        // Merge guest cart into user's database cart BEFORE session regeneration
+        $this->mergeGuestCart($user);
+
+        $request->session()->regenerate();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Login successful',
+            'redirect_url' => route('checkout')
+        ]);
+    }
+
     public function adminLogin(Request $request)
     {
         $this->validateLogin($request);

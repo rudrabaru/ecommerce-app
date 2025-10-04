@@ -5,7 +5,6 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\CartController;
 Route::get('/', [\App\Http\Controllers\MainController::class, 'index'])->name('home');
-Route::get('/checkout', [\App\Http\Controllers\MainController::class, 'checkout'])->name('checkout');
 Route::get('/shopping-cart', [\App\Http\Controllers\MainController::class, 'cart'])->name('shopping.cart');
 Route::get('/cart', [\App\Http\Controllers\CartController::class, 'index'])->name('cart.index');
 Route::get('/shop', [\Modules\Products\Http\Controllers\StorefrontProductsController::class, 'shop'])->name('shop');
@@ -24,7 +23,17 @@ Route::delete('/cart/discount', [\App\Http\Controllers\CartController::class, 'r
 Route::get('/cart/dropdown', [\App\Http\Controllers\CartController::class, 'dropdown'])->name('cart.dropdown');
 Route::get('/search', [\Modules\Products\Http\Controllers\StorefrontProductsController::class, 'search'])->name('products.search');
 Route::middleware('auth')->group(function () {
+    Route::get('/checkout', [\App\Http\Controllers\CheckoutController::class, 'index'])->name('checkout');
     Route::post('/checkout', [\App\Http\Controllers\CheckoutController::class, 'store'])->name('checkout.store');
+    
+    // Address management routes
+    Route::resource('addresses', \App\Http\Controllers\UserAddressController::class);
+    Route::post('/addresses/{address}/set-default', [\App\Http\Controllers\UserAddressController::class, 'setDefault'])->name('addresses.set-default');
+    
+    // Order success page
+    Route::get('/orders/success', function () {
+        return view('orders.success');
+    })->name('orders.success');
 });
 
 // Provide a common dashboard route for auth flows/tests; redirect by role
@@ -57,6 +66,7 @@ Route::middleware('guest')->group(function () {
     // User portal
     Route::get('/login', [\App\Http\Controllers\Auth\PortalLoginController::class, 'showUserLogin'])->name('login');
     Route::post('/login', [\App\Http\Controllers\Auth\PortalLoginController::class, 'userLogin'])->name('login.submit');
+    Route::post('/login/ajax', [\App\Http\Controllers\Auth\PortalLoginController::class, 'ajaxUserLogin'])->name('login.ajax');
 
     // Admin/Provider portal
     Route::get('/admin/login', [\App\Http\Controllers\Auth\PortalLoginController::class, 'showAdminLogin'])->name('admin.login');

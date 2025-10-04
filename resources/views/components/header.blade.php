@@ -52,6 +52,45 @@
             justify-content: center;
             font-weight: bold;
         }
+        
+        /* Dropdown styles */
+        .dropdown {
+            position: relative;
+        }
+        
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: white;
+            border: 1px solid #e5e5e5;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            min-width: 150px;
+            z-index: 1000;
+            display: none;
+        }
+        
+        .dropdown:hover .dropdown-menu {
+            display: block;
+        }
+        
+        .dropdown-menu li {
+            list-style: none;
+        }
+        
+        .dropdown-menu a {
+            display: block;
+            padding: 10px 15px;
+            color: #333;
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
+        
+        .dropdown-menu a:hover {
+            background: #f8f9fa;
+            color: #e7ab3c;
+        }
     </style>
 </head>
 
@@ -99,6 +138,16 @@
                                     @if (Route::has('register'))
                                         <li><a href="{{ route('register') }}">Register</a></li>
                                     @endif
+                                @else
+                                    <li class="dropdown">
+                                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">
+                                            My Account <i class="fa fa-caret-down"></i>
+                                        </a>
+                                        <ul class="dropdown-menu">
+                                            <li><a href="{{ route('addresses.index') }}">My Addresses</a></li>
+                                            <li><a href="{{ route('profile.edit') }}">Profile</a></li>
+                                        </ul>
+                                    </li>
                                 @endguest
                             @endif
                         </ul>

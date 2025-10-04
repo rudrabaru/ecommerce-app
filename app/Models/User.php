@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
@@ -59,5 +60,23 @@ class User extends Authenticatable implements MustVerifyEmail
                 // Ignore during early migrations / seeding
             }
         });
+    }
+
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(UserAddress::class);
+    }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    public function getDefaultShippingAddress()
+    {
+        return $this->addresses()
+            ->where('type', 'shipping')
+            ->where('is_default', true)
+            ->first();
     }
 }

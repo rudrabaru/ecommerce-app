@@ -26,16 +26,6 @@ class MainController extends Controller
         return redirect()->route('cart.index');
     }
 
-    public function checkout()
-    {
-        $cart = session('cart', []);
-        if (empty($cart)) {
-            return redirect()->route('shop')->with('status', 'Your cart is empty.');
-        }
-        $items = collect($cart)->values();
-        $subtotal = $items->reduce(fn($c,$i)=> $c + ($i['price'] * $i['quantity']), 0);
-        return view('checkout', compact('items','subtotal'));
-    }
 
     // Storefront routes are served by Modules\Products\Http\Controllers\StorefrontProductsController
 }

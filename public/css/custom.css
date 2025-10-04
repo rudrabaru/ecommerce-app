@@ -56,4 +56,142 @@
 	border-left: 1px solid #e5e5e5 !important;
 }
 
+/* Checkout Form Styles */
+.address-selection {
+    margin-bottom: 20px;
+}
+
+.address-option {
+    margin-bottom: 15px;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    padding: 15px;
+    transition: all 0.3s ease;
+}
+
+.address-option:hover {
+    border-color: #e7ab3c;
+    box-shadow: 0 2px 8px rgba(231, 171, 60, 0.1);
+}
+
+.address-option input[type="radio"] {
+    margin-right: 10px;
+}
+
+.address-label {
+    cursor: pointer;
+    margin: 0;
+    display: flex;
+    align-items: flex-start;
+}
+
+.address-info {
+    flex: 1;
+    line-height: 1.5;
+}
+
+.default-badge {
+    background: #e7ab3c;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    margin-left: 10px;
+}
+
+.payment-methods {
+    margin-bottom: 20px;
+}
+
+.payment-option {
+    margin-bottom: 15px;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    padding: 15px;
+    transition: all 0.3s ease;
+}
+
+.payment-option:hover {
+    border-color: #e7ab3c;
+    box-shadow: 0 2px 8px rgba(231, 171, 60, 0.1);
+}
+
+.payment-option input[type="radio"] {
+    margin-right: 10px;
+}
+
+.payment-label {
+    cursor: pointer;
+    margin: 0;
+    display: flex;
+    align-items: center;
+}
+
+.payment-info {
+    flex: 1;
+}
+
+.payment-info strong {
+    display: block;
+    margin-bottom: 5px;
+}
+
+.checkout__order {
+    background: #f8f9fa;
+    padding: 30px;
+    border-radius: 8px;
+    margin-top: 20px;
+}
+
+.checkout__order h4 {
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.checkout__order__products {
+    display: flex;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e5e5e5;
+    margin-bottom: 15px;
+    font-weight: 600;
+}
+
+.checkout__order ul {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 20px 0;
+}
+
+.checkout__order ul li {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.checkout__order__subtotal,
+.checkout__order__total {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    font-weight: 600;
+}
+
+.checkout__order__total {
+    border-top: 2px solid #e7ab3c;
+    font-size: 18px;
+    color: #e7ab3c;
+}
+
+.site-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.site-btn:disabled:hover {
+    background: #ccc;
+}
+
 

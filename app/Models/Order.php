@@ -17,6 +17,8 @@ class Order extends Model
         'total_amount',
         'status',
         'shipping_address',
+        'shipping_address_id',
+        'payment_method_id',
         'notes'
     ];
 
@@ -38,6 +40,21 @@ class Order extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(\Modules\Products\Models\Product::class);
+    }
+
+    public function shippingAddress(): BelongsTo
+    {
+        return $this->belongsTo(UserAddress::class, 'shipping_address_id');
+    }
+
+    public function paymentMethod(): BelongsTo
+    {
+        return $this->belongsTo(PaymentMethod::class);
+    }
+
+    public function payment(): BelongsTo
+    {
+        return $this->belongsTo(Payment::class);
     }
 
     protected static function boot()

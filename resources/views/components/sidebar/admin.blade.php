@@ -57,17 +57,10 @@
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link js-ajax-link {{ request()->routeIs('admin.reports.*') ? 'active' : '' }}" 
-           href="{{ Route::has('admin.reports.index') ? route('admin.reports.index') : '#' }}">
-            <i class="fas fa-chart-bar me-2"></i>
-            {{ __('Reports') }}
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link js-ajax-link {{ request()->routeIs('admin.settings.*') ? 'active' : '' }}" 
-           href="{{ Route::has('admin.settings.index') ? route('admin.settings.index') : '#' }}">
+        <a class="nav-link js-ajax-link {{ request()->routeIs('admin.profile.*') ? 'active' : '' }}" 
+           href="{{ route('admin.profile') }}">
             <i class="fas fa-cog me-2"></i>
-            {{ __('Settings') }}
+            {{ __('Profile') }}
         </a>
     </li>
 </ul>
