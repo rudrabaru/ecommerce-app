@@ -45,10 +45,37 @@
                                     { data: 'id', name: 'id', width: '60px' },
                                     { data: 'name', name: 'name' },
                                     { data: 'email', name: 'email' },
-                                    { data: 'status', name: 'status', width: '100px' },
+                                    // Custom rendered switch returned by server for verification
+                                    { data: 'status', name: 'status', width: '120px', orderable: false, searchable: false },
                                     { data: 'created_at', name: 'created_at' },
                                     { data: 'actions', name: 'actions', orderable: false, searchable: false }
                                 ]
+                            });
+
+                            // Bind verify toggle events (using event delegation)
+                            $table.on('change', '.js-verify-toggle', function(){
+                                var userId = $(this).data('id');
+                                var verify = $(this).is(':checked');
+                                // Optimistic UI: keep switch position but revert on error
+                                var $switch = $(this);
+                                fetch('/admin/users/' + userId + '/verify', {
+                                    method: 'POST',
+                                    headers: {
+                                        'X-Requested-With': 'XMLHttpRequest',
+                                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
+                                        'Content-Type': 'application/json'
+                                    },
+                                    body: JSON.stringify({ verify: verify ? 1 : 0 })
+                                }).then(function(r){ return r.json(); })
+                                .then(function(resp){
+                                    if (!resp.success) { throw new Error(resp.message || 'Failed to update.'); }
+                                    // Optional toast/alert
+                                    if (window.Swal) Swal.fire('Success', resp.message, 'success');
+                                }).catch(function(err){
+                                    console.error('Verify toggle failed:', err);
+                                    $switch.prop('checked', !verify);
+                                    if (window.Swal) Swal.fire('Error', err.message || 'Failed to update.', 'error');
+                                });
                             });
                         }
                         if (window.jQuery) { start(); }

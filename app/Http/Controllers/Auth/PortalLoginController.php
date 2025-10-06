@@ -31,6 +31,13 @@ class PortalLoginController extends Controller
         }
 
         $user = Auth::user();
+        // Enforce admin-side verification: normal users must have verified emails
+        if (is_null($user->email_verified_at)) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            return back()->withErrors(['email' => 'Please verify your email before logging in.'])->withInput();
+        }
         
         // Merge guest cart into user's database cart BEFORE session regeneration
         $this->mergeGuestCart($user);
@@ -61,6 +68,16 @@ class PortalLoginController extends Controller
         }
 
         $user = Auth::user();
+        // Enforce verified email for AJAX login as well
+        if (is_null($user->email_verified_at)) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            return response()->json([
+                'success' => false,
+                'errors' => ['email' => 'Please verify your email before logging in.']
+            ], 422);
+        }
         
         // Check if user is admin/provider (not allowed in user portal)
         if ($user->hasRole('admin') || $user->hasRole('provider')) {

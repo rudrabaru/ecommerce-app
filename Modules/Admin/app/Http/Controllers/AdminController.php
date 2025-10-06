@@ -203,11 +203,14 @@ class AdminController extends Controller
                 return optional($row->created_at)->format('Y-m-d H:i');
             })
             ->addColumn('status', function($row){
-                // Backfill: if status is null but email is verified, treat as verified
-                if (empty($row->status) && !empty($row->email_verified_at)) {
-                    return 'verified';
-                }
-                return $row->status ?: 'unverified';
+                // Render a toggle to verify/unverify users directly from the table.
+                // A user is considered verified if email_verified_at is not null.
+                $checked = $row->email_verified_at ? 'checked' : '';
+                $disabled = $row->hasRole('admin') ? 'disabled' : '';
+                $title = $row->email_verified_at ? 'Verified' : 'Unverified';
+                return '<div class="form-check form-switch" title="'.$title.'">'
+                    .'<input type="checkbox" class="form-check-input js-verify-toggle" data-id="'.$row->id.'" '.$checked.' '.$disabled.'>'
+                    .'</div>';
             })
             ->addColumn('actions', function($row){
                 $btns = '<div class="btn-group" role="group">';
@@ -220,7 +223,7 @@ class AdminController extends Controller
                 $btns .= '</div>';
                 return $btns;
             })
-            ->rawColumns(['actions'])
+            ->rawColumns(['status','actions'])
             ->toJson();
     }
 
@@ -269,5 +272,35 @@ class AdminController extends Controller
             $user->save();
         }
         return back()->with('status', 'User promoted to provider.');
+    }
+
+    /**
+     * Toggle a user's email verification status from the Admin panel.
+     * If "verify" is true, set email_verified_at to now(); otherwise null.
+     */
+    public function verify(Request $request, User $user)
+    {
+        // Do not allow verifying/unverifying admin accounts from this switch
+        if ($user->hasRole('admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot change verification state of admin accounts.'
+            ], 403);
+        }
+
+        $request->validate([
+            'verify' => ['required','boolean']
+        ]);
+
+        $user->email_verified_at = $request->boolean('verify') ? now() : null;
+        // Keep optional status column in sync if your UI uses it elsewhere
+        $user->status = $request->boolean('verify') ? 'verified' : 'unverified';
+        $user->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => $request->boolean('verify') ? 'User verified.' : 'User unverified.',
+            'email_verified_at' => $user->email_verified_at,
+        ]);
     }
 }

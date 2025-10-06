@@ -31,6 +31,14 @@ class AuthenticatedSessionController extends Controller
         // Merge guest cart into user's database cart BEFORE session regeneration
         $this->mergeGuestCart($user);
 
+        // Restrict login for regular users unless email is verified
+        if ($user->hasRole('user') && is_null($user->email_verified_at)) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            return redirect()->route('login')->withErrors(['email' => 'Please verify your email before logging in.']);
+        }
+
         $request->session()->regenerate();
 
         if ($user->hasRole('admin')) {

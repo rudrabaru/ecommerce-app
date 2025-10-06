@@ -33,6 +33,8 @@ Route::middleware(['web','auth','ensure_role:admin'])->group(function () {
     Route::get('/admin/users', [AdminController::class, 'index'])->name('admin.users.index');
     Route::get('/admin/users/data', [AdminController::class, 'data'])->name('admin.users.data');
     Route::resource('admin/users', AdminController::class)->names('admin.users')->except(['index']);
+    // Verify toggle endpoint
+    Route::post('/admin/users/{user}/verify', [AdminController::class, 'verify'])->name('admin.users.verify');
     Route::post('/admin/users/{user}/promote', [AdminController::class, 'promoteToProvider'])->name('admin.users.promote');
 
     // Providers management (role=provider)
