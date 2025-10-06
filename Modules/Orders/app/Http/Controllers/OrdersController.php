@@ -170,6 +170,11 @@ class OrdersController extends Controller
             ->addColumn('customer_name', fn($row) => $row->user->name)
             ->addColumn('product_name', fn($row) => $row->product->title)
             ->addColumn('total', fn($row) => '$' . number_format($row->total_amount, 2))
+            ->editColumn('created_at', function ($row) {
+                return optional($row->created_at)
+                    ? $row->created_at->copy()->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s')
+                    : null;
+            })
             ->addColumn('actions', function($row){
                 $btns = '<div class="btn-group" role="group">';
                 $btns .= '<button class="btn btn-sm btn-outline-primary edit-order" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#orderModal" onclick="openOrderModal('.$row->id.')">';

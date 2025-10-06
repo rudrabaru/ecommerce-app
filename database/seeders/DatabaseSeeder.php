@@ -14,22 +14,15 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Optionally create random users if needed
-        // User::factory(10)->create();
-
         if (Schema::hasTable('roles')) {
             $this->call([
                 RoleSeeder::class,
                 UsersWithRolesSeeder::class,
+                PaymentMethodSeeder::class,
             ]);
         }
 
-        // Seed categories and products (5 x 10)
-        \Artisan::call('module:seed', [
-            'module' => 'Products',
-            '--class' => 'Modules\\Products\\Database\\Seeders\\SeedCategoriesAndProducts'
-        ]);
-
-        // Note: Do not modify catalog data or orders here.
+        // Seed demo catalog last so providers/users are present first
+        $this->call(\Modules\Products\Database\Seeders\HierarchicalProductsSeeder::class);
     }
 }

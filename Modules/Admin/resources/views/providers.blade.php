@@ -54,6 +54,14 @@
                     })();
                     </script>
                     @endpush
+                    @push('scripts')
+                    <script>
+                    // Prevent missing function errors before discount modal is implemented
+                    window.openDiscountModal = window.openDiscountModal || function(){
+                        Swal && Swal.fire ? Swal.fire('Info','Discount modal not available yet.','info') : alert('Discount modal not available yet.');
+                    };
+                    </script>
+                    @endpush
                 </div>
             </div>
         </div>

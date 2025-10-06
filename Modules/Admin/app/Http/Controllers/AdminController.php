@@ -200,7 +200,9 @@ class AdminController extends Controller
 
         return $dataTables->eloquent($query)
             ->editColumn('created_at', function ($row) {
-                return optional($row->created_at)->format('Y-m-d H:i');
+                return optional($row->created_at)
+                    ? $row->created_at->copy()->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s')
+                    : null;
             })
             ->addColumn('status', function($row){
                 // Render a toggle to verify/unverify users directly from the table.
@@ -243,7 +245,9 @@ class AdminController extends Controller
 
         return $dataTables->eloquent($query)
             ->editColumn('created_at', function ($row) {
-                return optional($row->created_at)->format('Y-m-d H:i');
+                return optional($row->created_at)
+                    ? $row->created_at->copy()->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s')
+                    : null;
             })
             ->addColumn('actions', function($row){
                 $btns = '<div class="btn-group" role="group">';

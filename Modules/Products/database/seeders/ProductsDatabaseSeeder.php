@@ -12,12 +12,6 @@ class ProductsDatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        if (Category::count() === 0) {
-            Category::create(['name' => 'Electronics']);
-            Category::create(['name' => 'Clothing']);
-            Category::create(['name' => 'Books']);
-        }
-
-        $this->call(DemoProductsSeeder::class);
+        
     }
 }

@@ -16,34 +16,30 @@ class RoleSeeder extends Seeder
             Role::firstOrCreate(['name' => $roleName], ['guard_name' => 'web']);
         }
 
-        // Assign roles based on user id using Spatie pivot (idempotent)
-        $admin = User::find(1);
-        if ($admin) {
-            $admin->syncRoles(['admin']);
-            $adminRoleId = Role::where('name', 'admin')->value('id');
-            if ($adminRoleId) {
-                $admin->role_id = $adminRoleId;
-            }
-            $admin->save();
-        }
-
-        $provider = User::find(2);
-        if ($provider && $provider->id !== 1) {
-            $provider->syncRoles(['provider']);
-            $providerRoleId = Role::where('name', 'provider')->value('id');
-            if ($providerRoleId) {
-                $provider->role_id = $providerRoleId;
-            }
-            $provider->save();
-        }
-
-        // Ensure all other users have role user
+        // Normalize role_id for all users according to their spatie role
+        $adminRoleId = Role::where('name', 'admin')->value('id');
+        $providerRoleId = Role::where('name', 'provider')->value('id');
         $userRoleId = Role::where('name', 'user')->value('id');
-        User::whereNotIn('id', [1,2])->get()->each(function (User $u) use ($userRoleId) {
-            $u->syncRoles(['user']);
-            if ($userRoleId) {
-                $u->role_id = $userRoleId;
+
+        User::with('roles')->get()->each(function (User $u) use ($adminRoleId, $providerRoleId, $userRoleId) {
+            $roleName = optional($u->roles->first())->name;
+            $targetRoleId = null;
+            if ($roleName === 'admin') { $targetRoleId = $adminRoleId; }
+            elseif ($roleName === 'provider') { $targetRoleId = $providerRoleId; }
+            else { $targetRoleId = $userRoleId; }
+
+            if ($targetRoleId && (int)$u->role_id !== (int)$targetRoleId) {
+                $u->role_id = $targetRoleId;
             }
+
+            // Ensure all seeded users and normal users are verified
+            if (is_null($u->email_verified_at)) {
+                $u->email_verified_at = now();
+            }
+            if (\Schema::hasColumn('users','status')) {
+                $u->status = 'verified';
+            }
+
             $u->save();
         });
     }

@@ -87,7 +87,7 @@
         return isProvidersPage() ? 'provider' : 'user';
     }
 
-    function openUserModal(userId = null) {
+    window.openUserModal = function(userId = null) {
         // Reset form
         $('#userForm')[0].reset();
         $('.form-control').removeClass('is-invalid');
@@ -144,7 +144,7 @@
         }
     }
     
-    function saveUser() {
+    window.saveUser = function() {
         const form = document.getElementById('userForm');
         const formData = new FormData(form);
         const userId = $('#userId').val();
@@ -197,7 +197,7 @@
         });
     }
     
-    function deleteUser(userId) {
+    window.deleteUser = function(userId) {
         Swal.fire({
             title: 'Are you sure?',
             text: "You won't be able to revert this!",

@@ -3,7 +3,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="mb-0">Products</h1>
             <div>
-                @if(auth()->user()->hasRole('provider'))
+                @if(auth()->user()->hasRole('provider') || auth()->user()->hasRole('admin'))
                     <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#productModal" onclick="openProductModal()">
                         <i class="fas fa-plus"></i> Create Product
                     </button>
@@ -82,6 +82,18 @@
                             </div>
                             
                             <div class="col-md-4">
+                                @if(auth()->user()->hasRole('admin'))
+                                <div class="mb-3">
+                                    <label for="provider_id" class="form-label">Provider <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="provider_id" name="provider_id" required>
+                                        <option value="">Select Provider</option>
+                                        @foreach(\App\Models\User::whereHas('roles', fn($q) => $q->where('name','provider'))->orderBy('name')->get() as $provider)
+                                            <option value="{{ $provider->id }}">{{ $provider->name }} ({{ $provider->email }})</option>
+                                        @endforeach
+                                    </select>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+                                @endif
                                 <div class="mb-3">
                                     <label for="category_id" class="form-label">Category <span class="text-danger">*</span></label>
                                     <select class="form-select" id="category_id" name="category_id" required>
@@ -121,7 +133,7 @@
     <script>
         // DataTable is now initialized globally - no need for individual initialization
         
-        function openProductModal(productId = null) {
+        window.openProductModal = function(productId = null) {
             // Reset form
             $('#productForm')[0].reset();
             $('.form-control').removeClass('is-invalid');
@@ -173,7 +185,7 @@
             }
         }
         
-        function saveProduct() {
+        window.saveProduct = function() {
             const form = document.getElementById('productForm');
             const formData = new FormData(form);
             const productId = $('#productId').val();
@@ -230,7 +242,7 @@
             });
         }
         
-        function deleteProduct(productId) {
+        window.deleteProduct = function(productId) {
             Swal.fire({
                 title: 'Are you sure?',
                 text: "You won't be able to revert this!",
