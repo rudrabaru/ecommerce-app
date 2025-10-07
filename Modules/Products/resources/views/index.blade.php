@@ -18,6 +18,7 @@
                         <thead class="table-light">
                             <tr>
                                 <th>ID</th>
+                                <th>Image</th>
                                 <th>Title</th>
                                 <th>Category</th>
                                 <th>Price</th>

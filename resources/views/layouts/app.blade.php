@@ -360,6 +360,7 @@
                             ajax: ajaxUrl,
                             columns: [
                                 { data: 'id', name: 'id', width: '60px' },
+                                { data: 'image', name: 'image', orderable: false, searchable: false, width: '70px' },
                                 { data: 'title', name: 'title' },
                                 { data: 'category', name: 'category.name' },
                                 { 

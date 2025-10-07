@@ -53,12 +53,26 @@ class StorefrontProductsController extends Controller
                 $query->latest('id');
         }
 
-        $products = $query->paginate(12);
+        $products = $query->paginate(12)->withQueryString();
 
-        $categories = Category::orderBy('name')->get();
+        // Build category tree for sidebar
+        $categories = Category::with('children')->whereNull('parent_id')->orderBy('name')->get();
         $headerCategories = Category::orderBy('name')->take(8)->get();
+        // Global price bounds for slider UI
+        $bounds = Product::selectRaw('MIN(price) as min_price, MAX(price) as max_price')->first();
+        $priceMinBound = (float) ($bounds->min_price ?? 0);
+        $priceMaxBound = (float) ($bounds->max_price ?? 0);
 
-        return view('shop', compact('products', 'categories', 'headerCategories'));
+        if ($request->ajax()) {
+            $html = view('components.product-cards', ['products' => $products])->render();
+            $pagination = view('components.pagination', ['paginator' => $products])->render();
+            return response()->json([
+                'html' => $html,
+                'pagination' => $pagination,
+                'page' => (int)$products->currentPage(),
+            ]);
+        }
+        return view('shop', compact('products', 'categories', 'headerCategories', 'priceMinBound', 'priceMaxBound'));
     }
 
     /**

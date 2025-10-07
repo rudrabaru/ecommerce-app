@@ -10,8 +10,8 @@ Route::get('/cart', [\App\Http\Controllers\CartController::class, 'index'])->nam
 Route::get('/shop', [\Modules\Products\Http\Controllers\StorefrontProductsController::class, 'shop'])->name('shop');
 Route::get('/shop/{id}', [\Modules\Products\Http\Controllers\StorefrontProductsController::class, 'show'])->name('shop.details');
 // Category browsing (reuse existing module CategoryController)
-Route::get('/categories', [\Modules\Products\Http\Controllers\StorefrontCategoryController::class, 'index'])->name('categories.index');
-Route::get('/categories/{id}', [\Modules\Products\Http\Controllers\StorefrontCategoryController::class, 'show'])->name('categories.show');
+Route::get('/categories', [\Modules\Products\Http\Controllers\CategoryController::class, 'storefrontIndex'])->name('categories.index');
+Route::get('/categories/{id}', [\Modules\Products\Http\Controllers\CategoryController::class, 'storefrontShow'])->name('categories.show');
 // Friendly category routes
 // Removed duplicate/legacy category routes in favor of categories.show
 Route::post('/cart/add', [\App\Http\Controllers\CartController::class, 'add'])->name('cart.add');

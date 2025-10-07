@@ -20,17 +20,17 @@
                         <div class="tab-content">
                             <div class="tab-pane active" id="tabs-1" role="tabpanel">
                                 <div class="product__details__pic__item">
-                                    <img src="{{ $product->image ? asset('storage/'.$product->image) : asset('img/shop-details/product-big.png') }}" alt="">
+                                    <img src="{{ $product->image_url }}" alt="{{ $product->title }}" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.onerror=null;this.src='https://placehold.co/600x600?text=%20';">
                                 </div>
                             </div>
                             <div class="tab-pane" id="tabs-2" role="tabpanel">
                                 <div class="product__details__pic__item">
-                                    <img src="{{ asset('img/shop-details/product-big-3.png') }}" alt="">
+                                    <img src="{{ $product->image_url }}" alt="{{ $product->title }}" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.onerror=null;this.src='https://placehold.co/600x600?text=%20';">
                                 </div>
                             </div>
                             <div class="tab-pane" id="tabs-3" role="tabpanel">
                                 <div class="product__details__pic__item">
-                                    <img src="{{ asset('img/shop-details/product-big.png') }}" alt="">
+                                    <img src="{{ $product->image_url }}" alt="{{ $product->title }}" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.onerror=null;this.src='https://placehold.co/600x600?text=%20';">
                                 </div>
                             </div>
                             <div class="tab-pane" id="tabs-4" role="tabpanel">

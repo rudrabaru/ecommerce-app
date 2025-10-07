@@ -106,7 +106,7 @@
                     @foreach($products as $p)
                     <div class="col-lg-3 col-md-6 col-sm-6 mix new-arrivals">
                         <div class="product__item">
-                            <div class="product__item__pic set-bg" data-setbg="{{ $p->image ? asset('storage/'.$p->image) : asset('img/product/product-1.jpg') }}">
+                            <div class="product__item__pic set-bg" data-setbg="{{ $p->image_url }}">
                                 <span class="label">New</span>
                                 <ul class="product__hover">
                                     <li><a href="#"><img src="{{ asset('img/icon/heart.png') }}" alt=""></a></li>
@@ -115,7 +115,7 @@
                                 </ul>
                             </div>
                             <div class="product__item__text">
-                                <h6>{{ $p->name ?? $p->title }}</h6>
+                                <h6>{{ $p->title ?? $p->name }}</h6>
                                 <a href="{{ route('shop.details', ['id' => $p->id]) }}" class="add-cart">View Details</a>
                                 <div class="rating">
                                     <i class="fa fa-star-o"></i>

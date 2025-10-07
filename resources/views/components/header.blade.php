@@ -164,5 +164,7 @@
     </header>
     <!-- Header Section (White) End -->
     
-    {{-- Cart Icon - Always positioned at extreme right --}}
-    @include('components.cart-icon')
+    {{-- Cart Icon - Only for authenticated users --}}
+    @auth
+        @include('components.cart-icon')
+    @endauth

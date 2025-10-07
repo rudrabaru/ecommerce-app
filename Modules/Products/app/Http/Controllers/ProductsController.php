@@ -222,6 +222,12 @@ class ProductsController extends Controller
             $query->where('provider_id', Auth::id());
         }
         return $dataTables->eloquent($query)
+            ->addColumn('image', function($row){
+                $src = e($row->image_url);
+                $alt = e($row->title);
+                $fallback = 'https://placehold.co/60x60?text=%20';
+                return '<img src="'.$src.'" alt="'.$alt.'" style="height:50px;width:50px;object-fit:cover;border-radius:4px;" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.onerror=null;this.src=\''.$fallback.'\';" />';
+            })
             ->addColumn('category', fn($row) => optional($row->category)->name)
             ->addColumn('status', function($row){
                 return $row->is_approved
@@ -249,7 +255,7 @@ class ProductsController extends Controller
                 $btns .= '</div>';
                 return $btns;
             })
-            ->rawColumns(['actions','status'])
+            ->rawColumns(['actions','status','image'])
             ->toJson();
     }
 }
