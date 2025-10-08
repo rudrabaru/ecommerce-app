@@ -10,10 +10,11 @@ class MainController extends Controller
     // Landing page (template homepage)
     public function index()
     {
-        // Provide products for header dropdown and optional homepage sections
+        // New Arrivals: products created within the last 24 hours
         $products = Product::query()
             ->where('is_approved', true)
-            ->latest('id')
+            ->where('created_at', '>=', now()->subDay())
+            ->orderByDesc('created_at')
             ->take(10)
             ->get(['id', 'title as name', 'price', 'image']);
 

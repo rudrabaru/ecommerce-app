@@ -31,6 +31,7 @@
                         </div>
                         <div class="shop__sidebar__accordion">
                             <div class="accordion" id="accordionExample">
+                                <!-- Categories Card -->
                                 <div class="card">
                                     <div class="card-heading">
                                         <a>Categories</a>
@@ -41,40 +42,87 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                <!-- Price Slider Card -->
                                 <div class="card">
-                                    
-                                    
+                                    <div class="card-heading">
+                                        <a>Price</a>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="shop__sidebar__price">
+                                            <!-- Price Range Display -->
+                                            <div class="price-range-display mb-3">
+                                                <span class="d-inline-block">$<span id="minPriceDisplay">{{ request('min_price', floor($priceMinBound ?? 0)) }}</span></span>
+                                                <span class="mx-2">-</span>
+                                                <span class="d-inline-block">$<span id="maxPriceDisplay">{{ request('max_price', ceil($priceMaxBound ?? 2000)) }}</span></span>
+                                            </div>
+
+                                            <!-- Dual Range Slider -->
+                                            <div class="price-slider-wrapper mb-3">
+                                                <div class="price-slider-track"></div>
+                                                <input type="range" 
+                                                    id="priceMinRange" 
+                                                    class="price-range-input" 
+                                                    min="0" 
+                                                    max="100" 
+                                                    value="{{ request('min_price') ? round((request('min_price') - ($priceMinBound ?? 0)) / (($priceMaxBound ?? 2000) - ($priceMinBound ?? 0)) * 100) : 0 }}"
+                                                    step="1">
+                                                <input type="range" 
+                                                    id="priceMaxRange" 
+                                                    class="price-range-input" 
+                                                    min="0" 
+                                                    max="100" 
+                                                    value="{{ request('max_price') ? round((request('max_price') - ($priceMinBound ?? 0)) / (($priceMaxBound ?? 2000) - ($priceMinBound ?? 0)) * 100) : 100 }}"
+                                                    step="1">
+                                            </div>
+
+                                            <!-- Apply Button -->
+                                            <button type="button" id="priceGo" class="btn btn-sm btn-dark btn-block mb-2">Go</button>
+
+                                            <!-- Reset Link -->
+                                            <div class="text-center mb-3">
+                                                <a href="#" id="resetPrice" class="text-muted small">Reset price range</a>
+                                            </div>
+
+                                            <!-- Quick Price Ranges -->
+                                            <div class="quick-price-links">
+                                                <p class="small text-muted mb-2">< Quick Price Ranges ></p>
+                                                <ul class="list-unstyled">
+                                                    <li><a href="#" class="js-quick-price small" data-min="0" data-max="200">Up to $200</a></li>
+                                                    <li><a href="#" class="js-quick-price small" data-min="200" data-max="500">$200 - $500</a></li>
+                                                    <li><a href="#" class="js-quick-price small" data-min="500" data-max="750">$500 - $750</a></li>
+                                                    <li><a href="#" class="js-quick-price small" data-min="750" data-max="{{ ceil($priceMaxBound ?? 20000) }}">Over $750</a></li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
+
+                                
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="col-lg-9">
                     <div class="shop__product__option">
-                        <div class="row">
+                        <div class="row align-items-center">
                             <div class="col-lg-6 col-md-6 col-sm-6"></div>
-                            <div class="col-lg-6 col-md-6 col-sm-6">
-                                <div class="shop__product__option__right">
-                                    <p>Sort by:</p>
-                                    <form action="{{ route('shop') }}" method="GET" id="sortForm">
-                                        <input type="hidden" name="q" value="{{ request('q') }}">
-                                        <input type="hidden" name="category" value="{{ request('category') }}">
-                                        <input type="hidden" name="min_price" value="{{ request('min_price') }}">
-                                        <input type="hidden" name="max_price" value="{{ request('max_price') }}">
-                                        <select name="sort" onchange="document.getElementById('sortForm').submit()">
-                                            <option value="latest" {{ request('sort') == 'latest' ? 'selected' : '' }}>Latest</option>
-                                            <option value="price_asc" {{ request('sort') == 'price_asc' ? 'selected' : '' }}>Price: Low to High</option>
-                                            <option value="price_desc" {{ request('sort') == 'price_desc' ? 'selected' : '' }}>Price: High to Low</option>
-                                            <option value="name_asc" {{ request('sort') == 'name_asc' ? 'selected' : '' }}>Name: A to Z</option>
-                                            <option value="name_desc" {{ request('sort') == 'name_desc' ? 'selected' : '' }}>Name: Z to A</option>
-                                        </select>
-                                    </form>
+                            <div class="col-lg-6 col-md-6 col-sm-6 d-flex justify-content-end">
+                                <div class="d-flex align-items-center gap-2">
+                                    <select id="shopSortSelect" class="form-select form-select-sm" style="max-width: 260px;" data-no-nice-select="1">
+                                        <option value="featured" {{ request('sort') == 'featured' ? 'selected' : '' }}>Sort by: Featured</option>
+                                        <option value="latest" {{ request('sort', 'latest') == 'latest' ? 'selected' : '' }}>Sort by: Latest</option>
+                                        <option value="price_asc" {{ request('sort') == 'price_asc' ? 'selected' : '' }}>Sort by: Price: Low to High</option>
+                                        <option value="price_desc" {{ request('sort') == 'price_desc' ? 'selected' : '' }}>Sort by: Price: High to Low</option>
+                                        <option value="best_reviews" {{ request('sort') == 'best_reviews' ? 'selected' : '' }}>Sort by: Best Customer Reviews</option>
+                                        <option value="trending" {{ request('sort') == 'trending' ? 'selected' : '' }}>Sort by: Trending</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div id="products-grid" class="row">
-                        @include('components.product-cards', ['products' => $products])
+                        @include('components.product-cards', ['products' => $products, 'showNewBadge' => ($showNewBadge ?? false)])
                     </div>
                     <div class="row mt-3">
                         <div class="col-lg-12" id="pagination-container">
@@ -103,14 +151,14 @@
     <!-- Js Plugins -->
     <script src="{{ asset('js/jquery-3.3.1.min.js') }}"></script>
     <script src="{{ asset('js/bootstrap.min.js') }}"></script>
-    <script src="js/jquery.nice-select.min.js"></script>
-    <script src="js/jquery.nicescroll.min.js"></script>
-    <script src="js/jquery.magnific-popup.min.js"></script>
-    <script src="js/jquery.countdown.min.js"></script>
-    <script src="js/jquery.slicknav.js"></script>
-    <script src="js/mixitup.min.js"></script>
-    <script src="js/owl.carousel.min.js"></script>
-    <script src="js/main.js"></script>
+    <script src="{{ asset('js/jquery.nice-select.min.js') }}"></script>
+    <script src="{{ asset('js/jquery.nicescroll.min.js') }}"></script>
+    <script src="{{ asset('js/jquery.magnific-popup.min.js') }}"></script>
+    <script src="{{ asset('js/jquery.countdown.min.js') }}"></script>
+    <script src="{{ asset('js/jquery.slicknav.js') }}"></script>
+    <script src="{{ asset('js/mixitup.min.js') }}"></script>
+    <script src="{{ asset('js/owl.carousel.min.js') }}"></script>
+    <script src="{{ asset('js/main.js') }}"></script>
     
     <script>
     (function(){
@@ -263,6 +311,10 @@
             $('#pagination-container').off('click', '.js-ajax-page').on('click', '.js-ajax-page', function(e){
                 e.preventDefault();
                 const url = new URL($(this).attr('href'), window.location.origin);
+                // preserve current sort selection on pagination
+                const params = new URLSearchParams(window.location.search);
+                const currentSort = params.get('sort');
+                if (currentSort) url.searchParams.set('sort', currentSort);
                 fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                     .then(r => r.json())
                     .then(data => {
@@ -276,6 +328,45 @@
                             initSetBg();
                         }, 120);
                     });
+            });
+        }
+        function bindSortDropdown(){
+            const $select = $('#shopSortSelect');
+            // Prevent theme from replacing with Nice Select so native dropdown opens
+            if ($.fn.niceSelect && $select.length) {
+                $select.each(function(){
+                    const $el = $(this);
+                    // If already converted by main.js, revert to native
+                    if ($el.next('.nice-select').length) {
+                        $el.next('.nice-select').remove();
+                        $el.show();
+                    }
+                });
+            }
+            $select.off('change').on('change', function(){
+                const chosen = this.value;
+                const params = new URLSearchParams(window.location.search);
+                const url = new URL("{{ route('shop') }}", window.location.origin);
+                // preserve other filters
+                ['q','category','min_price','max_price'].forEach(k => { if (params.get(k)) url.searchParams.set(k, params.get(k)); });
+                url.searchParams.set('sort', chosen);
+
+                const $grid = $('#products-grid');
+                const loader = $('<div class="text-center w-100 py-3" id="gridLoader"><div class="spinner-border text-primary"></div></div>');
+                $grid.css('opacity', 0.3).prepend(loader);
+                fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(r => r.json())
+                    .then(data => {
+                        $grid.css('opacity', 0);
+                        setTimeout(function(){
+                            $grid.html(data.html);
+                            $('#pagination-container').html(data.pagination);
+                            $grid.css('opacity', 1);
+                            history.pushState({}, '', url);
+                            initSetBg();
+                        }, 120);
+                    })
+                    .finally(() => $('#gridLoader').remove());
             });
         }
         function bindLiveSearch(){
@@ -306,26 +397,63 @@
                 }, 300);
             });
         }
+        
         function bindPriceSlider(){
-            const minBound = 0; const maxBound = 100; // normalized 0-100
-            const $min = $('#priceMinRange');
-            const $max = $('#priceMaxRange');
-            $('#resetPrice').on('click', function(e){ e.preventDefault(); $min.val(0); $max.val(100); $('#priceGo').trigger('click'); });
+            const globalMin = {{ (int)floor($priceMinBound ?? 0) }};
+            const globalMax = {{ (int)ceil($priceMaxBound ?? 2000) }};
+            const $minRange = $('#priceMinRange');
+            const $maxRange = $('#priceMaxRange');
+            const $minDisplay = $('#minPriceDisplay');
+            const $maxDisplay = $('#maxPriceDisplay');
+            
+            // Update price display labels in real-time
+            function updatePriceLabels() {
+                let minVal = parseInt($minRange.val());
+                let maxVal = parseInt($maxRange.val());
+                
+                // Prevent sliders from crossing
+                if (minVal > maxVal - 5) {
+                    minVal = maxVal - 5;
+                    $minRange.val(minVal);
+                }
+                if (maxVal < minVal + 5) {
+                    maxVal = minVal + 5;
+                    $maxRange.val(maxVal);
+                }
+                
+                const minPrice = Math.round(globalMin + (globalMax - globalMin) * (minVal / 100));
+                const maxPrice = Math.round(globalMin + (globalMax - globalMin) * (maxVal / 100));
+                
+                $minDisplay.text(minPrice);
+                $maxDisplay.text(maxPrice);
+            }
+            
+            // Bind input events for real-time label update
+            $minRange.on('input', updatePriceLabels);
+            $maxRange.on('input', updatePriceLabels);
+            
+            // Apply price filter on Go button click
             $('#priceGo').on('click', function(){
                 const params = new URLSearchParams(window.location.search);
-                const globalMin = {{ (int)floor($priceMinBound ?? 0) }};
-                const globalMax = {{ (int)ceil($priceMaxBound ?? 0) }};
-                const minVal = parseInt($min.val(), 10); const maxVal = parseInt($max.val(), 10);
-                const minPrice = Math.round(globalMin + (globalMax - globalMin) * (minVal/100));
-                const maxPrice = Math.round(globalMin + (globalMax - globalMin) * (maxVal/100));
+                const minVal = parseInt($minRange.val(), 10);
+                const maxVal = parseInt($maxRange.val(), 10);
+                const minPrice = Math.round(globalMin + (globalMax - globalMin) * (minVal / 100));
+                const maxPrice = Math.round(globalMin + (globalMax - globalMin) * (maxVal / 100));
+                
                 const url = new URL("{{ route('shop') }}", window.location.origin);
-                ['q','category','sort'].forEach(k => { if (params.get(k)) url.searchParams.set(k, params.get(k)); });
+                ['q','category','sort'].forEach(k => { 
+                    if (params.get(k)) url.searchParams.set(k, params.get(k)); 
+                });
                 url.searchParams.set('min_price', minPrice);
                 url.searchParams.set('max_price', maxPrice);
+                
+                const $grid = $('#products-grid');
+                const loader = $('<div class="text-center w-100 py-3" id="gridLoader"><div class="spinner-border text-primary"></div></div>');
+                $grid.css('opacity', 0.3).prepend(loader);
+                
                 fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                     .then(r => r.json())
                     .then(data => {
-                        const $grid = $('#products-grid');
                         $grid.css('opacity', 0);
                         setTimeout(function(){
                             $grid.html(data.html);
@@ -334,21 +462,73 @@
                             history.pushState({}, '', url);
                             initSetBg();
                         }, 120);
-                    });
+                    })
+                    .finally(() => $('#gridLoader').remove());
             });
-            // Quick price ranges
+            
+            // Reset price range
+            $('#resetPrice').on('click', function(e){ 
+                e.preventDefault(); 
+                $minRange.val(0); 
+                $maxRange.val(100); 
+                updatePriceLabels();
+                
+                const params = new URLSearchParams(window.location.search);
+                const url = new URL("{{ route('shop') }}", window.location.origin);
+                ['q','category','sort'].forEach(k => { 
+                    if (params.get(k)) url.searchParams.set(k, params.get(k)); 
+                });
+                // Remove price params
+                url.searchParams.delete('min_price');
+                url.searchParams.delete('max_price');
+                
+                const $grid = $('#products-grid');
+                const loader = $('<div class="text-center w-100 py-3" id="gridLoader"><div class="spinner-border text-primary"></div></div>');
+                $grid.css('opacity', 0.3).prepend(loader);
+                
+                fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(r => r.json())
+                    .then(data => {
+                        $grid.css('opacity', 0);
+                        setTimeout(function(){
+                            $grid.html(data.html);
+                            $('#pagination-container').html(data.pagination);
+                            $grid.css('opacity', 1);
+                            history.pushState({}, '', url);
+                            initSetBg();
+                        }, 120);
+                    })
+                    .finally(() => $('#gridLoader').remove());
+            });
+            
+            // Quick price range links
             $('.js-quick-price').on('click', function(e){
                 e.preventDefault();
                 const params = new URLSearchParams(window.location.search);
-                const min = parseInt($(this).data('min'),10); const max = parseInt($(this).data('max'),10);
+                const min = parseInt($(this).data('min'), 10);
+                const max = parseInt($(this).data('max'), 10);
+                
                 const url = new URL("{{ route('shop') }}", window.location.origin);
-                ['q','category','sort'].forEach(k => { if (params.get(k)) url.searchParams.set(k, params.get(k)); });
+                ['q','category','sort'].forEach(k => { 
+                    if (params.get(k)) url.searchParams.set(k, params.get(k)); 
+                });
                 url.searchParams.set('min_price', min);
                 url.searchParams.set('max_price', max);
+                
+                // Update slider positions
+                const minPercent = Math.round((min - globalMin) / (globalMax - globalMin) * 100);
+                const maxPercent = Math.round((max - globalMin) / (globalMax - globalMin) * 100);
+                $minRange.val(minPercent);
+                $maxRange.val(maxPercent);
+                updatePriceLabels();
+                
+                const $grid = $('#products-grid');
+                const loader = $('<div class="text-center w-100 py-3" id="gridLoader"><div class="spinner-border text-primary"></div></div>');
+                $grid.css('opacity', 0.3).prepend(loader);
+                
                 fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                     .then(r => r.json())
                     .then(data => {
-                        const $grid = $('#products-grid');
                         $grid.css('opacity', 0);
                         setTimeout(function(){
                             $grid.html(data.html);
@@ -357,15 +537,18 @@
                             history.pushState({}, '', url);
                             initSetBg();
                         }, 120);
-                    });
+                    })
+                    .finally(() => $('#gridLoader').remove());
             });
         }
+        
         $(document).ready(function(){
             initSetBg();
             bindAjaxPagination();
             bindLiveSearch();
             initCategoryToggle();
             bindPriceSlider();
+            bindSortDropdown();
             
             // Initial height calculation
             recalculateSidebarHeight();
@@ -373,9 +556,11 @@
         window.addEventListener('ajaxPageLoaded', function(){
             initSetBg();
             bindAjaxPagination();
+            bindSortDropdown();
         });
     })();
     </script>
+    
     <style>
         /* Enhanced sidebar styling to ensure proper expansion */
         .shop__sidebar {
@@ -464,6 +649,115 @@
         .js-sub-see-more:hover,
         .js-sub-see-less:hover {
             color: #ca1515;
+        }
+
+        /* Price Slider Styles */
+        .price-range-display {
+            font-weight: 600;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .price-slider-wrapper {
+            position: relative;
+            height: 6px;
+            margin: 20px 0;
+        }
+
+        .price-slider-track {
+            position: absolute;
+            width: 100%;
+            height: 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .price-range-input {
+            position: absolute;
+            width: 100%;
+            height: 6px;
+            background: transparent;
+            pointer-events: none;
+            -webkit-appearance: none;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .price-range-input::-webkit-slider-thumb {
+            pointer-events: all;
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #333;
+            cursor: pointer;
+            border: 3px solid #fff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            position: relative;
+            z-index: 3;
+        }
+
+        .price-range-input::-moz-range-thumb {
+            pointer-events: all;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #333;
+            cursor: pointer;
+            border: 3px solid #fff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            position: relative;
+            z-index: 3;
+        }
+
+        .price-range-input::-webkit-slider-thumb:hover {
+            background: #ca1515;
+        }
+
+        .price-range-input::-moz-range-thumb:hover {
+            background: #ca1515;
+        }
+
+        .price-range-input:first-of-type {
+            z-index: 2;
+        }
+
+        .price-range-input:last-of-type {
+            z-index: 1;
+        }
+
+        #resetPrice {
+            color: #666;
+            font-size: 0.875rem;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        #resetPrice:hover {
+            color: #ca1515;
+            text-decoration: underline;
+        }
+
+        .quick-price-links ul li {
+            margin-bottom: 8px;
+        }
+
+        .quick-price-links ul li a {
+            color: #333;
+            text-decoration: none;
+            transition: color 0.2s ease;
+            display: block;
+            padding: 4px 0;
+        }
+
+        .quick-price-links ul li a:hover {
+            color: #ca1515;
+        }
+
+        .shop__sidebar__price {
+            padding: 0;
         }
     </style>
     @include('components.cart-script')

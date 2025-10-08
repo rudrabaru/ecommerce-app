@@ -37,22 +37,49 @@ class StorefrontProductsController extends Controller
 
         $sort = $request->get('sort', 'latest');
         switch ($sort) {
+            case 'featured':
+                // Featured = show everything, default ordering by most recent
+                $query->orderByDesc('products.id');
+                break;
             case 'price_asc':
                 $query->orderBy('price', 'asc');
                 break;
             case 'price_desc':
                 $query->orderBy('price', 'desc');
                 break;
-            case 'name_asc':
-                $query->orderBy('title', 'asc');
+            case 'best_reviews':
+                // Prepare for future reviews table: products left-joined with reviews, sorted by avg rating desc
+                $query->leftJoin('reviews as r', 'r.product_id', '=', 'products.id')
+                      ->select('products.*')
+                      ->selectRaw('COALESCE(AVG(r.rating), 0) as avg_rating')
+                      ->groupBy('products.id')
+                      ->orderByDesc('avg_rating')
+                      ->orderByDesc('products.id');
                 break;
-            case 'name_desc':
-                $query->orderBy('title', 'desc');
+            case 'trending':
+                // Prepare for future orders table: sum of quantities sold
+                $query->leftJoin('order_items as oi', 'oi.product_id', '=', 'products.id')
+                      ->select('products.*')
+                      ->selectRaw('COALESCE(SUM(oi.quantity), 0) as total_sold')
+                      ->groupBy('products.id')
+                      ->orderByDesc('total_sold')
+                      ->orderByDesc('products.id');
+                break;
+            case 'latest':
+                // Latest = only items created within last 24 hours
+                $query->where('products.created_at', '>=', now()->subDay())
+                      ->orderByDesc('products.created_at')
+                      ->orderByDesc('products.id');
                 break;
             default:
-                $query->latest('id');
+                // Default fallback behaves like featured
+                $query->orderByDesc('products.id');
         }
 
+        // Ensure select columns are correct when joins are used
+        if (empty($query->getQuery()->columns)) {
+            $query->select('products.*');
+        }
         $products = $query->paginate(12)->withQueryString();
 
         // Build category tree for sidebar
@@ -63,8 +90,9 @@ class StorefrontProductsController extends Controller
         $priceMinBound = (float) ($bounds->min_price ?? 0);
         $priceMaxBound = (float) ($bounds->max_price ?? 0);
 
+        $showNewBadge = $sort === 'latest';
         if ($request->ajax()) {
-            $html = view('components.product-cards', ['products' => $products])->render();
+            $html = view('components.product-cards', ['products' => $products, 'showNewBadge' => $showNewBadge])->render();
             $pagination = view('components.pagination', ['paginator' => $products])->render();
             return response()->json([
                 'html' => $html,
@@ -72,7 +100,7 @@ class StorefrontProductsController extends Controller
                 'page' => (int)$products->currentPage(),
             ]);
         }
-        return view('shop', compact('products', 'categories', 'headerCategories', 'priceMinBound', 'priceMaxBound'));
+        return view('shop', compact('products', 'categories', 'headerCategories', 'priceMinBound', 'priceMaxBound', 'showNewBadge'));
     }
 
     /**

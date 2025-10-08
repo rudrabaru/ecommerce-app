@@ -109,9 +109,7 @@
                             <div class="product__item__pic set-bg" data-setbg="{{ $p->image_url }}">
                                 <span class="label">New</span>
                                 <ul class="product__hover">
-                                    <li><a href="#"><img src="{{ asset('img/icon/heart.png') }}" alt=""></a></li>
-                                    <li><a href="#"><img src="{{ asset('img/icon/compare.png') }}" alt=""> <span>Compare</span></a></li>
-                                    <li><a href="{{ route('shop.details', ['id' => $p->id]) }}"><img src="{{ asset('img/icon/search.png') }}" alt=""></a></li>
+                                    <li><a href="#"><img src="{{ asset('img/icon/heart.png') }}" alt=""> <span>Add to Wishlist</span></a></li>
                                 </ul>
                             </div>
                             <div class="product__item__text">

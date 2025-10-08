@@ -100,7 +100,10 @@
     /*--------------------------
         Select
     ----------------------------*/
-    $("select").niceSelect();
+    // Only apply Nice Select to selects that are not explicitly opted out
+    $("select").filter(function(){
+        return !$(this).is('[data-no-nice-select]');
+    }).niceSelect();
 
     /*-------------------
 		Radio Btn
