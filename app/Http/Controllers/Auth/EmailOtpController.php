@@ -66,8 +66,12 @@ class EmailOtpController extends Controller
         }
         $otp->used = true;
         $otp->save();
-        // Clear pending session and redirect to login
+        // Clear pending session and redirect to login (preserve optional redirect param for AJAX flows)
         $request->session()->forget('pending_user_id');
+        $redirect = $request->query('redirect');
+        if ($redirect) {
+            return redirect()->route('login', ['redirect' => $redirect])->with('status', 'Email verified. Please login.');
+        }
         return redirect()->route('login')->with('status', 'Email verified. Please login.');
     }
 }

@@ -4,7 +4,7 @@
     <x-auth-session-status class="mb-4" :status="session('status')" />
 
     @php($portal = $portal ?? 'user')
-    <form method="POST" action="{{ $portal === 'admin' ? route('admin.login.submit') : route('login.submit') }}">
+    <form id="plainLoginForm" method="POST" action="{{ $portal === 'admin' ? route('admin.login.submit') : route('login.submit') }}">
         @csrf
 
         <!-- Email Address -->
@@ -51,4 +51,41 @@
             </div>
         @endif
     </form>
+
+    @if(($portal ?? 'user') === 'user')
+    <script>
+    (function(){
+        function init(){
+            var form = document.getElementById('plainLoginForm');
+            if (!form) return;
+            form.addEventListener('submit', function(e){
+                var params = new URLSearchParams(window.location.search);
+                var redirect = params.get('redirect');
+                if (!redirect) return; // no intercept, allow normal submit
+                e.preventDefault();
+                var data = new FormData(form);
+                data.append('redirect', redirect);
+                fetch('{{ route('login.ajax') }}?redirect=' + encodeURIComponent(redirect), {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content') },
+                    body: data
+                }).then(function(r){ return r.json(); }).then(function(res){
+                    if (res && res.success){
+                        try { sessionStorage.setItem('postLoginCartToast', '1'); } catch(e) {}
+                        if (res.cart_count !== undefined && window.updateCartCount){ try { updateCartCount(res.cart_count); } catch(e) {} }
+                        // Navigate back to the original page
+                        window.location.href = redirect;
+                    } else if (res && res.errors) {
+                        // naive inline error display for email/password
+                        alert(Object.values(res.errors).join('\n'));
+                    } else {
+                        alert('Login failed. Please try again.');
+                    }
+                }).catch(function(){ alert('Login failed. Please try again.'); });
+            });
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+    })();
+    </script>
+    @endif
 </x-guest-layout>

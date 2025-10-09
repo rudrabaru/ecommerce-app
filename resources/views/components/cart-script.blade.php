@@ -8,9 +8,6 @@ $(document).ready(function() {
         const productId = form.find('input[name="product_id"]').val();
         const quantity = form.find('input[name="quantity"]').val() || 1;
         
-        // Debug logging
-        console.log('Add to cart clicked:', { productId, quantity });
-        
         // Show loading state
         const button = $(this);
         const originalText = button.text();
@@ -27,13 +24,26 @@ $(document).ready(function() {
             success: function(response) {
                 if (response.success) {
                     updateCartCount(response.cart_count);
-                    Swal.fire({
-                        title: 'Success!',
-                        text: response.message || 'Added to cart successfully',
-                        icon: 'success',
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
+                    // If user is authenticated, show success toast immediately
+                    // If guest, prompt login/register modal immediately after adding to session cart
+                    var isAuth = $('body').attr('data-is-auth') === '1';
+                    if (isAuth) {
+                        Swal.fire({
+                            title: 'Success!',
+                            text: response.message || 'Added to cart successfully',
+                            icon: 'success',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        // Open global login modal
+                        if (typeof $ !== 'undefined' && $('#loginModal').length) {
+                            $('#loginModal').modal('show');
+                        } else {
+                            // Fallback: redirect to login
+                            window.location.href = '{{ route('login') }}';
+                        }
+                    }
                 } else {
                     Swal.fire({
                         title: 'Error!',
@@ -66,5 +76,19 @@ $(document).ready(function() {
             }
         });
     });
+
+    // Post-login toast: show once after page reload
+    try {
+        if (sessionStorage.getItem('postLoginCartToast') === '1') {
+            sessionStorage.removeItem('postLoginCartToast');
+            Swal.fire({
+                title: 'Success!',
+                text: 'Item added to your cart',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+    } catch (e) {}
 });
 </script>

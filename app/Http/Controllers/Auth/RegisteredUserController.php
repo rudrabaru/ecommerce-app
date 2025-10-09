@@ -55,7 +55,23 @@ class RegisteredUserController extends Controller
             $user->save();
         }
 
-        event(new Registered($user));
+        // Avoid firing the default Registered event for storefront users to prevent
+        // Laravel's automatic email verification notification from being sent.
+        // We already send a single combined email (OTP + verify link) below.
+        // For non-user roles (e.g., admin/provider), we keep Laravel's default flow.
+        $role = $role ?? null; // preserve reference from below if exists
+        $shouldFireDefaultRegistered = false;
+        try {
+            $userRole = \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'user', 'guard_name' => 'web']);
+            $isStorefrontUser = $user->hasRole('user') || ((int)($user->role_id) === (int)($userRole->id ?? 0));
+            $shouldFireDefaultRegistered = ! $isStorefrontUser;
+        } catch (\Throwable $e) {
+            // If roles are not resolvable for some reason, default to firing the event to be safe
+            $shouldFireDefaultRegistered = true;
+        }
+        if ($shouldFireDefaultRegistered) {
+            event(new Registered($user));
+        }
 
         // For role user (role_id = 3), set status and require OTP before login
         if ($user->role_id) {
@@ -78,6 +94,10 @@ class RegisteredUserController extends Controller
 
                 // Store pending user id for guest-based OTP flow
                 $request->session()->put('pending_user_id', $user->id);
+                $redirect = $request->query('redirect');
+                if ($redirect) {
+                    return redirect()->route('verification.otp.notice', ['redirect' => $redirect])->with('status', 'Verification code sent.');
+                }
                 return redirect()->route('verification.otp.notice')->with('status', 'Verification code sent.');
             }
         }

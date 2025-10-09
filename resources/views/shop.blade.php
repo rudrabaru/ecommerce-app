@@ -110,8 +110,8 @@
                             <div class="col-lg-6 col-md-6 col-sm-6 d-flex justify-content-end">
                                 <div class="d-flex align-items-center gap-2">
                                     <select id="shopSortSelect" class="form-select form-select-sm" style="max-width: 260px;" data-no-nice-select="1">
-                                        <option value="featured" {{ request('sort') == 'featured' ? 'selected' : '' }}>Sort by: Featured</option>
-                                        <option value="latest" {{ request('sort', 'latest') == 'latest' ? 'selected' : '' }}>Sort by: Latest</option>
+                                        <option value="featured" {{ request('sort', 'featured') == 'featured' ? 'selected' : '' }}>Sort by: Featured</option>
+                                        <option value="latest" {{ request('sort') == 'latest' ? 'selected' : '' }}>Sort by: Latest</option>
                                         <option value="price_asc" {{ request('sort') == 'price_asc' ? 'selected' : '' }}>Sort by: Price: Low to High</option>
                                         <option value="price_desc" {{ request('sort') == 'price_desc' ? 'selected' : '' }}>Sort by: Price: High to Low</option>
                                         <option value="best_reviews" {{ request('sort') == 'best_reviews' ? 'selected' : '' }}>Sort by: Best Customer Reviews</option>

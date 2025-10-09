@@ -35,7 +35,7 @@ class StorefrontProductsController extends Controller
             $query->where('price', '<=', $maxPrice);
         }
 
-        $sort = $request->get('sort', 'latest');
+        $sort = $request->get('sort', 'featured');
         switch ($sort) {
             case 'featured':
                 // Featured = show everything, default ordering by most recent

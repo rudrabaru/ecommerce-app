@@ -4,9 +4,11 @@ use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\CartController;
+use App\Http\Controllers\CheckoutController;
+use App\Http\Controllers\UserAddressController;
+use App\Http\Controllers\Admin\DiscountCodeController;
+
 Route::get('/', [\App\Http\Controllers\MainController::class, 'index'])->name('home');
-Route::get('/shopping-cart', [\App\Http\Controllers\MainController::class, 'cart'])->name('shopping.cart');
-Route::get('/cart', [\App\Http\Controllers\CartController::class, 'index'])->name('cart.index');
 Route::get('/shop', [\Modules\Products\Http\Controllers\StorefrontProductsController::class, 'shop'])->name('shop');
 Route::get('/shop/{id}', [\Modules\Products\Http\Controllers\StorefrontProductsController::class, 'show'])->name('shop.details');
 // Category browsing (reuse existing module CategoryController)
@@ -23,6 +25,7 @@ Route::delete('/cart/discount', [\App\Http\Controllers\CartController::class, 'r
 Route::get('/cart/dropdown', [\App\Http\Controllers\CartController::class, 'dropdown'])->name('cart.dropdown');
 Route::get('/search', [\Modules\Products\Http\Controllers\StorefrontProductsController::class, 'search'])->name('products.search');
 Route::middleware('auth')->group(function () {
+    Route::get('/cart', [\App\Http\Controllers\CartController::class, 'index'])->name('cart.index');
     Route::get('/checkout', [\App\Http\Controllers\CheckoutController::class, 'index'])->name('checkout');
     Route::post('/checkout', [\App\Http\Controllers\CheckoutController::class, 'store'])->name('checkout.store');
     

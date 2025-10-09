@@ -95,10 +95,22 @@ class PortalLoginController extends Controller
 
         $request->session()->regenerate();
 
+        $redirect = $request->input('redirect');
+        // Optionally include fresh cart count for immediate UI update
+        $cartCount = null;
+        try {
+            if (class_exists(\App\Http\Controllers\CartController::class)) {
+                $cartCount = \App\Http\Controllers\CartController::getCartCount();
+            }
+        } catch (\Throwable $e) {
+            $cartCount = null;
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Login successful',
-            'redirect_url' => route('checkout')
+            'redirect_url' => $redirect ?: null,
+            'cart_count' => $cartCount,
         ]);
     }
 

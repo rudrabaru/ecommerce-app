@@ -93,6 +93,22 @@
         function updateCartCount(count) {
             $('#cart-count').text(count);
         }
+
+        // One-time toast after being redirected back from standalone login page
+        try {
+            if (sessionStorage.getItem('postLoginCartToast') === '1') {
+                sessionStorage.removeItem('postLoginCartToast');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        title: 'Login successful',
+                        text: 'Item added to your cart.',
+                        icon: 'success',
+                        timer: 1800,
+                        showConfirmButton: false
+                    });
+                }
+            }
+        } catch (e) {}
     </script>
 </body>
 

@@ -65,7 +65,14 @@
                     try { data = await r.json(); } catch(e) {}
                     throw data;
                 })
-                .then(() => { window.location.href = '{{ route("login") }}'; })
+                .then(() => {
+                    // Preserve redirect param when navigating to login page for AJAX modal flows
+                    var params = new URLSearchParams(window.location.search);
+                    var redirect = params.get('redirect');
+                    var url = '{{ route("login") }}';
+                    if (redirect) url += ('?redirect=' + encodeURIComponent(redirect));
+                    window.location.href = url;
+                })
                 .catch(err => {
                     const msg = (err && err.errors && err.errors.code && err.errors.code[0]) || 'Invalid code';
                     const input = document.getElementById('code');

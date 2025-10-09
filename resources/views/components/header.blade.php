@@ -94,7 +94,7 @@
     </style>
 </head>
 
-<body>
+<body data-is-auth="{{ auth()->check() ? '1' : '0' }}">
     <!-- Page Preloder -->
     <div id="preloder">
         <div class="loader"></div>
@@ -164,7 +164,12 @@
     </header>
     <!-- Header Section (White) End -->
     
-    {{-- Cart Icon - Only for authenticated users --}}
-    @auth
+    {{-- Cart Icon: render always; hidden for guests and shown after AJAX login --}}
+    <div id="cartIconVisibilityWrapper" style="display: {{ auth()->check() ? 'block' : 'none' }};">
         @include('components.cart-icon')
-    @endauth
+    </div>
+
+    {{-- Global Login Modal for guests --}}
+    @guest
+        @include('components.login-modal')
+    @endguest
