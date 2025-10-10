@@ -216,7 +216,7 @@ class AdminController extends Controller
             })
             ->addColumn('actions', function($row){
                 $btns = '<div class="btn-group" role="group">';
-                $btns .= '<button class="btn btn-sm btn-outline-primary edit-user" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#userModal" onclick="openUserModal('.$row->id.')">';
+                $btns .= '<button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editUserModal" data-user-id="'.$row->id.'">';
                 $btns .= '<i class="fas fa-edit"></i> Edit</button>';
                 if (!$row->hasRole('admin')) {
                     $btns .= '<button class="btn btn-sm btn-outline-danger delete-user js-delete" data-id="'.$row->id.'" data-delete-url="'.route('admin.users.destroy', $row->id).'">';
@@ -251,10 +251,10 @@ class AdminController extends Controller
             })
             ->addColumn('actions', function($row){
                 $btns = '<div class="btn-group" role="group">';
-                $btns .= '<button class="btn btn-sm btn-outline-primary edit-user" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#userModal" onclick="openUserModal('.$row->id.')">';
+                $btns .= '<button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editProviderModal" data-user-id="'.$row->id.'">';
                 $btns .= '<i class="fas fa-edit"></i> Edit</button>';
                 if (!$row->hasRole('admin')) {
-                    $btns .= '<button class="btn btn-sm btn-outline-danger delete-user js-delete" data-id="'.$row->id.'" data-delete-url="'.route('admin.users.destroy', $row->id).'">';
+                    $btns .= '<button class="btn btn-sm btn-outline-danger js-delete" data-id="'.$row->id.'" data-delete-url="'.route('admin.users.destroy', $row->id).'">';
                     $btns .= '<i class="fas fa-trash"></i> Delete</button>';
                 }
                 $btns .= '</div>';

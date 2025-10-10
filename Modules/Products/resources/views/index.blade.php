@@ -4,7 +4,7 @@
             <h1 class="mb-0">Products</h1>
             <div>
                 @if(auth()->user()->hasRole('provider') || auth()->user()->hasRole('admin'))
-                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#productModal" onclick="openProductModal()">
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#productModal">
                         <i class="fas fa-plus"></i> Create Product
                     </button>
                 @endif
@@ -132,6 +132,16 @@
     </div>
 
     <script>
+        // Initialize modal behavior
+        document.addEventListener('DOMContentLoaded', function() {
+            const productModal = document.getElementById('productModal');
+            productModal.addEventListener('show.bs.modal', function(event) {
+                const button = event.relatedTarget;
+                const productId = button.getAttribute('data-product-id');
+                openProductModal(productId);
+            });
+        });
+
         // DataTable is now initialized globally - no need for individual initialization
         
         window.openProductModal = function(productId = null) {
