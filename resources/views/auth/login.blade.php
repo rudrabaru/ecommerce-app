@@ -12,6 +12,31 @@
             <x-input-label for="email" :value="__('Email')" />
             <x-text-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email')" required autofocus autocomplete="username" />
             <x-input-error :messages="$errors->get('email')" class="mt-2" />
+            
+            @if($errors->has('email') && str_contains($errors->first('email'), 'verify'))
+                <div class="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-yellow-800">
+                                Email Verification Required
+                            </h3>
+                            <div class="mt-2 text-sm text-yellow-700">
+                                <p>Please check your email and click the verification link before logging in.</p>
+                                <p class="mt-1">
+                                    <a href="{{ route('verification.resend') }}" class="font-medium underline text-yellow-800 hover:text-yellow-900">
+                                        Resend verification email
+                                    </a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            @endif
         </div>
 
         <!-- Password -->
@@ -55,6 +80,44 @@
     @if(($portal ?? 'user') === 'user')
     <script>
     (function(){
+        // Enhanced error display functions
+        function showVerificationError(message) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Email Verification Required',
+                    html: `
+                        <div class="text-left">
+                            <p class="mb-3">${message}</p>
+                            <p class="mb-3">Please check your email and click the verification link before logging in.</p>
+                            <p>
+                                <a href="{{ route('verification.resend') }}" class="text-blue-600 underline hover:text-blue-800">
+                                    Resend verification email
+                                </a>
+                            </p>
+                        </div>
+                    `,
+                    confirmButtonText: 'OK',
+                    confirmButtonColor: '#f59e0b'
+                });
+            } else {
+                alert(message + '\n\nPlease check your email and click the verification link before logging in.');
+            }
+        }
+        
+        function showLoginError(message) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Login Failed',
+                    text: message,
+                    confirmButtonText: 'OK'
+                });
+            } else {
+                alert(message);
+            }
+        }
+        
         function init(){
             var form = document.getElementById('plainLoginForm');
             if (!form) return;
@@ -76,12 +139,19 @@
                         // Navigate back to the original page
                         window.location.href = redirect;
                     } else if (res && res.errors) {
-                        // naive inline error display for email/password
-                        alert(Object.values(res.errors).join('\n'));
+                        // Enhanced error display for email verification
+                        const errorMessage = Object.values(res.errors).join('\n');
+                        if (errorMessage.includes('verify')) {
+                            // Show enhanced verification error
+                            showVerificationError(errorMessage);
+                        } else {
+                            // Show regular error
+                            showLoginError(errorMessage);
+                        }
                     } else {
-                        alert('Login failed. Please try again.');
+                        showLoginError('Login failed. Please try again.');
                     }
-                }).catch(function(){ alert('Login failed. Please try again.'); });
+                }).catch(function(){ showLoginError('Login failed. Please try again.'); });
             });
         }
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

@@ -85,6 +85,43 @@ Route::get('/verify-otp', [\App\Http\Controllers\Auth\EmailOtpController::class,
 Route::get('/verify-otp/send', [\App\Http\Controllers\Auth\EmailOtpController::class, 'send'])->name('verification.otp.send');
 Route::post('/verify-otp', [\App\Http\Controllers\Auth\EmailOtpController::class, 'verify'])->name('verification.otp.verify');
 
+// Guest verification resend routes
+Route::get('/resend-verification', function() {
+    return view('auth.resend-verification');
+})->name('verification.resend');
+
+Route::post('/resend-verification', function(\Illuminate\Http\Request $request) {
+    $request->validate([
+        'email' => 'required|email|exists:users,email'
+    ]);
+
+    $user = \App\Models\User::where('email', $request->email)->first();
+    
+    if ($user && is_null($user->email_verified_at)) {
+        // Send verification email using the existing OTP system
+        try {
+            $otp = \App\Models\EmailOtp::create([
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'otp' => str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT),
+                'link_token' => \Illuminate\Support\Str::random(64),
+                'expires_at' => now()->addHours(24),
+                'used' => false
+            ]);
+
+            // Send email with verification link
+            $verifyUrl = route('verification.link', ['token' => $otp->link_token]);
+            \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\VerifyOtpMail($otp->otp, $verifyUrl));
+            
+            return redirect()->route('verification.resend')->with('status', 'A new verification link has been sent to your email address.');
+        } catch (\Exception $e) {
+            return back()->withErrors(['email' => 'Failed to send verification email. Please try again.']);
+        }
+    } else {
+        return back()->withErrors(['email' => 'This email is already verified or does not exist.']);
+    }
+})->name('verification.resend.submit');
+
 // Link-based verification
 Route::get('/verify-email/link/{token}', function(string $token) {
     $otp = \App\Models\EmailOtp::where('link_token', $token)->where('used', false)->first();

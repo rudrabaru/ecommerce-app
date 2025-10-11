@@ -77,6 +77,9 @@ x-init="
     {!! Hook::applyFilters(AdminFilterHook::ADMIN_FOOTER_BEFORE, '') !!}
 
     @stack('scripts')
+    
+    <!-- Admin Navigation and State Management -->
+    @vite('Modules/Admin/resources/js/admin-navigation.js')
 
     @if (!empty(config('settings.global_custom_js')))
     
@@ -100,59 +103,12 @@ x-init="
         return Array.prototype.slice.call((root || document).querySelectorAll(sel)); 
     };
     
-    // Global modal openers
-    window.openCreateUserModal = function(){
-        console.log('openCreateUserModal called');
-        var modal = window.AdminPanel.qs('#createUserModal');
-        console.log('Modal found:', !!modal);
-        if (modal) {
-            try {
-                var bsModal = new bootstrap.Modal(modal);
-                bsModal.show();
-                console.log('Bootstrap modal opened');
-            } catch (e) {
-                console.error('Bootstrap modal error:', e);
-                if (window.jQuery) {
-                    jQuery(modal).modal('show');
-                    console.log('jQuery modal opened');
-                }
-            }
+    // Navigation and state management functions
+    window.AdminPanel.navigateTo = function(url, page) {
+        if (window.AdminState && window.AdminState.loadPage) {
+            window.AdminState.loadPage(url, page);
         } else {
-            console.error('Create User Modal not found');
-        }
-    };
-
-    window.openCreateProviderModal = function(){
-        console.log('openCreateProviderModal called');
-        var modal = window.AdminPanel.qs('#createProviderModal');
-        console.log('Modal found:', !!modal);
-        if (modal) {
-            try {
-                var bsModal = new bootstrap.Modal(modal);
-                bsModal.show();
-                console.log('Bootstrap modal opened');
-            } catch (e) {
-                console.error('Bootstrap modal error:', e);
-                if (window.jQuery) {
-                    jQuery(modal).modal('show');
-                    console.log('jQuery modal opened');
-                }
-            }
-        } else {
-            console.error('Create Provider Modal not found');
-        }
-    };
-
-    // Legacy function for backward compatibility
-    window.openUserModal = function(userId){
-        console.log('openUserModal called with userId:', userId);
-        if (userId) {
-            var editBtn = window.AdminPanel.qs('.edit-user[data-id="' + userId + '"]');
-            if (editBtn) {
-                editBtn.click();
-            }
-        } else {
-            window.openCreateUserModal();
+            window.location.href = url;
         }
     };
 

@@ -4,6 +4,7 @@ namespace Modules\Payments\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Yajra\DataTables\DataTables;
 
 class PaymentsController extends Controller
 {
@@ -13,6 +14,24 @@ class PaymentsController extends Controller
     public function index()
     {
         return view('payments::index');
+    }
+
+    /**
+     * Get payments data for DataTable
+     */
+    public function data()
+    {
+        // For now, return empty data since we don't have a Payment model yet
+        return DataTables::of(collect([]))
+            ->addColumn('actions', function($row) {
+                return '<div class="btn-group" role="group">
+                    <button class="btn btn-sm btn-outline-primary" disabled>
+                        <i class="fas fa-eye"></i> View
+                    </button>
+                </div>';
+            })
+            ->rawColumns(['actions'])
+            ->make(true);
     }
 
     /**

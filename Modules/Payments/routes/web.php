@@ -14,7 +14,10 @@ use Modules\Payments\Http\Controllers\PaymentsController;
 |
 */
 
-// Temporarily disabled to avoid exposing placeholder endpoints; gate behind auth when enabled
-// Route::middleware(['web','auth'])->group(function () {
-//     Route::resource('payments', PaymentsController::class)->names('payments');
-// });
+Route::middleware(['web','auth'])->group(function () {
+    // Admin routes - only admins can access
+    Route::middleware(['ensure_role:admin'])->prefix('admin')->as('admin.')->group(function () {
+        Route::get('payments/data', [PaymentsController::class, 'data'])->name('payments.data');
+        Route::resource('payments', PaymentsController::class)->names('payments');
+    });
+});

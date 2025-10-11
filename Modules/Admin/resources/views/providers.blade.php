@@ -2,11 +2,6 @@
     <div class="container-fluid">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="mb-0">Providers</h1>
-            <div>
-                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createProviderModal">
-                    <i class="fas fa-plus"></i> Create Provider
-                </button>
-            </div>
         </div>
 
         <div class="card">
@@ -31,136 +26,138 @@
         </div>
     </div>
 
-    @include('admin::partials.create-provider-modal')
-    @include('admin::partials.edit-provider-modal')
+
+    @push('styles')
+        <style>
+        /* Admin DataTables Custom Styles */
+        .form-check.form-switch {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 38px;
+        }
+        .form-check-input {
+            width: 3rem;
+            height: 1.5rem;
+            margin: 0;
+            cursor: pointer;
+            transition: all 0.15s ease-in-out;
+        }
+        .form-check-input:checked {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+        }
+        .form-check-input:focus {
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        }
+        .form-check-input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .dataTables_wrapper {
+            padding: 0;
+        }
+        .dataTables_length,
+        .dataTables_filter {
+            margin-bottom: 1rem;
+        }
+        .dataTables_length select,
+        .dataTables_filter input {
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            padding: 0.375rem 0.75rem;
+            font-size: 0.875rem;
+        }
+        .dataTables_length select:focus,
+        .dataTables_filter input:focus {
+            border-color: #86b7fe;
+            outline: 0;
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        }
+        .table th {
+            border-top: none;
+            font-weight: 600;
+            color: #495057;
+            background-color: #f8f9fa;
+            padding: 0.75rem;
+            vertical-align: middle;
+        }
+        .table td {
+            padding: 0.75rem;
+            vertical-align: middle;
+            border-top: 1px solid #dee2e6;
+        }
+        .table-hover tbody tr:hover {
+            background-color: rgba(0, 0, 0, 0.075);
+        }
+        .btn-group .btn {
+            margin-right: 0.25rem;
+        }
+        .btn-group .btn:last-child {
+            margin-right: 0;
+        }
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+            border-radius: 0.25rem;
+        }
+        .dataTables_processing {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 0.375rem;
+            padding: 1rem;
+            z-index: 1000;
+        }
+        .dataTables_paginate {
+            margin-top: 1rem;
+        }
+        .paginate_button {
+            padding: 0.375rem 0.75rem;
+            margin-left: 0.125rem;
+            border: 1px solid #dee2e6;
+            border-radius: 0.25rem;
+            color: #0d6efd;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.15s ease-in-out;
+        }
+        .paginate_button:hover {
+            background-color: #e9ecef;
+            border-color: #adb5bd;
+            color: #0d6efd;
+        }
+        .paginate_button.current {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+            color: white;
+        }
+        .paginate_button.disabled {
+            color: #6c757d;
+            cursor: not-allowed;
+            background-color: transparent;
+            border-color: #dee2e6;
+        }
+        .dataTables_info {
+            margin-top: 1rem;
+            color: #6c757d;
+            font-size: 0.875rem;
+        }
+        .table-responsive {
+            border: none;
+        }
+        .card-body {
+            padding: 1.5rem;
+        }
+        .card-body .table-responsive {
+            margin: 0;
+        }
+        </style>
+    @endpush
 
     @push('scripts')
         @vite('Modules/Admin/resources/js/providers.js')
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initialize DataTable
-            const table = $('#providers-table').DataTable({
-                processing: true,
-                serverSide: true,
-                ajax: $(table).data('dt-url'),
-                pageLength: $(table).data('dt-page-length'),
-                order: JSON.parse($(table).attr('data-dt-order')),
-                columns: [
-                    { data: 'id', name: 'id', width: '60px' },
-                    { data: 'name', name: 'name' },
-                    { data: 'email', name: 'email' },
-                    { data: 'created_at', name: 'created_at' },
-                    { data: 'actions', name: 'actions', orderable: false, searchable: false }
-                ]
-            });
-
-            // Handle Create Provider Modal
-            const createProviderModal = document.getElementById('createProviderModal');
-            createProviderModal.addEventListener('shown.bs.modal', function() {
-                document.getElementById('create_provider_name').focus();
-            });
-
-            // Handle Edit Provider Modal
-            const editProviderModal = document.getElementById('editProviderModal');
-            editProviderModal.addEventListener('show.bs.modal', function(event) {
-                const button = event.relatedTarget;
-                const providerId = button.getAttribute('data-id');
-                loadProviderData(providerId);
-            });
-
-            // Load Provider Data for Editing
-            function loadProviderData(providerId) {
-                fetch(`/admin/users/${providerId}/edit`, {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    const form = document.getElementById('editProviderForm');
-                    form.action = `/admin/users/${providerId}`;
-                    document.getElementById('edit_provider_name').value = data.user.name;
-                    document.getElementById('edit_provider_email').value = data.user.email;
-                    document.getElementById('edit_providerId').value = providerId;
-                    
-                    // Enable save button after data is loaded
-                    document.getElementById('editProviderSaveBtn').disabled = false;
-                })
-                .catch(error => {
-                    console.error('Error loading provider data:', error);
-                    Swal.fire('Error', 'Failed to load provider data', 'error');
-                });
-            }
-
-            // Form Validation and Submission
-            ['createProviderForm', 'editProviderForm'].forEach(formId => {
-                const form = document.getElementById(formId);
-                const isCreate = formId === 'createProviderForm';
-                const saveBtn = document.getElementById(isCreate ? 'createProviderSaveBtn' : 'editProviderSaveBtn');
-                const spinner = document.getElementById(isCreate ? 'createProviderSpinner' : 'editProviderSpinner');
-
-                // Validate form inputs
-                form.querySelectorAll('input').forEach(input => {
-                    input.addEventListener('input', validateForm);
-                });
-
-                function validateForm() {
-                    const name = form.querySelector('[name="name"]').value.trim();
-                    const email = form.querySelector('[name="email"]').value.trim();
-                    const password = isCreate ? form.querySelector('[name="password"]').value : true;
-
-                    const isValid = name.length > 0 && 
-                                  email.length > 0 && 
-                                  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) &&
-                                  (isCreate ? password.length >= 8 : true);
-
-                    saveBtn.disabled = !isValid;
-                }
-            });
-
-            // Handle form submissions
-            function submitForm(formId) {
-                const form = document.getElementById(formId);
-                const formData = new FormData(form);
-                const saveBtn = form.querySelector('button[type="submit"]');
-                const spinner = saveBtn.querySelector('.spinner-border');
-                
-                saveBtn.disabled = true;
-                spinner.classList.remove('d-none');
-
-                fetch(form.action, {
-                    method: form.querySelector('[name="_method"]')?.value || 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        const modal = bootstrap.Modal.getInstance(form.closest('.modal'));
-                        modal.hide();
-                        form.reset();
-                        table.ajax.reload();
-                        Swal.fire('Success', data.message, 'success');
-                    } else {
-                        throw new Error(data.message || 'An error occurred');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    Swal.fire('Error', error.message || 'Failed to save provider', 'error');
-                })
-                .finally(() => {
-                    saveBtn.disabled = false;
-                    spinner.classList.add('d-none');
-                });
-            }
-
-            // Expose submitForm to global scope for onclick handlers
-            window.submitForm = submitForm;
-        });
-    </script>
     @endpush
 </x-app-layout>

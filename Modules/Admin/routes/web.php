@@ -29,15 +29,15 @@ Route::middleware(['web','auth','ensure_role:admin'])->group(function () {
     Route::get('/admin/dashboard/recent-users', [\App\Http\Controllers\AdminDashboardController::class, 'recentUsers'])->name('admin.dashboard.recent-users');
     Route::get('/admin/dashboard/recent-products', [\App\Http\Controllers\AdminDashboardController::class, 'recentProducts'])->name('admin.dashboard.recent-products');
     
-    // Users management (role=user)
+    // Users management (role=user) - Read-only with AJAX datatables
     Route::get('/admin/users', [AdminController::class, 'index'])->name('admin.users.index');
     Route::get('/admin/users/data', [AdminController::class, 'data'])->name('admin.users.data');
-    Route::resource('admin/users', AdminController::class)->names('admin.users')->except(['index']);
+    Route::delete('/admin/users/{user}', [AdminController::class, 'destroy'])->name('admin.users.destroy');
     // Verify toggle endpoint
     Route::post('/admin/users/{user}/verify', [AdminController::class, 'verify'])->name('admin.users.verify');
     Route::post('/admin/users/{user}/promote', [AdminController::class, 'promoteToProvider'])->name('admin.users.promote');
 
-    // Providers management (role=provider)
+    // Providers management (role=provider) - Read-only with AJAX datatables
     Route::get('/admin/providers', [AdminController::class, 'providersIndex'])->name('admin.providers.index');
     Route::get('/admin/providers/data', [AdminController::class, 'providersData'])->name('admin.providers.data');
 });

@@ -21,140 +21,12 @@ class AdminController extends Controller
     }
 
     /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        $roles = \Spatie\Permission\Models\Role::all();
-        return response()->json($roles);
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        try {
-            $validated = $request->validate([
-                'name' => ['required', 'string', 'max:255'],
-                'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
-                'password' => ['required', 'string', 'min:8'],
-                'role' => ['required', 'string', 'exists:roles,name']
-            ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $e->errors()
-                ], 422);
-            }
-            throw $e;
-        }
-
-        $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => bcrypt($validated['password']),
-        ]);
-
-        $user->assignRole($validated['role']);
-
-        // Keep role_id column in sync with Spatie role pivot
-        $roleId = Role::where('name', $validated['role'])->value('id');
-        if ($roleId) {
-            $user->role_id = $roleId;
-            $user->save();
-        }
-
-        if ($request->wantsJson() || $request->ajax()) {
-            return response()->json([
-                'success' => true,
-                'message' => __('User created successfully')
-            ]);
-        }
-
-        return redirect()->route('admin.users.index')->with('status', __('User created'));
-    }
-
-    /**
      * Show the specified resource.
      */
     public function show($id)
     {
         $user = User::with('roles')->findOrFail($id);
         return response()->json($user);
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit($id)
-    {
-        $user = User::with('roles')->findOrFail($id);
-        $roles = \Spatie\Permission\Models\Role::all();
-        
-        if (request()->wantsJson() || request()->ajax()) {
-            return response()->json([
-                'user' => $user,
-                'roles' => $roles
-            ]);
-        }
-        
-        return view('admin::edit', compact('user', 'roles'));
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, $id)
-    {
-        $user = User::findOrFail($id);
-
-        try {
-            $validated = $request->validate([
-                'name' => ['required', 'string', 'max:255'],
-                'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,' . $id],
-                'password' => ['nullable', 'string', 'min:8'],
-                'role' => ['required', 'string', 'exists:roles,name']
-            ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Validation failed',
-                    'errors' => $e->errors()
-                ], 422);
-            }
-            throw $e;
-        }
-
-        $user->update([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-        ]);
-
-        if (!empty($validated['password'])) {
-            $user->update(['password' => bcrypt($validated['password'])]);
-        }
-
-        $user->syncRoles([$validated['role']]);
-
-        // Keep role_id column in sync with Spatie role pivot
-        $roleId = Role::where('name', $validated['role'])->value('id');
-        if ($roleId) {
-            $user->role_id = $roleId;
-            $user->save();
-        }
-
-        if ($request->wantsJson() || $request->ajax()) {
-            return response()->json([
-                'success' => true,
-                'message' => __('User updated successfully')
-            ]);
-        }
-
-        return redirect()->route('admin.users.index')->with('status', __('User updated'));
     }
 
     /**
@@ -216,8 +88,6 @@ class AdminController extends Controller
             })
             ->addColumn('actions', function($row){
                 $btns = '<div class="btn-group" role="group">';
-                $btns .= '<button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editUserModal" data-user-id="'.$row->id.'">';
-                $btns .= '<i class="fas fa-edit"></i> Edit</button>';
                 if (!$row->hasRole('admin')) {
                     $btns .= '<button class="btn btn-sm btn-outline-danger delete-user js-delete" data-id="'.$row->id.'" data-delete-url="'.route('admin.users.destroy', $row->id).'">';
                     $btns .= '<i class="fas fa-trash"></i> Delete</button>';
@@ -251,8 +121,6 @@ class AdminController extends Controller
             })
             ->addColumn('actions', function($row){
                 $btns = '<div class="btn-group" role="group">';
-                $btns .= '<button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editProviderModal" data-user-id="'.$row->id.'">';
-                $btns .= '<i class="fas fa-edit"></i> Edit</button>';
                 if (!$row->hasRole('admin')) {
                     $btns .= '<button class="btn btn-sm btn-outline-danger js-delete" data-id="'.$row->id.'" data-delete-url="'.route('admin.users.destroy', $row->id).'">';
                     $btns .= '<i class="fas fa-trash"></i> Delete</button>';

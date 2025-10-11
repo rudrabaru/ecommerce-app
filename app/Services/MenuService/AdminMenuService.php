@@ -101,7 +101,7 @@ class AdminMenuService
         
         return sprintf(
             '<li class="menu-item-%s">
-                <a href="%s" class="menu-item group js-ajax-link %s">
+                <a href="%s" class="menu-item group admin-nav-link %s" data-page="%s">
                     <iconify-icon icon="%s" class="menu-item-icon" width="18" height="18"></iconify-icon>
                     <span class="menu-item-text">%s</span>
                 </a>
@@ -109,6 +109,7 @@ class AdminMenuService
             $item['id'],
             $item['route'],
             $isActive,
+            $item['id'],
             $icon,
             $item['label']
         );

@@ -8,6 +8,9 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
+use App\Models\EmailOtp;
+use App\Mail\VerifyOtpMail;
+use Illuminate\Support\Facades\Mail;
 
 class AuthenticatedSessionController extends Controller
 {
@@ -36,6 +39,10 @@ class AuthenticatedSessionController extends Controller
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
+            
+            // Send verification email for unverified users (same as registration flow)
+            $this->sendVerificationEmail($user);
+            
             return redirect()->route('login')->withErrors(['email' => 'Please verify your email before logging in.']);
         }
 
@@ -114,6 +121,46 @@ class AuthenticatedSessionController extends Controller
         // Clear guest cart
         session()->forget(['cart', 'cart_discount_code', 'cart_discount']);
         \Log::info('Guest cart cleared after merge');
+    }
+
+    /**
+     * Send verification email to unverified user (same as registration flow)
+     */
+    private function sendVerificationEmail($user)
+    {
+        try {
+            // Generate OTP and link token
+            $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            $linkToken = bin2hex(random_bytes(20));
+            
+            // Create or update EmailOtp record
+            EmailOtp::updateOrCreate(
+                ['user_id' => $user->id, 'email' => $user->email, 'used' => false],
+                [
+                    'code' => $code, 
+                    'link_token' => $linkToken, 
+                    'expires_at' => now()->addMinutes(15)
+                ]
+            );
+            
+            // Generate verification URL
+            $verifyUrl = url('/verify-email/link/'.$linkToken);
+            
+            // Send email with OTP and verification link
+            Mail::to($user->email)->send(new VerifyOtpMail($code, $verifyUrl));
+            
+            \Log::info('Verification email sent to unverified user', [
+                'user_id' => $user->id,
+                'email' => $user->email
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Failed to send verification email to unverified user', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 
     /**
