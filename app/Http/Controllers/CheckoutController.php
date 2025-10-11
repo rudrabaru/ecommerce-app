@@ -49,7 +49,7 @@ class CheckoutController extends Controller
             });
         }
 
-        $addresses = $user->addresses()->where('type', 'shipping')->get();
+        $addresses = $user->addresses()->with(['country', 'state', 'city'])->where('type', 'shipping')->get();
         $paymentMethods = PaymentMethod::getActiveMethods();
 
         // Calculate cart total

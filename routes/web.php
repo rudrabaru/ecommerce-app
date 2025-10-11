@@ -76,6 +76,8 @@ Route::middleware('guest')->group(function () {
     Route::post('/admin/login', [\App\Http\Controllers\Auth\PortalLoginController::class, 'adminLogin'])->name('admin.login.submit');
 });
 
+// Location routes are handled by the Location module
+
 // Note: Module routes are loaded by their own service providers; no manual glob include here
 
 // OTP verification routes (guest flow using session 'pending_user_id')

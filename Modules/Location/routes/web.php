@@ -14,6 +14,9 @@ use Modules\Location\Http\Controllers\LocationController;
 |
 */
 
-Route::group([], function () {
-    Route::resource('location', LocationController::class)->names('location');
+Route::group(['as' => 'locations.'], function () {
+    Route::get('locations/countries', [LocationController::class, 'countries'])->name('countries');
+    Route::get('locations/states/{country}', [LocationController::class, 'states'])->name('states');
+    Route::get('locations/cities/{state}', [LocationController::class, 'cities'])->name('cities');
+    Route::get('locations/phone-codes', [LocationController::class, 'phoneCodes'])->name('phonecodes');
 });

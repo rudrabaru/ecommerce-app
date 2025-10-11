@@ -31,11 +31,13 @@ class UserAddressController extends Controller
             'company' => 'nullable|string|max:255',
             'address_line_1' => 'required|string|max:255',
             'address_line_2' => 'nullable|string|max:255',
-            'city' => 'required|string|max:255',
-            'state' => 'required|string|max:255',
+            'country_id' => 'required|exists:countries,id',
+            'state_id' => 'required|exists:states,id',
+            'city_id' => 'required|exists:cities,id',
             'postal_code' => 'required|string|max:20',
-            'country' => 'required|string|max:255',
             'phone' => 'required|string|max:20',
+            'country_code' => 'required|string|max:10',
+            'email' => 'nullable|email|max:255',
             'is_default' => 'boolean',
         ]);
 
@@ -47,7 +49,7 @@ class UserAddressController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Address created successfully.',
-            'address' => $address
+            'address' => $address->load(['country', 'state', 'city'])
         ]);
     }
 
@@ -59,7 +61,7 @@ class UserAddressController extends Controller
 
         return response()->json([
             'success' => true,
-            'address' => $address
+            'address' => $address->load(['country', 'state', 'city'])
         ]);
     }
 
@@ -75,11 +77,13 @@ class UserAddressController extends Controller
             'company' => 'nullable|string|max:255',
             'address_line_1' => 'required|string|max:255',
             'address_line_2' => 'nullable|string|max:255',
-            'city' => 'required|string|max:255',
-            'state' => 'required|string|max:255',
+            'country_id' => 'required|exists:countries,id',
+            'state_id' => 'required|exists:states,id',
+            'city_id' => 'required|exists:cities,id',
             'postal_code' => 'required|string|max:20',
-            'country' => 'required|string|max:255',
             'phone' => 'required|string|max:20',
+            'country_code' => 'required|string|max:10',
+            'email' => 'nullable|email|max:255',
             'is_default' => 'boolean',
         ]);
 
@@ -88,7 +92,7 @@ class UserAddressController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Address updated successfully.',
-            'address' => $address
+            'address' => $address->load(['country', 'state', 'city'])
         ]);
     }
 

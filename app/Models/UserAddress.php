@@ -15,11 +15,13 @@ class UserAddress extends Model
         'company',
         'address_line_1',
         'address_line_2',
-        'city',
-        'state',
+        'country_id',
+        'state_id',
+        'city_id',
         'postal_code',
-        'country',
         'phone',
+        'country_code',
+        'email',
         'is_default'
     ];
 
@@ -30,6 +32,21 @@ class UserAddress extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function country(): BelongsTo
+    {
+        return $this->belongsTo(Country::class);
+    }
+
+    public function state(): BelongsTo
+    {
+        return $this->belongsTo(State::class);
+    }
+
+    public function city(): BelongsTo
+    {
+        return $this->belongsTo(City::class);
     }
 
     public function getFullNameAttribute(): string
@@ -43,7 +60,7 @@ class UserAddress extends Model
         if ($this->address_line_2) {
             $address .= ', ' . $this->address_line_2;
         }
-        $address .= ', ' . $this->city . ', ' . $this->state . ' ' . $this->postal_code . ', ' . $this->country;
+        $address .= ', ' . $this->city->name . ', ' . $this->state->name . ' ' . $this->postal_code . ', ' . $this->country->name;
         return $address;
     }
 
