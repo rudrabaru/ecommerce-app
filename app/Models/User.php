@@ -47,7 +47,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'password' => 'hashed',
         ];
     }
-    
+
     // Ensure providers/admins keep status null
     protected static function booted(): void
     {

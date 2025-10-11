@@ -47,12 +47,8 @@
                         <label for="phone">Contact Number <span class="text-danger">*</span></label>
                         <div class="input-group">
                             <div class="input-group-prepend">
-                                <select class="form-control" id="country_code" style="max-width: 80px;">
-                                    <option value="+91">🇮🇳 +91</option>
-                                    <option value="+1">🇺🇸 +1</option>
-                                    <option value="+44">🇬🇧 +44</option>
-                                    <option value="+33">🇫🇷 +33</option>
-                                    <option value="+49">🇩🇪 +49</option>
+                                <select class="form-control" id="country_code" name="country_code" style="max-width: 80px;">
+                                    <option value="">Select</option>
                                 </select>
                             </div>
                             <input type="tel" class="form-control @error('phone') is-invalid @enderror" 
@@ -81,15 +77,8 @@
                             <div class="form-group">
                                 <label for="country">Country <span class="text-danger">*</span></label>
                                 <select class="form-control @error('country') is-invalid @enderror" 
-                                        id="country" name="country" required>
+                                        id="country" name="country_id" required>
                                     <option value="">Select Country</option>
-                                    <option value="India">India</option>
-                                    <option value="United States">United States</option>
-                                    <option value="United Kingdom">United Kingdom</option>
-                                    <option value="France">France</option>
-                                    <option value="Germany">Germany</option>
-                                    <option value="Canada">Canada</option>
-                                    <option value="Australia">Australia</option>
                                 </select>
                                 <div class="invalid-feedback"></div>
                             </div>
@@ -98,7 +87,7 @@
                             <div class="form-group">
                                 <label for="state">State <span class="text-danger">*</span></label>
                                 <select class="form-control @error('state') is-invalid @enderror" 
-                                        id="state" name="state" required>
+                                        id="state" name="state_id" required disabled>
                                     <option value="">Select State</option>
                                 </select>
                                 <div class="invalid-feedback"></div>
@@ -108,7 +97,7 @@
                             <div class="form-group">
                                 <label for="city">City <span class="text-danger">*</span></label>
                                 <select class="form-control @error('city') is-invalid @enderror" 
-                                        id="city" name="city" required>
+                                        id="city" name="city_id" required disabled>
                                     <option value="">Select City</option>
                                 </select>
                                 <div class="invalid-feedback"></div>
@@ -176,6 +165,163 @@
         </div>
     </div>
 </div>
+
+<!-- Debug Script -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded - checking jQuery');
+    if (typeof jQuery === 'undefined') {
+        console.error('jQuery is not loaded!');
+    } else {
+        console.log('jQuery version:', jQuery.fn.jquery);
+        
+        // Test API endpoints
+        console.log('Testing API endpoints...');
+        
+        $.ajax({
+            url: '            url: '{{ route("locations.phonecodes") }}',',
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+            },
+            success: function(data) {
+                console.log('Phone codes loaded:', data);
+                const select = $('#country_code');
+                select.empty();
+                data.forEach(code => {
+                    select.append(`<option value="${code.phone_code}">${getFlagEmoji(code.iso_code)} ${code.phone_code}</option>`);
+                });
+            },
+            error: function(xhr, status, error) {
+                console.error('Phone codes error:', {
+                    status: xhr.status,
+                    statusText: xhr.statusText,
+                    response: xhr.responseText,
+                    error: error
+                });
+            }
+        });
+
+        $.ajax({
+            url: '{{ route("locations.countries") }}',
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+            },
+            success: function(data) {
+                console.log('Countries loaded:', data);
+                const select = $('#country');
+                select.empty();
+                select.append('<option value="">Select Country</option>');
+                data.forEach(country => {
+                    select.append(`<option value="${country.id}">${getFlagEmoji(country.iso_code)} ${country.name}</option>`);
+                });
+            },
+            error: function(xhr, status, error) {
+                console.error('Countries error:', {
+                    status: xhr.status,
+                    statusText: xhr.statusText,
+                    response: xhr.responseText,
+                    error: error
+                });
+                $('#country').empty().append('<option value="">Error loading countries</option>');
+            }
+        });
+
+        // Handle country change
+        $('#country').on('change', function() {
+            const countryId = $(this).val();
+            if (!countryId) {
+                $('#state').empty().append('<option value="">Select State</option>').prop('disabled', true);
+                $('#city').empty().append('<option value="">Select City</option>').prop('disabled', true);
+                return;
+            }
+
+            $.ajax({
+                url: '{{ route("locations.states", ["country" => "_id_"]) }}'.replace('_id_', countryId),
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                },
+                success: function(data) {
+                    const select = $('#state');
+                    select.empty();
+                    select.append('<option value="">Select State</option>');
+                    data.forEach(state => {
+                        select.append(`<option value="${state.id}">${state.name}</option>`);
+                    });
+                    select.prop('disabled', false);
+                    $('#city').empty().append('<option value="">Select City</option>').prop('disabled', true);
+                },
+                error: function(xhr, status, error) {
+                    console.error('States error:', {
+                        status: xhr.status,
+                        statusText: xhr.statusText,
+                        response: xhr.responseText,
+                        error: error
+                    });
+                    $('#state').empty().append('<option value="">Error loading states</option>').prop('disabled', true);
+                    $('#city').empty().append('<option value="">Select City</option>').prop('disabled', true);
+                }
+            });
+        });
+
+        // Handle state change
+        $('#state').on('change', function() {
+            const stateId = $(this).val();
+            if (!stateId) {
+                $('#city').empty().append('<option value="">Select City</option>').prop('disabled', true);
+                return;
+            }
+
+            $.ajax({
+                url: '{{ route("locations.cities", ["state" => "_id_"]) }}'.replace('_id_', stateId),
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                },
+                success: function(data) {
+                    const select = $('#city');
+                    select.empty();
+                    select.append('<option value="">Select City</option>');
+                    data.forEach(city => {
+                        select.append(`<option value="${city.id}">${city.name}</option>`);
+                    });
+                    select.prop('disabled', false);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Cities error:', {
+                        status: xhr.status,
+                        statusText: xhr.statusText,
+                        response: xhr.responseText,
+                        error: error
+                    });
+                    $('#city').empty().append('<option value="">Error loading cities</option>').prop('disabled', true);
+                }
+            });
+        });
+
+        // Add getFlagEmoji function if not already defined
+        if (typeof getFlagEmoji === 'undefined') {
+            window.getFlagEmoji = function(isoCode) {
+                const codePoints = isoCode
+                    .toUpperCase()
+                    .split('')
+                    .map(char => 127397 + char.charCodeAt());
+                return String.fromCodePoint(...codePoints);
+            };
+        }
+    }
+});
+</script>
 
 <style>
 .modal-content {
@@ -298,3 +444,4 @@
 }
 </style>
 
+@include('partials.address-modal-script')

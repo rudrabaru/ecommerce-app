@@ -1,0 +1,115 @@
+<!-- Route definitions for JavaScript -->
+<script>
+window.addressRoutes = {
+    phonecodes: '{{ route("locations.phonecodes") }}',
+    countries: '{{ route("locations.countries") }}',
+    states: '{{ route("locations.states", ["country" => "_id_"]) }}',
+    cities: '{{ route("locations.cities", ["state" => "_id_"]) }}'
+};
+</script>
+
+<!-- Address Modal Script -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, checking jQuery...');
+    
+    // Make sure jQuery is loaded
+    if (typeof jQuery === 'undefined') {
+        console.error('jQuery is required but not loaded!');
+        return;
+    }
+    
+    const $ = jQuery;
+    console.log('jQuery version:', $.fn.jquery);
+    
+    console.log('jQuery version:', jQuery.fn.jquery);
+
+    // Generic function to update dropdowns
+    function updateDropdown(url, selectElement, placeholder, formatOption) {
+        jQuery.ajax({
+            url: url,
+            method: 'GET',
+            dataType: 'json',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            },
+            success: function(data) {
+                const select = jQuery(selectElement);
+                select.empty().append(`<option value="">${placeholder}</option>`);
+                data.forEach(item => {
+                    select.append(formatOption(item));
+                });
+                select.prop('disabled', false);
+            },
+            error: function(xhr, status, error) {
+                console.error(`Error loading ${selectElement}:`, error);
+                jQuery(selectElement).empty()
+                    .append(`<option value="">Error loading ${placeholder}</option>`)
+                    .prop('disabled', true);
+            }
+        });
+    }
+
+    // Function to get flag emoji
+    function getFlagEmoji(isoCode) {
+        if (!isoCode) return '';
+        return isoCode.toUpperCase()
+            .split('')
+            .map(char => 127397 + char.charCodeAt())
+            .map(code => String.fromCodePoint(code))
+            .join('');
+    }
+
+    // Initial setup - disable state and city
+    jQuery('#state, #city').prop('disabled', true);
+
+    // Load phone codes
+    updateDropdown(
+        '{{ route("locations.phonecodes") }}',
+        '#country_code',
+        'Select Code',
+        code => `<option value="${code.phone_code}">${getFlagEmoji(code.iso_code)} ${code.phone_code}</option>`
+    );
+
+    // Load countries
+    updateDropdown(
+        '{{ route("locations.countries") }}',
+        '#country',
+        'Select Country',
+        country => `<option value="${country.id}">${getFlagEmoji(country.iso_code)} ${country.name}</option>`
+    );
+
+    // Handle country change
+    jQuery('#country').on('change', function() {
+        const countryId = jQuery(this).val();
+        jQuery('#state').empty().append('<option value="">Select State</option>').prop('disabled', true);
+        jQuery('#city').empty().append('<option value="">Select City</option>').prop('disabled', true);
+        
+        if (countryId) {
+            updateDropdown(
+                '{{ route("locations.states", ["country" => "_id_"]) }}'.replace('_id_', countryId),
+                '#state',
+                'Select State',
+                state => `<option value="${state.id}">${state.name}</option>`
+            );
+        }
+    });
+
+    // Handle state change
+    jQuery('#state').on('change', function() {
+        const stateId = jQuery(this).val();
+        jQuery('#city').empty().append('<option value="">Select City</option>').prop('disabled', true);
+        
+        if (stateId) {
+            updateDropdown(
+                '{{ route("locations.cities", ["state" => "_id_"]) }}'.replace('_id_', stateId),
+                '#city',
+                'Select City',
+                city => `<option value="${city.id}">${city.name}</option>`
+            );
+        }
+    });
+});
+</script>

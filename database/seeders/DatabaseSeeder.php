@@ -14,15 +14,15 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        if (Schema::hasTable('roles')) {
-            $this->call([
-                RoleSeeder::class,
-                UsersWithRolesSeeder::class,
-                PaymentMethodSeeder::class,
-            ]);
-        }
+        // if (Schema::hasTable('roles')) {
+        //     $this->call([
+        //         RoleSeeder::class,
+        //         UsersWithRolesSeeder::class,
+        //         PaymentMethodSeeder::class,
+        //     ]);
+        // }
 
-        // Seed demo catalog last so providers/users are present first
-        $this->call(\Modules\Products\Database\Seeders\HierarchicalProductsSeeder::class);
+        // // Seed demo catalog last so providers/users are present first
+        // $this->call(\Modules\Products\Database\Seeders\HierarchicalProductsSeeder::class);
     }
 }

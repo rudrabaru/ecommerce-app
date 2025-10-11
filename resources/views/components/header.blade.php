@@ -14,6 +14,20 @@
     <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;600;700;800;900&display=swap"
     rel="stylesheet">
 
+    <!-- Core JavaScript Dependencies -->
+    <script src="{{ asset('js/jquery-3.3.1.min.js') }}"></script>
+    <script>
+        // Set up global AJAX settings
+        if (typeof jQuery !== 'undefined') {
+            jQuery.ajaxSetup({
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            });
+        }
+    </script>
+    <script src="{{ asset('js/bootstrap.min.js') }}"></script>
+
     <!-- Css Styles -->
     <link rel="stylesheet" href="{{ asset('css/bootstrap.min.css') }}" type="text/css">
     <link rel="stylesheet" href="{{ asset('css/font-awesome.min.css') }}" type="text/css">
