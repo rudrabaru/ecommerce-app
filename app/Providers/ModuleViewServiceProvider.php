@@ -19,6 +19,3 @@ class ModuleViewServiceProvider extends ServiceProvider
         View::addNamespace('user', base_path('Modules/User/Resources/views'));
     }
 }
-
-
-

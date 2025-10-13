@@ -12,7 +12,6 @@ use Yajra\DataTables\DataTables;
 
 class DiscountCodeController extends Controller
 {
-
     public function index(): \Illuminate\View\View
     {
         return view('admin.discounts.index');
@@ -22,11 +21,11 @@ class DiscountCodeController extends Controller
     {
         $query = DiscountCode::query()->with('categories');
         return $dataTables->eloquent($query)
-            ->addColumn('categories', function($row){
+            ->addColumn('categories', function ($row) {
                 return $row->categories->pluck('name')->implode(', ');
             })
-            ->editColumn('is_active', fn($r) => $r->is_active ? 'Active' : 'Inactive')
-            ->addColumn('actions', function($row){
+            ->editColumn('is_active', fn ($r) => $r->is_active ? 'Active' : 'Inactive')
+            ->addColumn('actions', function ($row) {
                 $del = route('admin.discounts.destroy', $row->id);
                 return '<div class="btn-group" role="group">'
                     .'<button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#discountModal" data-discount-id="'.$row->id.'">Edit</button>'
@@ -98,5 +97,3 @@ class DiscountCodeController extends Controller
         return redirect()->route('admin.discounts.index')->with('status', 'Discount code deleted');
     }
 }
-
-

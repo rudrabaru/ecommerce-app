@@ -56,7 +56,7 @@ class UsersWithRolesSeeder extends Seeder
             }
 
             // Optional status column in sync with verification
-            if (property_exists($user, 'status') || \Schema::hasColumn('users','status')) {
+            if (property_exists($user, 'status') || \Schema::hasColumn('users', 'status')) {
                 $user->status = 'verified';
             }
 
@@ -64,5 +64,3 @@ class UsersWithRolesSeeder extends Seeder
         }
     }
 }
-
-

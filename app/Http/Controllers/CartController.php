@@ -13,6 +13,17 @@ use Modules\Products\Models\Product as ProductModel;
 
 class CartController extends Controller
 {
+    private function resolveImageUrl($image)
+    {
+        if (!$image) {
+            return asset('img/product/product-1.jpg');
+        }
+        // If it already looks like a full URL (e.g., seeded placeholder), return as-is
+        if (is_string($image) && (str_starts_with($image, 'http://') || str_starts_with($image, 'https://'))) {
+            return $image;
+        }
+        return asset('storage/' . $image);
+    }
     public static function getCartCount()
     {
         if (Auth::check()) {
@@ -36,11 +47,14 @@ class CartController extends Controller
             $cart = Cart::where('user_id', Auth::id())->first();
             if ($cart) {
                 $items = $cart->items()->with('product')->get()->map(function ($item) {
+                    $image = $item->product->image;
+                    $imageUrl = $this->resolveImageUrl($image);
                     return [
                         'product_id' => $item->product_id,
                         'name' => $item->product->title ?? $item->product->name,
                         'price' => (float) $item->unit_price,
                         'image' => $item->product->image,
+                        'image_url' => $imageUrl,
                         'quantity' => $item->quantity,
                     ];
                 });
@@ -56,7 +70,12 @@ class CartController extends Controller
         } else {
             // For guests, get cart from session
             $cart = session('cart', []);
-            $items = collect($cart)->values();
+            $items = collect($cart)->values()->map(function($i){
+                $image = $i['image'] ?? null;
+                $imageUrl = $this->resolveImageUrl($image);
+                $i['image_url'] = $imageUrl;
+                return $i;
+            });
             $subtotal = $items->reduce(fn($c,$i)=> $c + ($i['price'] * $i['quantity']), 0);
             $discountAmount = (float) session('cart_discount', 0);
             $total = $subtotal - $discountAmount;
@@ -106,7 +125,9 @@ class CartController extends Controller
                 ]);
             }
             
+            // Revalidate discount if previously applied
             $cartCount = $cart->items()->sum('quantity');
+            $this->revalidateAndPersistDiscountForUserCart($cart);
         } else {
             // For guests, use session cart
             $cart = session()->get('cart', []);
@@ -122,6 +143,8 @@ class CartController extends Controller
                 ];
             }
             session()->put('cart', $cart);
+            // Revalidate discount if previously applied
+            $this->revalidateAndPersistDiscountForSessionCart();
             $cartCount = collect($cart)->sum('quantity');
         }
 
@@ -152,7 +175,10 @@ class CartController extends Controller
                     $cartItem->save();
                 }
             }
+            // Revalidate discount if previously applied
+            if ($cart) { $this->revalidateAndPersistDiscountForUserCart($cart); }
             $cartCount = $cart ? $cart->items()->sum('quantity') : 0;
+            $discountAmount = $cart ? (float)($cart->fresh()->discount_amount ?? 0) : 0;
         } else {
             // For guests, update session cart
             $cart = session('cart', []);
@@ -160,13 +186,17 @@ class CartController extends Controller
                 $cart[$productId]['quantity'] = $validated['quantity'];
                 session()->put('cart', $cart);
             }
+            // Revalidate discount if previously applied
+            $this->revalidateAndPersistDiscountForSessionCart();
             $cartCount = collect($cart)->sum('quantity');
+            $discountAmount = (float) session('cart_discount', 0);
         }
 
         if ($request->ajax()) {
             return response()->json([
                 'success' => true,
-                'cart_count' => $cartCount
+                'cart_count' => $cartCount,
+                'discount_amount' => $discountAmount
             ]);
         }
 
@@ -181,7 +211,10 @@ class CartController extends Controller
             if ($cart) {
                 $cart->items()->where('product_id', $productId)->delete();
             }
+            // Revalidate discount if previously applied
+            if ($cart) { $this->revalidateAndPersistDiscountForUserCart($cart); }
             $cartCount = $cart ? $cart->items()->sum('quantity') : 0;
+            $discountAmount = $cart ? (float)($cart->fresh()->discount_amount ?? 0) : 0;
         } else {
             // For guests, remove from session cart
             $cart = session('cart', []);
@@ -189,13 +222,17 @@ class CartController extends Controller
                 unset($cart[$productId]);
                 session()->put('cart', $cart);
             }
+            // Revalidate discount if previously applied
+            $this->revalidateAndPersistDiscountForSessionCart();
             $cartCount = collect($cart)->sum('quantity');
+            $discountAmount = (float) session('cart_discount', 0);
         }
 
         if (request()->ajax()) {
             return response()->json([
                 'success' => true,
-                'cart_count' => $cartCount
+                'cart_count' => $cartCount,
+                'discount_amount' => $discountAmount
             ]);
         }
 
@@ -251,23 +288,39 @@ class CartController extends Controller
                 'category_id' => optional($i->product)->category_id,
             ]) : collect();
         } else {
-            $sessionCart = session('cart', []);
-            $ids = array_column($sessionCart, 'product_id');
-            $categories = ProductModel::whereIn('id', $ids)->pluck('category_id', 'id');
-            $items = collect($sessionCart)->map(function ($i) use ($categories) {
-                return [
-                    'product_id' => $i['product_id'],
-                    'quantity' => $i['quantity'],
-                    'price' => (float)$i['price'],
-                    'category_id' => $categories[$i['product_id']] ?? null,
-                ];
-            });
+            $sessionCart = array_values(session('cart', []));
+            try {
+                $ids = array_column($sessionCart, 'product_id');
+                $categories = empty($ids) ? collect() : ProductModel::whereIn('id', $ids)->pluck('category_id', 'id');
+                $items = collect($sessionCart)->map(function ($i) use ($categories) {
+                    $pid = isset($i['product_id']) ? (int)$i['product_id'] : null;
+                    $catId = null;
+                    if (!is_null($pid)) {
+                        if ($categories instanceof \Illuminate\Support\Collection) {
+                            $catId = $categories->get($pid);
+                        } else if (is_array($categories)) {
+                            $catId = isset($categories[$pid]) ? $categories[$pid] : null;
+                        }
+                    }
+                    return [
+                        'product_id' => $pid,
+                        'quantity' => (int)($i['quantity'] ?? 0),
+                        'price' => (float)($i['price'] ?? 0.0),
+                        'category_id' => $catId,
+                    ];
+                });
+            } catch (\Throwable $e) {
+                if ($request->ajax()) {
+                    return response()->json(['success' => false, 'message' => 'Invalid cart data for discount application'], 400);
+                }
+                return redirect()->back()->with('error', 'Invalid cart data for discount application');
+            }
         }
 
         $subtotal = $items->reduce(fn($c,$i)=> $c + ($i['price'] * $i['quantity']), 0.0);
         $categoryIds = $items->pluck('category_id')->filter()->unique()->values()->all();
 
-        [$ok, $message, $discountAmount, $discount] = $service->validateAndCalculate($discountCode, $items->all(), $categoryIds, $subtotal);
+        [$ok, $message, $discountAmount, $discount, $affectedItems] = $service->validateAndCalculate($discountCode, $items->all(), $categoryIds, $subtotal);
         if (!$ok) {
             if ($request->ajax()) {
                 return response()->json(['success' => false, 'message' => $message], 400);
@@ -293,11 +346,73 @@ class CartController extends Controller
                 'success' => true,
                 'message' => $message,
                 'discount_amount' => $discountAmount,
-                'discount_code' => $discountCode
+                'discount_code' => $discountCode,
+                'affected_items' => (int) $affectedItems
             ]);
         }
 
         return redirect()->back()->with('success', 'Discount code applied successfully');
+    }
+
+    private function revalidateAndPersistDiscountForUserCart(?Cart $cart): void
+    {
+        if (!$cart) return;
+        if (!$cart->discount_code) return;
+        $cart->load('items.product');
+        $items = $cart->items->map(fn($i) => [
+            'product_id' => $i->product_id,
+            'quantity' => $i->quantity,
+            'price' => (float)$i->unit_price,
+            'category_id' => optional($i->product)->category_id,
+        ]);
+        $subtotal = $items->reduce(fn($c,$i)=> $c + ($i['price'] * $i['quantity']), 0.0);
+        $categoryIds = $items->pluck('category_id')->filter()->unique()->values()->all();
+        $service = new DiscountService();
+        [$ok, $message, $discountAmount] = $service->validateAndCalculate($cart->discount_code, $items->all(), $categoryIds, $subtotal);
+        if ($ok) {
+            $cart->update(['discount_amount' => $discountAmount]);
+        } else {
+            $cart->update(['discount_code' => null, 'discount_amount' => 0]);
+        }
+    }
+
+    private function revalidateAndPersistDiscountForSessionCart(): void
+    {
+        $code = session('cart_discount_code');
+        if (!$code) return;
+        $sessionCart = array_values(session('cart', []));
+        if (empty($sessionCart)) {
+            session()->forget(['cart_discount_code','cart_discount']);
+            return;
+        }
+        $ids = array_column($sessionCart, 'product_id');
+        $categories = empty($ids) ? collect() : ProductModel::whereIn('id', $ids)->pluck('category_id', 'id');
+        $items = collect($sessionCart)->map(function ($i) use ($categories) {
+            $pid = isset($i['product_id']) ? (int)$i['product_id'] : null;
+            $catId = null;
+            if (!is_null($pid)) {
+                if ($categories instanceof \Illuminate\Support\Collection) {
+                    $catId = $categories->get($pid);
+                } else if (is_array($categories)) {
+                    $catId = isset($categories[$pid]) ? $categories[$pid] : null;
+                }
+            }
+            return [
+                'product_id' => $pid,
+                'quantity' => (int)($i['quantity'] ?? 0),
+                'price' => (float)($i['price'] ?? 0.0),
+                'category_id' => $catId,
+            ];
+        });
+        $subtotal = $items->reduce(fn($c,$i)=> $c + ($i['price'] * $i['quantity']), 0.0);
+        $categoryIds = $items->pluck('category_id')->filter()->unique()->values()->all();
+        $service = new DiscountService();
+        [$ok, $message, $discountAmount] = $service->validateAndCalculate($code, $items->all(), $categoryIds, $subtotal);
+        if ($ok) {
+            session()->put('cart_discount', $discountAmount);
+        } else {
+            session()->forget(['cart_discount_code','cart_discount']);
+        }
     }
 
     public function removeDiscount(Request $request)
@@ -365,10 +480,10 @@ class CartController extends Controller
             $name = $item['name'] ?? $item->product->title;
             $price = $item['price'] ?? $item->unit_price;
             $quantity = $item['quantity'] ?? $item->quantity;
-            $image = $item['image'] ?? $item->product->image;
+            $image = $item['image_url'] ?? ($item['image'] ?? $item->product->image);
             
             $html .= '<div class="cart-dropdown-item" style="padding: 10px 15px; border-bottom: 1px solid #eee; display: flex; align-items: center;">
-                <img src="' . ($image ? asset('storage/'.$image) : asset('img/product/product-1.jpg')) . '" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; margin-right: 10px;">
+                <img src="' . $image . '" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; margin-right: 10px;">
                 <div class="flex-fill">
                     <div style="font-size: 14px; font-weight: 500;">' . $name . '</div>
                     <div style="font-size: 12px; color: #666;">Qty: ' . $quantity . ' × $' . number_format($price, 2) . '</div>

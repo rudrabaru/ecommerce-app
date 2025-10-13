@@ -28,11 +28,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/cart', [\App\Http\Controllers\CartController::class, 'index'])->name('cart.index');
     Route::get('/checkout', [\App\Http\Controllers\CheckoutController::class, 'index'])->name('checkout');
     Route::post('/checkout', [\App\Http\Controllers\CheckoutController::class, 'store'])->name('checkout.store');
-    
+
     // Address management routes
     Route::resource('addresses', \App\Http\Controllers\UserAddressController::class);
     Route::post('/addresses/{address}/set-default', [\App\Http\Controllers\UserAddressController::class, 'setDefault'])->name('addresses.set-default');
-    
+
     // Order success page
     Route::get('/orders/success', function () {
         return view('orders.success');
@@ -86,17 +86,17 @@ Route::get('/verify-otp/send', [\App\Http\Controllers\Auth\EmailOtpController::c
 Route::post('/verify-otp', [\App\Http\Controllers\Auth\EmailOtpController::class, 'verify'])->name('verification.otp.verify');
 
 // Guest verification resend routes
-Route::get('/resend-verification', function() {
+Route::get('/resend-verification', function () {
     return view('auth.resend-verification');
 })->name('verification.resend');
 
-Route::post('/resend-verification', function(\Illuminate\Http\Request $request) {
+Route::post('/resend-verification', function (\Illuminate\Http\Request $request) {
     $request->validate([
         'email' => 'required|email|exists:users,email'
     ]);
 
     $user = \App\Models\User::where('email', $request->email)->first();
-    
+
     if ($user && is_null($user->email_verified_at)) {
         // Send verification email using the existing OTP system
         try {
@@ -112,7 +112,7 @@ Route::post('/resend-verification', function(\Illuminate\Http\Request $request) 
             // Send email with verification link
             $verifyUrl = route('verification.link', ['token' => $otp->link_token]);
             \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\VerifyOtpMail($otp->otp, $verifyUrl));
-            
+
             return redirect()->route('verification.resend')->with('status', 'A new verification link has been sent to your email address.');
         } catch (\Exception $e) {
             return back()->withErrors(['email' => 'Failed to send verification email. Please try again.']);
@@ -123,7 +123,7 @@ Route::post('/resend-verification', function(\Illuminate\Http\Request $request) 
 })->name('verification.resend.submit');
 
 // Link-based verification
-Route::get('/verify-email/link/{token}', function(string $token) {
+Route::get('/verify-email/link/{token}', function (string $token) {
     $otp = \App\Models\EmailOtp::where('link_token', $token)->where('used', false)->first();
     if (!$otp || ($otp->expires_at && $otp->expires_at->isPast())) {
         abort(403, 'Invalid or expired verification link.');
@@ -132,7 +132,7 @@ Route::get('/verify-email/link/{token}', function(string $token) {
     if (!$user) {
         abort(404);
     }
-    $userRoleId = \Spatie\Permission\Models\Role::where('name','user')->value('id');
+    $userRoleId = \Spatie\Permission\Models\Role::where('name', 'user')->value('id');
     if ($userRoleId && (int)$user->role_id === (int)$userRoleId) {
         $user->status = 'verified';
         $user->save();

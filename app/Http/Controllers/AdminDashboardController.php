@@ -14,30 +14,30 @@ class AdminDashboardController extends Controller
     public function stats()
     {
         $this->authorizeAdmin();
-        
+
         // Count strictly by role_id to stay in sync with DB
         $userRoleId = Role::where('name', 'user')->value('id');
         $providerRoleId = Role::where('name', 'provider')->value('id');
-        
+
         $stats = [
             'total_users' => $userRoleId ? User::where('role_id', $userRoleId)->count() : 0,
             'total_providers' => $providerRoleId ? User::where('role_id', $providerRoleId)->count() : 0,
             'total_categories' => Category::count(),
             'total_products' => Product::count(),
         ];
-        
+
         return response()->json($stats);
     }
-    
+
     public function recentUsers()
     {
         $this->authorizeAdmin();
-        
+
         $users = User::with('roles')
             ->latest()
             ->limit(5)
             ->get()
-            ->map(function($user) {
+            ->map(function ($user) {
                 $role = $user->roles->first();
                 $roleName = $role ? $role->name : 'user';
                 $roleClass = match(strtolower($roleName)) {
@@ -47,7 +47,7 @@ class AdminDashboardController extends Controller
                     'customer' => 'info',
                     default => 'secondary'
                 };
-                
+
                 return [
                     'id' => $user->id,
                     'name' => $user->name,
@@ -57,22 +57,22 @@ class AdminDashboardController extends Controller
                     'created_at' => $user->created_at,
                 ];
             });
-        
+
         return response()->json($users);
     }
-    
+
     public function recentProducts()
     {
         $this->authorizeAdmin();
-        
+
         $products = Product::with(['provider', 'category'])
             ->latest()
             ->limit(5)
             ->get()
-            ->map(function($product) {
+            ->map(function ($product) {
                 $statusClass = $product->is_approved ? 'success' : 'warning';
                 $statusText = $product->is_approved ? 'Approved' : 'Pending';
-                
+
                 return [
                     'id' => $product->id,
                     'title' => $product->title,
@@ -83,10 +83,10 @@ class AdminDashboardController extends Controller
                     'created_at' => $product->created_at,
                 ];
             });
-        
+
         return response()->json($products);
     }
-    
+
     private function authorizeAdmin(): void
     {
         abort_unless(Auth::user() && Auth::user()->hasRole('admin'), 403);

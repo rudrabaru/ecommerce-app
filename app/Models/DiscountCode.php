@@ -11,7 +11,8 @@ use Modules\Products\Models\Category;
 
 class DiscountCode extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory;
+    use SoftDeletes;
 
     protected $fillable = [
         'code',
@@ -70,14 +71,20 @@ class DiscountCode extends Model
     public function isWithinDateRange(): bool
     {
         $now = now();
-        if ($this->valid_from && $now->lt($this->valid_from)) return false;
-        if ($this->valid_until && $now->gt($this->valid_until)) return false;
+        if ($this->valid_from && $now->lt($this->valid_from)) {
+            return false;
+        }
+        if ($this->valid_until && $now->gt($this->valid_until)) {
+            return false;
+        }
         return true;
     }
 
     public function hasRemainingUses(): bool
     {
-        if (is_null($this->usage_limit)) return true;
+        if (is_null($this->usage_limit)) {
+            return true;
+        }
         return $this->usage_count < $this->usage_limit;
     }
 
@@ -87,9 +94,9 @@ class DiscountCode extends Model
         if (empty($allowed) && $this->category_id) {
             $allowed = [$this->category_id];
         }
-        if (empty($allowed)) return true; // if none selected, applies to all
+        if (empty($allowed)) {
+            return true;
+        } // if none selected, applies to all
         return count(array_intersect($allowed, $categoryIds)) > 0;
     }
 }
-
-

@@ -98,7 +98,7 @@ class AdminMenuService
     {
         $isActive = $item['active'] ? 'menu-item-active' : 'menu-item-inactive';
         $icon = $item['icon'] ?? 'lucide:circle';
-        
+
         return sprintf(
             '<li class="menu-item-%s">
                 <a href="%s" class="menu-item group admin-nav-link %s" data-page="%s">
@@ -120,4 +120,3 @@ class AdminMenuService
         return false; // No submenus in current implementation
     }
 }
-

@@ -19,5 +19,3 @@ class CartItem extends Model
         return $this->belongsTo(\Modules\Products\Models\Product::class);
     }
 }
-
-

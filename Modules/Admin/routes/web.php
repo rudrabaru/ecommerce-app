@@ -23,12 +23,12 @@ Route::middleware(['web','auth','ensure_role:admin'])->group(function () {
         return view('admin::dashboard');
     })->name('admin.dashboard');
     Route::get('/admin/profile', [AdminProfileController::class, 'edit'])->name('admin.profile');
-    
+
     // Dashboard data endpoints
     Route::get('/admin/dashboard/stats', [\App\Http\Controllers\AdminDashboardController::class, 'stats'])->name('admin.dashboard.stats');
     Route::get('/admin/dashboard/recent-users', [\App\Http\Controllers\AdminDashboardController::class, 'recentUsers'])->name('admin.dashboard.recent-users');
     Route::get('/admin/dashboard/recent-products', [\App\Http\Controllers\AdminDashboardController::class, 'recentProducts'])->name('admin.dashboard.recent-products');
-    
+
     // Users management (role=user) - Read-only with AJAX datatables
     Route::get('/admin/users', [AdminController::class, 'index'])->name('admin.users.index');
     Route::get('/admin/users/data', [AdminController::class, 'data'])->name('admin.users.data');

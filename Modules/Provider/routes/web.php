@@ -23,7 +23,7 @@ Route::middleware(['web','auth','ensure_role:provider'])->group(function () {
         return view('provider::dashboard');
     })->name('provider.dashboard');
     Route::get('/provider/profile', [ProviderProfileController::class, 'edit'])->name('provider.profile');
-    
+
     // Dashboard data endpoints
     Route::get('/provider/dashboard/stats', [\App\Http\Controllers\ProviderDashboardController::class, 'stats'])->name('provider.dashboard.stats');
     Route::get('/provider/dashboard/recent-orders', [\App\Http\Controllers\ProviderDashboardController::class, 'recentOrders'])->name('provider.dashboard.recent-orders');

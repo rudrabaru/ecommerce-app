@@ -119,17 +119,17 @@
                         <h4>Your Order</h4>
                         <div class="checkout__order__products">Products <span>Total</span></div>
                         <ul>
-                            @php
+                        @php
                                 $user = Auth::user();
                                 $subtotal = 0;
-                                $discountAmount = 0;
+                            $discountAmount = isset($discountAmount) ? (float)$discountAmount : 0;
                                 
                                 if ($user) {
                                     // For logged-in users, get cart from database
                                     $cart = \App\Models\Cart::where('user_id', $user->id)->first();
                                     if ($cart) {
                                         $cartItems = $cart->items()->with('product')->get();
-                                        $discountAmount = (float) ($cart->discount_amount ?? 0);
+                                        $discountAmount = $discountAmount > 0 ? $discountAmount : (float) ($cart->discount_amount ?? 0);
                                     } else {
                                         $cartItems = collect();
                                     }
@@ -137,7 +137,7 @@
                                     // For guests, get cart from session
                                     $sessionCart = session('cart', []);
                                     $cartItems = collect($sessionCart);
-                                    $discountAmount = (float) session('cart_discount', 0);
+                                    $discountAmount = $discountAmount > 0 ? $discountAmount : (float) session('cart_discount', 0);
                                 }
                             @endphp
                             @foreach($cartItems as $item)
@@ -168,6 +168,8 @@
                         <div class="checkout__order__subtotal">Subtotal <span>${{ number_format($subtotal, 2) }}</span></div>
                         @if($discountAmount > 0)
                             <div class="checkout__order__discount">Discount <span>-${{ number_format($discountAmount, 2) }}</span></div>
+                        @else
+                            <div class="checkout__order__discount" style="display:none">Discount <span>-$0.00</span></div>
                         @endif
                         <div class="checkout__order__total">Total <span>${{ number_format($subtotal - $discountAmount, 2) }}</span></div>
                     </div>

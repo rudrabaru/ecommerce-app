@@ -8,5 +8,3 @@ class AdminProfileController extends BaseProfileController
 {
     // Inherit profile edit/update/destroy behavior from Breeze ProfileController
 }
-
-

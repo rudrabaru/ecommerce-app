@@ -23,7 +23,7 @@ class PaymentsController extends Controller
     {
         // For now, return empty data since we don't have a Payment model yet
         return DataTables::of(collect([]))
-            ->addColumn('actions', function($row) {
+            ->addColumn('actions', function ($row) {
                 return '<div class="btn-group" role="group">
                     <button class="btn btn-sm btn-outline-primary" disabled>
                         <i class="fas fa-eye"></i> View

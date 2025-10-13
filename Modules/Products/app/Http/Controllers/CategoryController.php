@@ -28,7 +28,7 @@ class CategoryController extends Controller
     public function store(Request $request)
     {
         $this->authorizeAdmin();
-        
+
         try {
             $data = $request->validate([
                 'name' => ['required', 'string', 'max:255'],
@@ -46,32 +46,32 @@ class CategoryController extends Controller
             }
             throw $e;
         }
-        
+
         if ($request->hasFile('image')) {
             $path = $request->file('image')->store('categories', 'public');
             $data['image'] = $path;
         }
 
         Category::create($data);
-        
+
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
                 'message' => __('Category created successfully')
             ]);
         }
-        
+
         return redirect()->route('admin.categories.index')->with('status', __('Category created'));
     }
 
     public function edit(Category $category)
     {
         $this->authorizeAdmin();
-        
+
         if (request()->wantsJson() || request()->ajax()) {
             return response()->json($category);
         }
-        
+
         $parents = Category::where('id', '!=', $category->id)->orderBy('name')->get();
         return view('products::categories.edit', compact('category', 'parents'));
     }
@@ -79,7 +79,7 @@ class CategoryController extends Controller
     public function update(Request $request, Category $category)
     {
         $this->authorizeAdmin();
-        
+
         try {
             $data = $request->validate([
                 'name' => ['required', 'string', 'max:255'],
@@ -97,21 +97,21 @@ class CategoryController extends Controller
             }
             throw $e;
         }
-        
+
         if ($request->hasFile('image')) {
             $path = $request->file('image')->store('categories', 'public');
             $data['image'] = $path;
         }
 
         $category->update($data);
-        
+
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
                 'message' => __('Category updated successfully')
             ]);
         }
-        
+
         return redirect()->route('admin.categories.index')->with('status', __('Category updated'));
     }
 
@@ -119,14 +119,14 @@ class CategoryController extends Controller
     {
         $this->authorizeAdmin();
         $category->delete();
-        
+
         if (request()->wantsJson() || request()->ajax()) {
             return response()->json([
                 'success' => true,
                 'message' => __('Category deleted successfully')
             ]);
         }
-        
+
         return redirect()->route('admin.categories.index')->with('status', __('Category deleted'));
     }
 
@@ -140,9 +140,11 @@ class CategoryController extends Controller
         $this->authorizeAdmin();
         $query = Category::with(['parent', 'products']);
         return $dataTables->eloquent($query)
-            ->addColumn('parent', fn($row) => optional($row->parent)->name)
-            ->addColumn('image', function($row){
-                if (!$row->image) return '';
+            ->addColumn('parent', fn ($row) => optional($row->parent)->name)
+            ->addColumn('image', function ($row) {
+                if (!$row->image) {
+                    return '';
+                }
                 $image = trim((string)$row->image, " \t\n\r\0\x0B\"'{}");
                 if (strlen($image) && $image[0] === '@') {
                     $image = substr($image, 1); // strip accidental leading '@'
@@ -164,12 +166,14 @@ class CategoryController extends Controller
                             $query = $urlParts['query'] ?? '';
                             $text = '';
                             parse_str($query, $q);
-                            if (!empty($q['text'])) { $text = $q['text']; }
+                            if (!empty($q['text'])) {
+                                $text = $q['text'];
+                            }
                             if (preg_match('#/(\d+x\d+)\.png/([0-9a-fA-F]{3,6})#', $path, $m)) {
                                 $size = $m[1];
                                 $bg = $m[2];
                                 $src = 'https://placehold.co/' . $size . '/' . $bg . '/ffffff?text=' . urlencode($text ?: '');
-                            } else if (preg_match('#/(\d+x\d+)#', $path, $m)) {
+                            } elseif (preg_match('#/(\d+x\d+)#', $path, $m)) {
                                 $size = $m[1];
                                 $src = 'https://placehold.co/' . $size . '?text=' . urlencode($text ?: '');
                             } else {
@@ -196,9 +200,9 @@ class CategoryController extends Controller
                 $html = '<img src="'.e($src).'" alt="'.$alt.'" style="height:40px;width:40px;object-fit:cover;border-radius:4px;" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.onerror=null;this.src=\''.$fallback.'\';" />';
                 return $html;
             })
-            ->addColumn('description', fn($row) => e(Str::limit((string)$row->description, 80)))
-            ->addColumn('products_count', fn($row) => $row->products->count())
-            ->addColumn('actions', function($row){
+            ->addColumn('description', fn ($row) => e(Str::limit((string)$row->description, 80)))
+            ->addColumn('products_count', fn ($row) => $row->products->count())
+            ->addColumn('actions', function ($row) {
                 $btns = '<div class="btn-group" role="group">';
                 $btns .= '<button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#categoryModal" onclick="openCategoryModal('.$row->id.')">';
                 $btns .= '<i class="fas fa-edit"></i> Edit</button>';
@@ -239,9 +243,9 @@ class CategoryController extends Controller
             ->orderByDesc('id');
 
         if ($q = request('q')) {
-            $productsQuery->where(function($qb) use ($q){
-                $qb->where('title','like',"%$q%")
-                   ->orWhere('description','like',"%$q%");
+            $productsQuery->where(function ($qb) use ($q) {
+                $qb->where('title', 'like', "%$q%")
+                   ->orWhere('description', 'like', "%$q%");
             });
         }
 
@@ -256,5 +260,3 @@ class CategoryController extends Controller
 
     // Note: Admin resource uses index(). Storefront uses dedicated routes/methods above.
 }
-
-

@@ -25,5 +25,3 @@ class StorefrontCategoryController extends Controller
         return view('category-products', compact('category', 'products'));
     }
 }
-
-

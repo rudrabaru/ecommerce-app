@@ -32,6 +32,7 @@ class CheckoutController extends Controller
                     'product_id' => $item->product_id,
                     'quantity' => $item->quantity,
                     'price' => (float) $item->unit_price,
+                    'category_id' => optional($item->product)->category_id,
                 ];
             });
         } else {
@@ -40,11 +41,16 @@ class CheckoutController extends Controller
             if (empty($sessionCart)) {
                 return redirect()->route('cart.index')->with('error', 'Your cart is empty.');
             }
-            $cartItems = collect($sessionCart)->map(function ($item) {
+            $ids = array_values(array_column($sessionCart, 'product_id'));
+            $categories = empty($ids) ? collect() : Product::whereIn('id', $ids)->pluck('category_id', 'id');
+            $cartItems = collect($sessionCart)->map(function ($item) use ($categories) {
                 return [
-                    'product_id' => $item['product_id'],
-                    'quantity' => $item['quantity'],
-                    'price' => (float) $item['price'],
+                    'product_id' => $item['product_id'] ?? null,
+                    'quantity' => (int)($item['quantity'] ?? 0),
+                    'price' => (float) ($item['price'] ?? 0),
+                    'category_id' => ($categories instanceof \Illuminate\Support\Collection)
+                        ? $categories->get($item['product_id'] ?? null)
+                        : ($categories[$item['product_id'] ?? null] ?? null),
                 ];
             });
         }
@@ -58,7 +64,39 @@ class CheckoutController extends Controller
             $cartTotal += $item['price'] * $item['quantity'];
         }
 
-        return view('checkout', compact('addresses', 'paymentMethods', 'cartTotal'));
+        // Revalidate discount to ensure consistency before checkout
+        $discountAmount = 0.0;
+        if ($user) {
+            $cartModel = Cart::where('user_id', $user->id)->first();
+            if ($cartModel && $cartModel->discount_code) {
+                $service = new \App\Services\DiscountService();
+                $categoryIds = collect($cartItems)->pluck('category_id')->filter()->unique()->values()->all();
+                [$ok, $msg, $recalc] = $service->validateAndCalculate($cartModel->discount_code, $cartItems->all(), $categoryIds, $cartTotal);
+                if ($ok) {
+                    $discountAmount = $recalc;
+                    if ((float)$cartModel->discount_amount !== (float)$recalc) {
+                        $cartModel->update(['discount_amount' => $recalc]);
+                    }
+                } else {
+                    $cartModel->update(['discount_code' => null, 'discount_amount' => 0]);
+                }
+            }
+        } else {
+            $code = session('cart_discount_code');
+            if ($code) {
+                $service = new \App\Services\DiscountService();
+                $categoryIds = collect($cartItems)->pluck('category_id')->filter()->unique()->values()->all();
+                [$ok, $msg, $recalc] = $service->validateAndCalculate($code, $cartItems->all(), $categoryIds, $cartTotal);
+                if ($ok) {
+                    $discountAmount = $recalc;
+                    session()->put('cart_discount', $recalc);
+                } else {
+                    session()->forget(['cart_discount_code','cart_discount']);
+                }
+            }
+        }
+
+        return view('checkout', compact('addresses', 'paymentMethods', 'cartTotal', 'discountAmount'));
     }
 
     public function store(Request $request)
@@ -100,6 +138,49 @@ class CheckoutController extends Controller
 
         DB::beginTransaction();
         try {
+            $discountCode = null;
+            $discountAmountTotal = 0.0;
+            $perItemAllocation = [];
+
+            // Prepare discount allocation if present
+            if ($user) {
+                $cartModel = Cart::where('user_id', $user->id)->first();
+                if ($cartModel && $cartModel->discount_code) {
+                    $discountCode = $cartModel->discount_code;
+                }
+            } else {
+                $discountCode = session('cart_discount_code');
+            }
+
+            if ($discountCode) {
+                $service = new \App\Services\DiscountService();
+                // Build normalized cart items for allocation
+                $normItems = [];
+                if ($user) {
+                    foreach ($cartItems as $ci) {
+                        $normItems[] = [
+                            'product_id' => $ci->product_id,
+                            'quantity' => (int)$ci->quantity,
+                            'price' => (float)$ci->unit_price,
+                            'category_id' => optional($ci->product)->category_id,
+                        ];
+                    }
+                } else {
+                    $ids = array_column($cartItems->toArray(), 'product_id');
+                    $categories = Product::whereIn('id', $ids)->pluck('category_id', 'id');
+                    foreach ($cartItems as $ci) {
+                        $normItems[] = [
+                            'product_id' => $ci['product_id'],
+                            'quantity' => (int)$ci['quantity'],
+                            'price' => (float)$ci['price'],
+                            'category_id' => $categories[$ci['product_id']] ?? null,
+                        ];
+                    }
+                }
+
+                $perItemAllocation = $service->allocatePerItem(\App\Models\DiscountCode::whereRaw('upper(code) = ?', [strtoupper($discountCode)])->first(), $normItems);
+                $discountAmountTotal = array_sum($perItemAllocation);
+            }
             foreach ($cartItems as $item) {
                 // Handle both database cart items and session cart items
                 if ($user) {
@@ -114,7 +195,12 @@ class CheckoutController extends Controller
                     $unitPrice = (float) $item['price'];
                 }
                 
-                $total = $unitPrice * $quantity;
+                $lineTotal = $unitPrice * $quantity;
+                $lineDiscount = 0.0;
+                if ($discountCode && isset($perItemAllocation[$product->id])) {
+                    $lineDiscount = min($perItemAllocation[$product->id], $lineTotal);
+                }
+                $total = $lineTotal - $lineDiscount;
 
                 $order = Order::create([
                     'user_id' => $userId,
@@ -141,10 +227,21 @@ class CheckoutController extends Controller
                 $created[] = $order->order_number;
             }
 
+            // Increment discount usage once per checkout if discount used
+            if ($discountCode && $discountAmountTotal > 0) {
+                if ($d = \App\Models\DiscountCode::whereRaw('upper(code) = ?', [strtoupper($discountCode)])->first()) {
+                    (new \App\Services\DiscountService())->incrementUsage($d);
+                }
+            }
+
             // Clear cart based on user type
             if ($user) {
                 // Clear database cart
                 $cart->items()->delete();
+                // Also clear discount on cart
+                if (isset($cart)) {
+                    $cart->update(['discount_code' => null, 'discount_amount' => 0]);
+                }
             } else {
                 // Clear session cart
                 session()->forget(['cart', 'cart_discount_code', 'cart_discount']);

@@ -11,13 +11,14 @@ use Illuminate\Support\Facades\Auth;
 
 class AddressController extends Controller
 {
-    use AuthorizesRequests, ValidatesRequests;
+    use AuthorizesRequests;
+    use ValidatesRequests;
     public function index(): JsonResponse
     {
         $addresses = Auth::user()->addresses()
             ->with(['country', 'state', 'city'])
             ->get();
-            
+
         return response()->json(['data' => $addresses]);
     }
 
@@ -56,7 +57,7 @@ class AddressController extends Controller
     public function show(UserAddress $address): JsonResponse
     {
         $this->authorize('view', $address);
-        
+
         return response()->json([
             'data' => $address->load(['country', 'state', 'city'])
         ]);
@@ -65,7 +66,7 @@ class AddressController extends Controller
     public function update(Request $request, UserAddress $address): JsonResponse
     {
         $this->authorize('update', $address);
-        
+
         $validatedData = $request->validate([
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
@@ -99,7 +100,7 @@ class AddressController extends Controller
     public function destroy(UserAddress $address): JsonResponse
     {
         $this->authorize('delete', $address);
-        
+
         if ($address->is_default) {
             return response()->json([
                 'message' => 'Cannot delete default address'

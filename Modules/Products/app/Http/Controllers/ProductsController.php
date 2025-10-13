@@ -98,11 +98,11 @@ class ProductsController extends Controller
     {
         $product = Product::findOrFail($id);
         $this->authorizeUpdate($product);
-        
+
         if (request()->wantsJson() || request()->ajax()) {
             return response()->json($product);
         }
-        
+
         $categories = Category::orderBy('name')->get();
         return view('products::edit', compact('product', 'categories'));
     }
@@ -146,14 +146,14 @@ class ProductsController extends Controller
         }
 
         $product->update($validated);
-        
+
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
                 'message' => __('Product updated successfully')
             ]);
         }
-        
+
         $route = auth()->user()->hasRole('admin') ? 'admin.products.index' : 'provider.products.index';
         return redirect()->route($route)->with('status', __('Product updated'));
     }
@@ -166,14 +166,14 @@ class ProductsController extends Controller
         $product = Product::findOrFail($id);
         $this->authorizeUpdate($product);
         $product->delete();
-        
+
         if (request()->wantsJson() || request()->ajax()) {
             return response()->json([
                 'success' => true,
                 'message' => __('Product deleted successfully')
             ]);
         }
-        
+
         $route = auth()->user()->hasRole('admin') ? 'admin.products.index' : 'provider.products.index';
         return redirect()->route($route)->with('status', __('Product deleted'));
     }
@@ -204,14 +204,18 @@ class ProductsController extends Controller
     private function authorizeUpdate(Product $product): void
     {
         $user = Auth::user();
-        if ($user->hasRole('admin')) { return; }
+        if ($user->hasRole('admin')) {
+            return;
+        }
         abort_unless($product->provider_id === $user->id, 403);
     }
 
     private function authorizeView(Product $product): void
     {
         $user = Auth::user();
-        if ($user->hasRole('admin')) { return; }
+        if ($user->hasRole('admin')) {
+            return;
+        }
         abort_unless($product->is_approved || $product->provider_id === $user->id, 403);
     }
 
@@ -222,19 +226,19 @@ class ProductsController extends Controller
             $query->where('provider_id', Auth::id());
         }
         return $dataTables->eloquent($query)
-            ->addColumn('image', function($row){
+            ->addColumn('image', function ($row) {
                 $src = e($row->image_url);
                 $alt = e($row->title);
                 $fallback = 'https://placehold.co/60x60?text=%20';
                 return '<img src="'.$src.'" alt="'.$alt.'" style="height:50px;width:50px;object-fit:cover;border-radius:4px;" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.onerror=null;this.src=\''.$fallback.'\';" />';
             })
-            ->addColumn('category', fn($row) => optional($row->category)->name)
-            ->addColumn('status', function($row){
+            ->addColumn('category', fn ($row) => optional($row->category)->name)
+            ->addColumn('status', function ($row) {
                 return $row->is_approved
                     ? '<span class="badge bg-success">Approved</span>'
                     : '<span class="badge bg-warning text-dark">Pending</span>';
             })
-            ->addColumn('actions', function($row){
+            ->addColumn('actions', function ($row) {
                 $isAdmin = Auth::user()->hasRole('admin');
                 $btns = '<div class="btn-group" role="group">';
                 $btns .= '<button class="btn btn-sm btn-outline-primary edit-product" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#productModal" onclick="openProductModal('.$row->id.')">';

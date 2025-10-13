@@ -35,7 +35,7 @@ class AdminController extends Controller
     public function destroy($id)
     {
         $user = User::findOrFail($id);
-        
+
         // Prevent deleting admin users
         if ($user->hasRole('admin')) {
             if (request()->wantsJson() || request()->ajax()) {
@@ -46,16 +46,16 @@ class AdminController extends Controller
             }
             return redirect()->back()->withErrors(['user' => __('Cannot delete admin users')]);
         }
-        
+
         $user->delete();
-        
+
         if (request()->wantsJson() || request()->ajax()) {
             return response()->json([
                 'success' => true,
                 'message' => __('User deleted successfully')
             ]);
         }
-        
+
         return redirect()->route('admin.users.index')->with('status', __('User deleted'));
     }
 
@@ -76,7 +76,7 @@ class AdminController extends Controller
                     ? $row->created_at->copy()->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s')
                     : null;
             })
-            ->addColumn('status', function($row){
+            ->addColumn('status', function ($row) {
                 // Render a toggle to verify/unverify users directly from the table.
                 // A user is considered verified if email_verified_at is not null.
                 $checked = $row->email_verified_at ? 'checked' : '';
@@ -86,7 +86,7 @@ class AdminController extends Controller
                     .'<input type="checkbox" class="form-check-input js-verify-toggle" data-id="'.$row->id.'" '.$checked.' '.$disabled.'>'
                     .'</div>';
             })
-            ->addColumn('actions', function($row){
+            ->addColumn('actions', function ($row) {
                 $btns = '<div class="btn-group" role="group">';
                 if (!$row->hasRole('admin')) {
                     $btns .= '<button class="btn btn-sm btn-outline-danger delete-user js-delete" data-id="'.$row->id.'" data-delete-url="'.route('admin.users.destroy', $row->id).'">';
@@ -119,7 +119,7 @@ class AdminController extends Controller
                     ? $row->created_at->copy()->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s')
                     : null;
             })
-            ->addColumn('actions', function($row){
+            ->addColumn('actions', function ($row) {
                 $btns = '<div class="btn-group" role="group">';
                 if (!$row->hasRole('admin')) {
                     $btns .= '<button class="btn btn-sm btn-outline-danger js-delete" data-id="'.$row->id.'" data-delete-url="'.route('admin.users.destroy', $row->id).'">';

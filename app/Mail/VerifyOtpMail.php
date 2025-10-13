@@ -8,7 +8,8 @@ use Illuminate\Queue\SerializesModels;
 
 class VerifyOtpMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable;
+    use SerializesModels;
 
     public string $code;
     public ?string $verifyUrl;
@@ -25,5 +26,3 @@ class VerifyOtpMail extends Mailable
             ->view('emails.verify-otp', ['code' => $this->code, 'verifyUrl' => $this->verifyUrl]);
     }
 }
-
-

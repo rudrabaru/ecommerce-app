@@ -11,4 +11,3 @@ use Illuminate\Support\Facades\Route;
 | Public profile editing is handled by core routes in routes/web.php.
 |
 */
-

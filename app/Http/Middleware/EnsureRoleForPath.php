@@ -29,5 +29,3 @@ class EnsureRoleForPath
         return $next($request);
     }
 }
-
-

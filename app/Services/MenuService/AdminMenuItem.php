@@ -25,4 +25,3 @@ class AdminMenuItem
         $this->itemStyles = $data['itemStyles'] ?? '';
     }
 }
-

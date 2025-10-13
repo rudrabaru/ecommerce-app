@@ -75,5 +75,3 @@ class EmailOtpController extends Controller
         return redirect()->route('login')->with('status', 'Email verified. Please login.');
     }
 }
-
-

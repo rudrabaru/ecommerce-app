@@ -166,5 +166,3 @@ class StorefrontProductsController extends Controller
         return response()->json(['products' => $products]);
     }
 }
-
-

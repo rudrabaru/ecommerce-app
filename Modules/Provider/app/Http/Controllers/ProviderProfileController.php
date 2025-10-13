@@ -8,5 +8,3 @@ class ProviderProfileController extends BaseProfileController
 {
     // Inherit profile behavior
 }
-
-

@@ -129,5 +129,3 @@ return [
 
     'activator' => 'file',
 ];
-
-

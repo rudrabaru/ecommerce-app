@@ -52,7 +52,9 @@ class Category extends Model
                     $query = $parts['query'] ?? '';
                     $text = '';
                     parse_str($query, $q);
-                    if (!empty($q['text'])) { $text = $q['text']; }
+                    if (!empty($q['text'])) {
+                        $text = $q['text'];
+                    }
                     if (preg_match('#/(\\d+x\\d+)\\.png/([0-9a-fA-F]{3,6})#', $path, $m)) {
                         $size = $m[1];
                         $bg = $m[2];
@@ -64,7 +66,8 @@ class Category extends Model
                     }
                     return 'https://placehold.co/400x300?text=';
                 }
-            } catch (\Throwable $e) {}
+            } catch (\Throwable $e) {
+            }
             return $image;
         }
 
@@ -78,5 +81,3 @@ class Category extends Model
         return asset('storage/' . ltrim($image, '/'));
     }
 }
-
-

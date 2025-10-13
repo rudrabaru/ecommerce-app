@@ -17,10 +17,10 @@ class DiscountCodesDisplayTest extends TestCase
     {
         // Create a user (provider)
         $user = User::factory()->create();
-        
+
         // Create a category
         $category = Category::create(['name' => 'Fashion']);
-        
+
         // Create a product
         $product = Product::create([
             'title' => 'Test Product',
@@ -44,7 +44,7 @@ class DiscountCodesDisplayTest extends TestCase
             'valid_until' => now()->addMonth(),
             'is_active' => true,
         ]);
-        
+
         // Attach to category via pivot
         $discountCode->categories()->attach($category->id);
 
@@ -53,7 +53,7 @@ class DiscountCodesDisplayTest extends TestCase
 
         // Assert the page loads successfully
         $response->assertStatus(200);
-        
+
         // Assert the discount code is displayed
         $response->assertSee('FASHION20');
         $response->assertSee('20% OFF');
@@ -64,10 +64,10 @@ class DiscountCodesDisplayTest extends TestCase
     {
         // Create a user (provider)
         $user = User::factory()->create();
-        
+
         // Create a category
         $category = Category::create(['name' => 'Fashion']);
-        
+
         // Create a product
         $product = Product::create([
             'title' => 'Test Product',
@@ -86,7 +86,7 @@ class DiscountCodesDisplayTest extends TestCase
             'discount_value' => 20.00,
             'is_active' => false,
         ]);
-        
+
         // Attach to category via pivot
         $discountCode->categories()->attach($category->id);
 
@@ -95,7 +95,7 @@ class DiscountCodesDisplayTest extends TestCase
 
         // Assert the page loads successfully
         $response->assertStatus(200);
-        
+
         // Assert the inactive discount code is not displayed
         $response->assertDontSee('INACTIVE20');
     }
@@ -104,10 +104,10 @@ class DiscountCodesDisplayTest extends TestCase
     {
         // Create a user (provider)
         $user = User::factory()->create();
-        
+
         // Create a category
         $category = Category::create(['name' => 'Fashion']);
-        
+
         // Create a product
         $product = Product::create([
             'title' => 'Test Product',
@@ -128,7 +128,7 @@ class DiscountCodesDisplayTest extends TestCase
             'valid_until' => now()->subDay(),
             'is_active' => true,
         ]);
-        
+
         // Attach to category via pivot
         $discountCode->categories()->attach($category->id);
 
@@ -137,7 +137,7 @@ class DiscountCodesDisplayTest extends TestCase
 
         // Assert the page loads successfully
         $response->assertStatus(200);
-        
+
         // Assert the expired discount code is not displayed
         $response->assertDontSee('EXPIRED20');
     }

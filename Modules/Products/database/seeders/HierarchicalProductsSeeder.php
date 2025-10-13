@@ -17,7 +17,7 @@ class HierarchicalProductsSeeder extends Seeder
 
         // Collect provider users
         $providerIds = User::query()
-            ->whereHas('roles', fn($q) => $q->where('name', 'provider'))
+            ->whereHas('roles', fn ($q) => $q->where('name', 'provider'))
             ->pluck('id')
             ->toArray();
 

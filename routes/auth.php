@@ -43,9 +43,9 @@ Route::middleware('auth')->group(function () {
     Route::post('email/verification-notification', [EmailVerificationNotificationController::class, 'store'])
         ->middleware('throttle:6,1')
         ->name('verification.send');
-    
+
     // Add GET route for email verification notification (for guest users)
-    Route::get('email/verification-notification', function() {
+    Route::get('email/verification-notification', function () {
         return redirect()->route('verification.resend');
     })->name('verification.send.get');
 

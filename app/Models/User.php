@@ -9,10 +9,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
+
 class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, HasRoles;
+    use HasFactory;
+    use Notifiable;
+    use HasRoles;
 
     /**
      * The attributes that are mass assignable.
@@ -53,7 +56,7 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         static::saving(function (User $user) {
             try {
-                $userRoleId = \Spatie\Permission\Models\Role::where('name','user')->value('id');
+                $userRoleId = \Spatie\Permission\Models\Role::where('name', 'user')->value('id');
                 if ($userRoleId && (int)$user->role_id !== (int)$userRoleId) {
                     $user->status = null;
                 }

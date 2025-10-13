@@ -52,7 +52,7 @@ class OrdersController extends Controller
 
         // Get product details
         $product = \Modules\Products\Models\Product::findOrFail($validated['product_id']);
-        
+
         $validated['provider_id'] = $product->provider_id;
         $validated['unit_price'] = $product->price;
         $validated['total_amount'] = $product->price * $validated['quantity'];
@@ -77,11 +77,11 @@ class OrdersController extends Controller
     {
         $order = Order::with(['user', 'provider', 'product'])->findOrFail($id);
         $this->authorizeView($order);
-        
+
         if (request()->wantsJson() || request()->ajax()) {
             return response()->json($order);
         }
-        
+
         return view('orders::show', compact('order'));
     }
 
@@ -92,11 +92,11 @@ class OrdersController extends Controller
     {
         $order = Order::findOrFail($id);
         $this->authorizeUpdate($order);
-        
+
         if (request()->wantsJson() || request()->ajax()) {
             return response()->json($order);
         }
-        
+
         return view('orders::edit', compact('order'));
     }
 
@@ -125,14 +125,14 @@ class OrdersController extends Controller
         }
 
         $order->update($validated);
-        
+
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
                 'message' => __('Order updated successfully')
             ]);
         }
-        
+
         $route = auth()->user()->hasRole('admin') ? 'admin.orders.index' : 'provider.orders.index';
         return redirect()->route($route)->with('status', __('Order updated'));
     }
@@ -145,14 +145,14 @@ class OrdersController extends Controller
         $order = Order::findOrFail($id);
         $this->authorizeUpdate($order);
         $order->delete();
-        
+
         if (request()->wantsJson() || request()->ajax()) {
             return response()->json([
                 'success' => true,
                 'message' => __('Order deleted successfully')
             ]);
         }
-        
+
         $route = auth()->user()->hasRole('admin') ? 'admin.orders.index' : 'provider.orders.index';
         return redirect()->route($route)->with('status', __('Order deleted'));
     }
@@ -160,22 +160,22 @@ class OrdersController extends Controller
     public function data(DataTables $dataTables)
     {
         $query = Order::query()->with(['user', 'provider', 'product']);
-        
+
         // Role-based filtering
         if (Auth::user()->hasRole('provider')) {
             $query->where('provider_id', Auth::id());
         }
-        
+
         return $dataTables->eloquent($query)
-            ->addColumn('customer_name', fn($row) => $row->user->name)
-            ->addColumn('product_name', fn($row) => $row->product->title)
-            ->addColumn('total', fn($row) => '$' . number_format($row->total_amount, 2))
+            ->addColumn('customer_name', fn ($row) => $row->user->name)
+            ->addColumn('product_name', fn ($row) => $row->product->title)
+            ->addColumn('total', fn ($row) => '$' . number_format($row->total_amount, 2))
             ->editColumn('created_at', function ($row) {
                 return optional($row->created_at)
                     ? $row->created_at->copy()->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s')
                     : null;
             })
-            ->addColumn('actions', function($row){
+            ->addColumn('actions', function ($row) {
                 $btns = '<div class="btn-group" role="group">';
                 $btns .= '<button class="btn btn-sm btn-outline-primary edit-order" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#orderModal" onclick="openOrderModal('.$row->id.')">';
                 $btns .= '<i class="fas fa-edit"></i> Edit</button>';
@@ -191,14 +191,18 @@ class OrdersController extends Controller
     private function authorizeView(Order $order): void
     {
         $user = Auth::user();
-        if ($user->hasRole('admin')) { return; }
+        if ($user->hasRole('admin')) {
+            return;
+        }
         abort_unless($order->provider_id === $user->id, 403);
     }
 
     private function authorizeUpdate(Order $order): void
     {
         $user = Auth::user();
-        if ($user->hasRole('admin')) { return; }
+        if ($user->hasRole('admin')) {
+            return;
+        }
         abort_unless($order->provider_id === $user->id, 403);
     }
 }

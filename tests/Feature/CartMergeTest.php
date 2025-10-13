@@ -18,7 +18,7 @@ class CartMergeTest extends TestCase
     {
         // Create a user
         $user = User::factory()->create();
-        
+
         // Create a category and product
         $category = Category::create(['name' => 'Test Category']);
         $product = Product::create([
@@ -43,13 +43,13 @@ class CartMergeTest extends TestCase
 
         // Set session data
         session(['cart' => $guestCart]);
-        
+
         // Simulate the cart merge by calling the mergeGuestCart method directly
         $controller = new \App\Http\Controllers\Auth\AuthenticatedSessionController();
         $reflection = new \ReflectionClass($controller);
         $method = $reflection->getMethod('mergeGuestCart');
         $method->setAccessible(true);
-        
+
         // Call the merge method
         $method->invoke($controller, $user);
 
@@ -74,7 +74,7 @@ class CartMergeTest extends TestCase
     {
         // Create a user
         $user = User::factory()->create();
-        
+
         // Create a category and product
         $category = Category::create(['name' => 'Test Category']);
         $product = Product::create([
@@ -107,7 +107,7 @@ class CartMergeTest extends TestCase
 
         // Set session data
         session(['cart' => $guestCart]);
-        
+
         // Simulate the cart merge
         $controller = new \App\Http\Controllers\Auth\AuthenticatedSessionController();
         $reflection = new \ReflectionClass($controller);

@@ -16,7 +16,7 @@ class ProductFactory extends Factory
 
     public function definition(): array
     {
-        $providerId = User::query()->whereHas('roles', function($q){ $q->where('name', 'provider'); })->inRandomOrder()->value('id')
+        $providerId = User::query()->whereHas('roles', function ($q) { $q->where('name', 'provider'); })->inRandomOrder()->value('id')
             ?? User::query()->inRandomOrder()->value('id')
             ?? 1;
 
@@ -32,5 +32,3 @@ class ProductFactory extends Factory
         ];
     }
 }
-
-

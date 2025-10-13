@@ -24,9 +24,13 @@ class RoleSeeder extends Seeder
         User::with('roles')->get()->each(function (User $u) use ($adminRoleId, $providerRoleId, $userRoleId) {
             $roleName = optional($u->roles->first())->name;
             $targetRoleId = null;
-            if ($roleName === 'admin') { $targetRoleId = $adminRoleId; }
-            elseif ($roleName === 'provider') { $targetRoleId = $providerRoleId; }
-            else { $targetRoleId = $userRoleId; }
+            if ($roleName === 'admin') {
+                $targetRoleId = $adminRoleId;
+            } elseif ($roleName === 'provider') {
+                $targetRoleId = $providerRoleId;
+            } else {
+                $targetRoleId = $userRoleId;
+            }
 
             if ($targetRoleId && (int)$u->role_id !== (int)$targetRoleId) {
                 $u->role_id = $targetRoleId;
@@ -36,7 +40,7 @@ class RoleSeeder extends Seeder
             if (is_null($u->email_verified_at)) {
                 $u->email_verified_at = now();
             }
-            if (\Schema::hasColumn('users','status')) {
+            if (\Schema::hasColumn('users', 'status')) {
                 $u->status = 'verified';
             }
 

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Requests; 
+namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -21,7 +21,8 @@ class UpdateDiscountCodeRequest extends FormRequest
                 try {
                     $dt = \Carbon\Carbon::parse(str_replace('T', ' ', $raw), config('app.timezone'));
                     $this->merge([$key => $dt->format('Y-m-d H:i:s')]);
-                } catch (\Throwable $e) {}
+                } catch (\Throwable $e) {
+                }
             }
         }
     }
@@ -54,5 +55,3 @@ class UpdateDiscountCodeRequest extends FormRequest
         ];
     }
 }
-
-

@@ -19,5 +19,3 @@ class EmailOtp extends Model
         'used' => 'boolean',
     ];
 }
-
-

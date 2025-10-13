@@ -39,10 +39,10 @@ class AuthenticatedSessionController extends Controller
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
-            
+
             // Send verification email for unverified users (same as registration flow)
             $this->sendVerificationEmail($user);
-            
+
             return redirect()->route('login')->withErrors(['email' => 'Please verify your email before logging in.']);
         }
 
@@ -64,14 +64,14 @@ class AuthenticatedSessionController extends Controller
     private function mergeGuestCart($user)
     {
         $guestCart = session('cart', []);
-        
+
         // Debug logging
         \Log::info('Cart merge attempt', [
             'user_id' => $user->id,
             'guest_cart_count' => count($guestCart),
             'guest_cart' => $guestCart
         ]);
-        
+
         if (empty($guestCart)) {
             \Log::info('No guest cart items to merge');
             return;
@@ -82,7 +82,7 @@ class AuthenticatedSessionController extends Controller
 
         foreach ($guestCart as $productId => $item) {
             $existingItem = $userCart->items()->where('product_id', $productId)->first();
-            
+
             if ($existingItem) {
                 // If item exists, add quantities
                 $existingItem->quantity += $item['quantity'];
@@ -132,28 +132,28 @@ class AuthenticatedSessionController extends Controller
             // Generate OTP and link token
             $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
             $linkToken = bin2hex(random_bytes(20));
-            
+
             // Create or update EmailOtp record
             EmailOtp::updateOrCreate(
                 ['user_id' => $user->id, 'email' => $user->email, 'used' => false],
                 [
-                    'code' => $code, 
-                    'link_token' => $linkToken, 
+                    'code' => $code,
+                    'link_token' => $linkToken,
                     'expires_at' => now()->addMinutes(15)
                 ]
             );
-            
+
             // Generate verification URL
             $verifyUrl = url('/verify-email/link/'.$linkToken);
-            
+
             // Send email with OTP and verification link
             Mail::to($user->email)->send(new VerifyOtpMail($code, $verifyUrl));
-            
+
             \Log::info('Verification email sent to unverified user', [
                 'user_id' => $user->id,
                 'email' => $user->email
             ]);
-            
+
         } catch (\Exception $e) {
             \Log::error('Failed to send verification email to unverified user', [
                 'user_id' => $user->id,

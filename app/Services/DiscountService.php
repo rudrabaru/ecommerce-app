@@ -41,10 +41,12 @@ class DiscountService
             $allowedCategoryIds = [$discount->category_id];
         }
         $eligibleSubtotal = $subtotal;
+        $affectedItemCount = 0;
         if (!empty($allowedCategoryIds)) {
             $eligibleSubtotal = 0.0;
             foreach ($cartItems as $item) {
                 if (in_array($item['category_id'] ?? null, $allowedCategoryIds)) {
+                    $affectedItemCount += (int)($item['quantity'] ?? 0);
                     $eligibleSubtotal += ($item['price'] * $item['quantity']);
                 }
             }
@@ -57,12 +59,73 @@ class DiscountService
             $amount = round($eligibleSubtotal * ((float)$discount->discount_value / 100), 2);
         }
 
-        return [true, 'Discount code applied successfully', $amount, $discount];
+        return [true, 'Discount code applied successfully', $amount, $discount, $affectedItemCount];
     }
 
     public function incrementUsage(DiscountCode $discount): void
     {
         $discount->increment('usage_count');
+    }
+
+    /**
+     * Allocate discount amount proportionally across eligible items.
+     * Returns map of product_id => discount_amount applied to that product line.
+     */
+    public function allocatePerItem(DiscountCode $discount, array $cartItems): array
+    {
+        $allowedCategoryIds = $discount->categories()->pluck('categories.id')->all();
+        if (empty($allowedCategoryIds) && $discount->category_id) {
+            $allowedCategoryIds = [$discount->category_id];
+        }
+
+        // Build eligible lines
+        $eligibleLines = [];
+        $eligibleSubtotal = 0.0;
+        foreach ($cartItems as $item) {
+            $lineTotal = (float)($item['price'] * $item['quantity']);
+            $isEligible = empty($allowedCategoryIds) || in_array(($item['category_id'] ?? null), $allowedCategoryIds);
+            if ($isEligible) {
+                $eligibleSubtotal += $lineTotal;
+                $eligibleLines[] = [
+                    'product_id' => $item['product_id'],
+                    'line_total' => $lineTotal,
+                ];
+            }
+        }
+
+        if ($eligibleSubtotal <= 0.0 || empty($eligibleLines)) {
+            return [];
+        }
+
+        // Compute total discount amount
+        $totalDiscount = 0.0;
+        if ($discount->discount_type === 'fixed') {
+            $totalDiscount = min($eligibleSubtotal, (float)$discount->discount_value);
+        } else {
+            $totalDiscount = round($eligibleSubtotal * ((float)$discount->discount_value / 100), 2);
+        }
+
+        if ($totalDiscount <= 0.0) {
+            return [];
+        }
+
+        // Proportional allocation
+        $allocation = [];
+        $allocatedSoFar = 0.0;
+        $lastIndex = count($eligibleLines) - 1;
+        foreach ($eligibleLines as $idx => $line) {
+            if ($idx === $lastIndex) {
+                $share = round($totalDiscount - $allocatedSoFar, 2);
+            } else {
+                $ratio = $line['line_total'] / $eligibleSubtotal;
+                $share = round($totalDiscount * $ratio, 2);
+                $allocatedSoFar += $share;
+            }
+            $pid = $line['product_id'];
+            $allocation[$pid] = ($allocation[$pid] ?? 0.0) + $share;
+        }
+
+        return $allocation;
     }
 }
 

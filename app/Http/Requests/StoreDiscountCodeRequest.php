@@ -21,7 +21,8 @@ class StoreDiscountCodeRequest extends FormRequest
                 try {
                     $dt = \Carbon\Carbon::parse(str_replace('T', ' ', $raw), config('app.timezone'));
                     $this->merge([$key => $dt->format('Y-m-d H:i:s')]);
-                } catch (\Throwable $e) {}
+                } catch (\Throwable $e) {
+                }
             }
         }
     }
@@ -46,5 +47,3 @@ class StoreDiscountCodeRequest extends FormRequest
         ];
     }
 }
-
-

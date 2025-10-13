@@ -28,7 +28,9 @@ class InitializeCart
             if (!empty($sessionCart)) {
                 foreach ($sessionCart as $item) {
                     $product = Product::find($item['product_id']);
-                    if (!$product) { continue; }
+                    if (!$product) {
+                        continue;
+                    }
                     $existing = $cart->items()->where('product_id', $product->id)->first();
                     $quantity = max(1, (int) $item['quantity']);
                     if ($existing) {
@@ -48,5 +50,3 @@ class InitializeCart
         return $next($request);
     }
 }
-
-

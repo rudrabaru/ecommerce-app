@@ -33,5 +33,3 @@ class ProtectAdminPaths
         return $next($request);
     }
 }
-
-

@@ -27,12 +27,12 @@ class LocationServiceProvider extends ServiceProvider
         $this->registerConfig();
         $this->registerViews();
         $this->loadMigrationsFrom(module_path($this->name, 'database/migrations'));
-        
+
         // Register the controllers namespace
         $this->app['router']->middleware('web')
             ->namespace('Modules\Location\Http\Controllers')
             ->group(module_path('Location', '/routes/web.php'));
-            
+
         $this->app['router']->middleware('api')
             ->prefix('api')
             ->namespace('Modules\Location\Http\Controllers')

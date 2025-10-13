@@ -39,7 +39,7 @@
                                 <tr data-product-id="{{ $item['product_id'] }}">
                                     <td class="product__cart__item">
                                         <div class="product__cart__item__pic">
-                                            <img src="{{ $item['image'] ? asset('storage/'.$item['image']) : asset('img/shopping-cart/cart-1.jpg') }}" alt="">
+                                            <img src="{{ $item['image_url'] ?? ($item['image'] ? asset('storage/'.$item['image']) : asset('img/shopping-cart/cart-1.jpg')) }}" alt="">
                                         </div>
                                         <div class="product__cart__item__text">
                                             <h6>{{ $item['name'] }}</h6>
@@ -96,10 +96,11 @@
                             <input type="text" name="discount_code" id="discount_code" placeholder="Coupon code" value="{{ $discountCode }}">
                             <button type="submit" id="apply-discount">Apply</button>
                         </form>
-                        <div class="mt-2 applied-discount" style="{{ ($discountAmount > 0) ? '' : 'display: none;' }}">
+                        <div class="mt-2 applied-discount" style="{{ (($discountAmount ?? 0) > 0) ? '' : 'display: none;' }}">
                             <small class="text-success">
-                                Applied: {{ $discountCode }} 
-                                <a href="#" id="remove-discount" class="text-danger">Remove</a>
+                                <span class="applied-label">Applied</span>: <span class="applied-code">{{ $discountCode }}</span>
+                                <span class="applied-affects" style="margin-left:6px;"></span>
+                                <a href="#" id="remove-discount" class="text-danger" style="margin-left:8px;">Remove</a>
                             </small>
                         </div>
                     </div>
@@ -107,7 +108,7 @@
                         <h6>Cart total</h6>
                         <ul>
                             <li>Subtotal <span class="subtotal-amount">${{ number_format(($subtotal ?? 0), 2) }}</span></li>
-                            <li class="text-success discount-row" style="{{ ($discountAmount ?? 0) > 0 ? '' : 'display: none;' }}">
+                            <li class="text-success discount-row" style="{{ (($discountAmount ?? 0) > 0) ? '' : 'display: none;' }}">
                                 Discount <span class="discount-amount">-${{ number_format($discountAmount ?? 0, 2) }}</span>
                             </li>
                             <li>Total <span class="total-amount">${{ number_format(($total ?? $subtotal ?? 0), 2) }}</span></li>
@@ -205,7 +206,11 @@
                 },
                 success: function(response) {
                     updateCartCount(response.cart_count);
-                    updateCartTotals();
+                    if (typeof response.discount_amount !== 'undefined') {
+                        updateDiscountDisplay(parseFloat(response.discount_amount) || 0);
+                    } else {
+                        updateCartTotals();
+                    }
                 },
                 error: function() {
                     Swal.fire('Error', 'Error updating quantity', 'error');
@@ -245,6 +250,8 @@
                 const $row = $(this).closest('tr');
                 
                 updateCartItemPrice($row, quantity);
+                // Immediately reflect totals in UI; server response will refine discount
+                updateCartTotals();
                 updateCartQuantity(productId, quantity);
             });
             
@@ -274,7 +281,11 @@
                                 // Remove the item from the table without page reload
                                 $('tr[data-product-id="' + productId + '"]').fadeOut(300, function() {
                                     $(this).remove();
-                                    updateCartTotals();
+                                    if (typeof response.discount_amount !== 'undefined') {
+                                        updateDiscountDisplay(parseFloat(response.discount_amount) || 0);
+                                    } else {
+                                        updateCartTotals();
+                                    }
                                 });
                             },
                             error: function(xhr) {
@@ -348,6 +359,15 @@
                         if (response.discount_code) {
                             $('#discount_code').val(response.discount_code);
                         }
+                        // Show affected items info if provided and > 0
+                        if (typeof response.affected_items !== 'undefined') {
+                            const n = parseInt(response.affected_items, 10) || 0;
+                            if (n > 0) {
+                                $('.applied-discount .applied-affects').text('(applies to ' + n + ' item' + (n>1?'s':'') + ')');
+                            } else {
+                                $('.applied-discount .applied-affects').text('');
+                            }
+                        }
                     },
                     error: function(xhr) {
                         try {
@@ -390,31 +410,25 @@
                 $('#cart-count').text(count);
             }
 
-            // Function to update cart totals dynamically
+            // Function to update cart totals dynamically (single definition on this page)
             function updateCartTotals() {
                 let subtotal = 0;
                 $('tbody tr').each(function() {
-                    const priceText = $(this).find('.cart__price').text().replace('$', '').replace(',', '');
+                    const priceText = $(this).find('.product__cart__item__text h5').text().replace('$', '').replace(',', '');
+                    const quantity = parseInt($(this).find('.quantity-input').val());
                     const price = parseFloat(priceText);
-                    if (!isNaN(price)) {
-                        subtotal += price;
+                    if (!isNaN(price) && !isNaN(quantity)) {
+                        subtotal += price * quantity;
                     }
                 });
-                
-                // Get discount amount from the discount row
                 let discountAmount = 0;
                 if ($('.discount-row').is(':visible')) {
                     const discountText = $('.discount-amount').text().replace('-$', '').replace('$', '').replace(',', '');
                     discountAmount = parseFloat(discountText) || 0;
                 }
-                
                 const total = subtotal - discountAmount;
-                
-                // Update the display
                 $('.subtotal-amount').text('$' + subtotal.toFixed(2));
                 $('.total-amount').text('$' + total.toFixed(2));
-                
-                
             }
 
             // Function to update discount display
@@ -431,6 +445,7 @@
                     $('.discount-row').hide();
                     $('#discount_code').val('');
                     $('.applied-discount').hide();
+                    $('.applied-discount .applied-affects').text('');
                 }
                 
                 // Update totals after discount change

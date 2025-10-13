@@ -12,7 +12,8 @@ use Illuminate\Queue\SerializesModels;
 
 class OrderConfirmationMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable;
+    use SerializesModels;
 
     public $order;
 

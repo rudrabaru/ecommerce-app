@@ -13,9 +13,9 @@ class ProviderDashboardController extends Controller
     public function stats()
     {
         $this->authorizeProvider();
-        
+
         $providerId = Auth::id();
-        
+
         $stats = [
             'total_products' => Product::where('provider_id', $providerId)->count(),
             'total_orders' => Order::where('provider_id', $providerId)->count(),
@@ -26,22 +26,22 @@ class ProviderDashboardController extends Controller
                 ->where('status', 'delivered')
                 ->count(),
         ];
-        
+
         return response()->json($stats);
     }
-    
+
     public function recentOrders()
     {
         $this->authorizeProvider();
-        
+
         $providerId = Auth::id();
-        
+
         $orders = Order::with(['user', 'product'])
             ->where('provider_id', $providerId)
             ->latest()
             ->limit(5)
             ->get()
-            ->map(function($order) {
+            ->map(function ($order) {
                 return [
                     'id' => $order->id,
                     'order_number' => $order->order_number,
@@ -52,24 +52,24 @@ class ProviderDashboardController extends Controller
                     'created_at' => $order->created_at,
                 ];
             });
-        
+
         return response()->json($orders);
     }
-    
+
     public function myProducts()
     {
         $this->authorizeProvider();
-        
+
         $providerId = Auth::id();
-        
+
         $products = Product::where('provider_id', $providerId)
             ->latest()
             ->limit(5)
             ->get()
-            ->map(function($product) {
+            ->map(function ($product) {
                 $statusClass = $product->is_approved ? 'success' : 'warning';
                 $statusText = $product->is_approved ? 'Approved' : 'Pending';
-                
+
                 return [
                     'id' => $product->id,
                     'title' => $product->title,
@@ -79,10 +79,10 @@ class ProviderDashboardController extends Controller
                     'created_at' => $product->created_at,
                 ];
             });
-        
+
         return response()->json($products);
     }
-    
+
     private function authorizeProvider(): void
     {
         abort_unless(Auth::user() && Auth::user()->hasRole('provider'), 403);
