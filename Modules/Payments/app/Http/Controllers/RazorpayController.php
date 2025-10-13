@@ -1,0 +1,69 @@
+<?php
+
+namespace Modules\Payments\Http\Controllers;
+
+use App\Http\Controllers\Controller;
+use App\Models\Order;
+use App\Models\Payment;
+use App\Models\PaymentMethod;
+use App\Services\Payments\RazorpayPaymentService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+
+class RazorpayController extends Controller
+{
+    public function initiate(Request $request, RazorpayPaymentService $service)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'order_ids' => ['required', 'array', 'min:1'],
+            'order_ids.*' => ['integer', 'exists:orders,id'],
+        ]);
+
+        $order = Order::whereIn('id', $validated['order_ids'])
+            ->where('user_id', $user->id)
+            ->latest('id')
+            ->firstOrFail();
+
+        $paymentMethod = PaymentMethod::where('name', 'razorpay')->firstOrFail();
+
+        DB::beginTransaction();
+        try {
+            Payment::firstOrCreate([
+                'order_id' => $order->id,
+                'payment_method_id' => $paymentMethod->id,
+            ], [
+                'amount' => $order->total_amount,
+                'currency' => 'INR',
+                'status' => 'pending',
+            ]);
+
+            $r = $service->createOrder($order);
+
+            DB::commit();
+
+            return response()->json([
+                'orderId' => $order->id,
+                'razorpayOrderId' => $r['razorpay_order_id'],
+                'amount' => $r['amount'],
+                'currency' => $r['currency'],
+                'key' => $r['key'],
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Unable to initiate Razorpay payment',
+            ], 422);
+        }
+    }
+
+    public function webhook(Request $request, RazorpayPaymentService $service)
+    {
+        $service->handleWebhook($request->all());
+        return response()->json(['received' => true]);
+    }
+}
+
+

@@ -228,6 +228,118 @@
     <script src="{{ asset('js/owl.carousel.min.js') }}"></script>
     <script src="{{ asset('js/main.js') }}"></script>
 
+    <!-- Payment SDKs (loaded lazily when needed) -->
+    <script>
+    (function() {
+        var stripeJsLoaded = false;
+        var razorpayJsLoaded = false;
+        function loadScript(src) {
+            return new Promise(function(resolve, reject) {
+                var s = document.createElement('script');
+                s.src = src;
+                s.onload = resolve;
+                s.onerror = reject;
+                document.head.appendChild(s);
+            });
+        }
+
+        function getSelectedPaymentMethodId() {
+            var el = document.querySelector('input[name="payment_method_id"]:checked');
+            return el ? el.value : null;
+        }
+
+        function showLoading(btn, on) {
+            if (!btn) return;
+            btn.disabled = !!on;
+            if (on) { btn.setAttribute('data-original-text', btn.innerText); btn.innerText = 'Processing...'; }
+            else { btn.innerText = btn.getAttribute('data-original-text') || 'PLACE ORDER'; }
+        }
+
+        function toast(msg, type) {
+            alert(msg);
+        }
+
+        async function initiateStripe(orderIds) {
+            if (!stripeJsLoaded) { await loadScript('https://js.stripe.com/v3/'); stripeJsLoaded = true; }
+            const res = await fetch('/api/v1/payment/stripe/initiate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ order_ids: orderIds })
+            });
+            if (!res.ok) throw new Error('Stripe initiate failed');
+            const data = await res.json();
+            const stripe = window.Stripe(data.publishableKey);
+            const { error, paymentIntent } = await stripe.confirmCardPayment(data.clientSecret, {
+                payment_method: { card: { token: 'tok_visa' } }
+            });
+            if (error) { throw new Error(error.message || 'Payment failed'); }
+            window.location.href = '/orders/success';
+        }
+
+        async function initiateRazorpay(orderIds) {
+            if (!razorpayJsLoaded) { await loadScript('https://checkout.razorpay.com/v1/checkout.js'); razorpayJsLoaded = true; }
+            const res = await fetch('/api/v1/payment/razorpay/initiate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ order_ids: orderIds })
+            });
+            if (!res.ok) throw new Error('Razorpay initiate failed');
+            const data = await res.json();
+            return new Promise(function(resolve, reject) {
+                const options = {
+                    key: data.key,
+                    amount: data.amount,
+                    currency: data.currency,
+                    order_id: data.razorpayOrderId,
+                    handler: function (response){ resolve(response); },
+                    modal: { ondismiss: function(){ reject(new Error('Payment cancelled')); } }
+                };
+                const rz = new window.Razorpay(options);
+                rz.open();
+            }).then(function(){ window.location.href = '/orders/success'; });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var form = document.querySelector('.checkout__form form');
+            if (!form) return;
+            var submitBtn = form.querySelector('button[type="submit"]');
+            form.addEventListener('submit', async function(e) {
+                try {
+                    e.preventDefault();
+                    showLoading(submitBtn, true);
+                    const formData = new FormData(form);
+                    const res = await fetch(form.action, {
+                        method: 'POST',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        body: formData
+                    });
+                    // COD path will redirect (non-ajax) or return HTML; online returns JSON
+                    const contentType = res.headers.get('content-type') || '';
+                    if (!contentType.includes('application/json')) {
+                        // Likely COD, follow redirect by reloading
+                        window.location.reload();
+                        return;
+                    }
+                    const data = await res.json();
+                    if (!data || !data.success) { throw new Error('Checkout initiation failed'); }
+                    const orderIds = data.order_ids || [];
+                    if (data.payment_method === 'stripe') {
+                        await initiateStripe(orderIds);
+                    } else if (data.payment_method === 'razorpay') {
+                        await initiateRazorpay(orderIds);
+                    } else {
+                        throw new Error('Unsupported payment method');
+                    }
+                } catch (err) {
+                    toast(err && err.message ? err.message : 'Something went wrong', 'error');
+                } finally {
+                    showLoading(submitBtn, false);
+                }
+            });
+        });
+    })();
+    </script>
+
     <!-- Address Modal JavaScript -->
     <script>
     // Global, safe, idempotent initializer for checkout address modal

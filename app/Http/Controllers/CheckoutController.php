@@ -221,7 +221,8 @@ class CheckoutController extends Controller
                     'order_id' => $order->id,
                     'payment_method_id' => $paymentMethod->id,
                     'amount' => $total,
-                    'status' => $paymentMethod->name === 'cod' ? 'pending' : 'pending',
+                    'currency' => $paymentMethod->name === 'razorpay' ? 'INR' : 'USD',
+                    'status' => 'pending',
                 ]);
 
                 $created[] = $order->order_number;
@@ -234,31 +235,44 @@ class CheckoutController extends Controller
                 }
             }
 
-            // Clear cart based on user type
-            if ($user) {
-                // Clear database cart
-                $cart->items()->delete();
-                // Also clear discount on cart
-                if (isset($cart)) {
-                    $cart->update(['discount_code' => null, 'discount_amount' => 0]);
+            // Clear cart immediately only for COD; online payments clear on success via webhook
+            if ($paymentMethod->name === 'cod') {
+                if ($user) {
+                    $cart->items()->delete();
+                    if (isset($cart)) {
+                        $cart->update(['discount_code' => null, 'discount_amount' => 0]);
+                    }
+                } else {
+                    session()->forget(['cart', 'cart_discount_code', 'cart_discount']);
                 }
-            } else {
-                // Clear session cart
-                session()->forget(['cart', 'cart_discount_code', 'cart_discount']);
             }
             
             DB::commit();
 
-            // Send confirmation email for each order
-            foreach ($created as $orderNumber) {
-                $order = Order::where('order_number', $orderNumber)->first();
-                if ($order) {
-                    Mail::to($order->user->email)->send(new OrderConfirmationMail($order));
+            if ($paymentMethod->name === 'cod') {
+                // Send confirmation email for each order
+                foreach ($created as $orderNumber) {
+                    $order = Order::where('order_number', $orderNumber)->first();
+                    if ($order) {
+                        Mail::to($order->user->email)->send(new OrderConfirmationMail($order));
+                    }
                 }
+                return redirect()->route('orders.success')
+                    ->with('success', 'Order placed successfully! Order numbers: ' . implode(', ', $created));
             }
 
-            return redirect()->route('orders.success')
-                ->with('success', 'Order placed successfully! Order numbers: ' . implode(', ', $created));
+            // For online payments, return payload for client to initiate gateway
+            if ($request->wantsJson() || $request->ajax()) {
+                $orderIds = Order::whereIn('order_number', $created)->pluck('id');
+                return response()->json([
+                    'success' => true,
+                    'payment_method' => $paymentMethod->name,
+                    'order_ids' => $orderIds,
+                ]);
+            }
+
+            return redirect()->route('checkout')
+                ->with('info', 'Payment required to complete your order.');
 
         } catch (\Exception $e) {
             DB::rollback();
