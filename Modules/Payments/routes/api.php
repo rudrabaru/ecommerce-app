@@ -18,9 +18,6 @@ use Modules\Payments\Http\Controllers\RazorpayController;
 
 Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::apiResource('payments', PaymentsController::class)->names('payments');
-
-    Route::post('/payment/stripe/initiate', [StripeController::class, 'initiate'])->name('payment.stripe.initiate');
-    Route::post('/payment/razorpay/initiate', [RazorpayController::class, 'initiate'])->name('payment.razorpay.initiate');
 });
 
 Route::post('/payment/stripe/webhook', [StripeController::class, 'webhook'])->name('payment.stripe.webhook');

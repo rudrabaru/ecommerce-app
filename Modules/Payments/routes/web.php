@@ -2,6 +2,8 @@
 
 use Illuminate\Support\Facades\Route;
 use Modules\Payments\Http\Controllers\PaymentsController;
+use Modules\Payments\Http\Controllers\StripeController;
+use Modules\Payments\Http\Controllers\RazorpayController;
 
 /*
 |--------------------------------------------------------------------------
@@ -20,4 +22,8 @@ Route::middleware(['web','auth'])->group(function () {
         Route::get('payments/data', [PaymentsController::class, 'data'])->name('payments.data');
         Route::resource('payments', PaymentsController::class)->names('payments');
     });
+
+    // Initiation endpoints for logged-in users (session auth)
+    Route::post('/payment/stripe/initiate', [StripeController::class, 'initiate'])->name('payment.stripe.initiate');
+    Route::post('/payment/razorpay/initiate', [RazorpayController::class, 'initiate'])->name('payment.razorpay.initiate');
 });

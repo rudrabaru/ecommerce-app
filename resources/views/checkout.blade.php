@@ -80,7 +80,7 @@
                                     @foreach($paymentMethods as $method)
                                         <div class="payment-option">
                                             <input type="radio" name="payment_method_id" value="{{ $method->id }}" 
-                                                   id="payment_{{ $method->id }}" 
+                                                   id="payment_{{ $method->id }}" data-method-name="{{ $method->name }}"
                                                    {{ $loop->first ? 'checked' : '' }}>
                                             <label for="payment_{{ $method->id }}" class="payment-label">
                                                 <div class="payment-info">
@@ -96,6 +96,15 @@
                                 @error('payment_method_id')
                                     <div class="text-danger">{{ $message }}</div>
                                 @enderror
+                            </div>
+
+                            <!-- Stripe Elements (visible only when Stripe selected) -->
+                            <div id="stripe-elements-container" style="display:none; margin-bottom: 16px;">
+                                <div class="checkout__input">
+                                    <p>Card Details<span>*</span></p>
+                                    <div id="stripe-card-element" class="form-control" style="padding: 10px; height: auto;"></div>
+                                    <div id="stripe-card-errors" class="text-danger mt-2" role="alert"></div>
+                                </div>
                             </div>
 
                             <!-- Order Notes -->
@@ -233,6 +242,10 @@
     (function() {
         var stripeJsLoaded = false;
         var razorpayJsLoaded = false;
+        var STRIPE_PUBLISHABLE_KEY = "{{ config('services.stripe.key') }}";
+        var stripeInstance = null;
+        var stripeElements = null;
+        var stripeCardElement = null;
         function loadScript(src) {
             return new Promise(function(resolve, reject) {
                 var s = document.createElement('script');
@@ -259,28 +272,66 @@
             alert(msg);
         }
 
-        async function initiateStripe(orderIds) {
+        function toggleStripeElementsVisible(show) {
+            var el = document.getElementById('stripe-elements-container');
+            if (el) el.style.display = show ? '' : 'none';
+        }
+
+        async function ensureStripeElementsReady() {
             if (!stripeJsLoaded) { await loadScript('https://js.stripe.com/v3/'); stripeJsLoaded = true; }
-            const res = await fetch('/api/v1/payment/stripe/initiate', {
+            if (!stripeInstance) {
+                var key = STRIPE_PUBLISHABLE_KEY || '';
+                if (!key) { throw new Error('Stripe publishable key missing'); }
+                stripeInstance = window.Stripe(key);
+            }
+            if (!stripeElements) { stripeElements = stripeInstance.elements(); }
+            if (!stripeCardElement) {
+                stripeCardElement = stripeElements.create('card');
+                stripeCardElement.mount('#stripe-card-element');
+                stripeCardElement.on('change', function(event) {
+                    var err = document.getElementById('stripe-card-errors');
+                    if (err) err.textContent = event.error ? event.error.message : '';
+                });
+            }
+        }
+
+        async function initiateStripe(orderIds) {
+            await ensureStripeElementsReady();
+            const token = (document.querySelector('meta[name="csrf-token"]')||{}).getAttribute ? document.querySelector('meta[name="csrf-token"]').getAttribute('content') : '';
+            const res = await fetch('/payment/stripe/initiate', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': token },
                 body: JSON.stringify({ order_ids: orderIds })
             });
             if (!res.ok) throw new Error('Stripe initiate failed');
             const data = await res.json();
-            const stripe = window.Stripe(data.publishableKey);
-            const { error, paymentIntent } = await stripe.confirmCardPayment(data.clientSecret, {
-                payment_method: { card: { token: 'tok_visa' } }
+            // Ensure instance matches publishable key returned
+            if (!stripeInstance || (data.publishableKey && STRIPE_PUBLISHABLE_KEY !== data.publishableKey)) {
+                STRIPE_PUBLISHABLE_KEY = data.publishableKey;
+                stripeInstance = window.Stripe(STRIPE_PUBLISHABLE_KEY);
+                stripeElements = stripeInstance.elements();
+                if (!stripeCardElement) {
+                    stripeCardElement = stripeElements.create('card');
+                    stripeCardElement.mount('#stripe-card-element');
+                }
+            }
+            const { error, paymentIntent } = await stripeInstance.confirmCardPayment(data.clientSecret, {
+                payment_method: { card: stripeCardElement }
             });
-            if (error) { throw new Error(error.message || 'Payment failed'); }
+            if (error) {
+                var err = document.getElementById('stripe-card-errors');
+                if (err) err.textContent = error.message || 'Payment failed';
+                throw new Error(error.message || 'Payment failed');
+            }
             window.location.href = '/orders/success';
         }
 
         async function initiateRazorpay(orderIds) {
             if (!razorpayJsLoaded) { await loadScript('https://checkout.razorpay.com/v1/checkout.js'); razorpayJsLoaded = true; }
-            const res = await fetch('/api/v1/payment/razorpay/initiate', {
+            const token = (document.querySelector('meta[name="csrf-token"]')||{}).getAttribute ? document.querySelector('meta[name="csrf-token"]').getAttribute('content') : '';
+            const res = await fetch('/payment/razorpay/initiate', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': token },
                 body: JSON.stringify({ order_ids: orderIds })
             });
             if (!res.ok) throw new Error('Razorpay initiate failed');
@@ -303,6 +354,21 @@
             var form = document.querySelector('.checkout__form form');
             if (!form) return;
             var submitBtn = form.querySelector('button[type="submit"]');
+            // Show Stripe card inputs when Stripe is selected
+            document.addEventListener('change', function(e) {
+                var target = e.target;
+                if (target && target.name === 'payment_method_id') {
+                    var name = target.getAttribute('data-method-name');
+                    if (name === 'stripe') { toggleStripeElementsVisible(true); ensureStripeElementsReady().catch(function(err){ console.error(err); }); }
+                    else { toggleStripeElementsVisible(false); }
+                }
+            });
+            // Initialize visibility on load
+            (function initStripeVisibility(){
+                var checked = document.querySelector('input[name="payment_method_id"]:checked');
+                var name = checked ? checked.getAttribute('data-method-name') : null;
+                if (name === 'stripe') { toggleStripeElementsVisible(true); ensureStripeElementsReady().catch(function(err){ console.error(err); }); }
+            })();
             form.addEventListener('submit', async function(e) {
                 try {
                     e.preventDefault();
@@ -671,6 +737,13 @@
     </script>
 
     <style>
+    /* Stripe Elements box */
+    #stripe-card-element {
+        background: #fff;
+    }
+    #stripe-card-errors {
+        font-size: 14px;
+    }
     /* Order Summary Alignment Fix */
     .checkout__order__subtotal,
     .checkout__order__discount,

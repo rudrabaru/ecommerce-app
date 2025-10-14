@@ -18,11 +18,32 @@ class CartController extends Controller
         if (!$image) {
             return asset('img/product/product-1.jpg');
         }
-        // If it already looks like a full URL (e.g., seeded placeholder), return as-is
         if (is_string($image) && (str_starts_with($image, 'http://') || str_starts_with($image, 'https://'))) {
+            // Rewrite legacy/seeded placeholder domain to a reliable one
+            try {
+                $parts = parse_url($image);
+                if (!empty($parts['host']) && stripos($parts['host'], 'via.placeholder.com') !== false) {
+                    $path = $parts['path'] ?? '';
+                    $query = $parts['query'] ?? '';
+                    $text = '';
+                    parse_str($query, $q);
+                    if (!empty($q['text'])) { $text = $q['text']; }
+                    if (preg_match('#/(\d+x\d+)\.png/([0-9a-fA-F]{3,6})#', $path, $m)) {
+                        $size = $m[1];
+                        $bg = $m[2];
+                        return 'https://placehold.co/' . $size . '/' . $bg . '/ffffff?text=' . urlencode($text ?: '');
+                    }
+                    if (preg_match('#/(\d+x\d+)#', $path, $m)) {
+                        $size = $m[1];
+                        return 'https://placehold.co/' . $size . '?text=' . urlencode($text ?: '');
+                    }
+                    return 'https://placehold.co/600x600?text=' . urlencode($text ?: '');
+                }
+            } catch (\Throwable $e) {
+            }
             return $image;
         }
-        return asset('storage/' . $image);
+        return asset('storage/' . ltrim($image, '/'));
     }
     public static function getCartCount()
     {
@@ -47,13 +68,12 @@ class CartController extends Controller
             $cart = Cart::where('user_id', Auth::id())->first();
             if ($cart) {
                 $items = $cart->items()->with('product')->get()->map(function ($item) {
-                    $image = $item->product->image;
-                    $imageUrl = $this->resolveImageUrl($image);
+                    $imageUrl = $item->product ? $item->product->image_url : $this->resolveImageUrl(null);
                     return [
                         'product_id' => $item->product_id,
                         'name' => $item->product->title ?? $item->product->name,
                         'price' => (float) $item->unit_price,
-                        'image' => $item->product->image,
+                        'image' => $item->product->image ?? null,
                         'image_url' => $imageUrl,
                         'quantity' => $item->quantity,
                     ];

@@ -29,7 +29,9 @@
                             <thead>
                                 <tr>
                                     <th>Product</th>
+                                    <th>Price</th>
                                     <th>Quantity</th>
+                                    <th>Discount</th>
                                     <th>Total</th>
                                     <th></th>
                                 </tr>
@@ -39,12 +41,28 @@
                                 <tr data-product-id="{{ $item['product_id'] }}">
                                     <td class="product__cart__item">
                                         <div class="product__cart__item__pic">
-                                            <img src="{{ $item['image_url'] ?? ($item['image'] ? asset('storage/'.$item['image']) : asset('img/shopping-cart/cart-1.jpg')) }}" alt="">
+                                            @php
+                                                $rawImage = $item['image_url'] ?? ($item['image'] ?? null);
+                                                $imgSrc = null;
+                                                if ($rawImage) {
+                                                    if (filter_var($rawImage, FILTER_VALIDATE_URL)) {
+                                                        $imgSrc = $rawImage;
+                                                    } else {
+                                                        $imgSrc = asset('storage/' . ltrim($rawImage, '/'));
+                                                    }
+                                                }
+                                                if (!$imgSrc) {
+                                                    $imgSrc = asset('img/shopping-cart/cart-1.jpg');
+                                                }
+                                            @endphp
+                                            <img src="{{ $imgSrc }}" alt="{{ $item['name'] }}" style="width:80px;height:80px;object-fit:cover;border-radius:6px;">
                                         </div>
                                         <div class="product__cart__item__text">
-                                            <h6>{{ $item['name'] }}</h6>
-                                            <h5>${{ number_format($item['price'], 2) }}</h5>
+                                            <h6 style="max-width:360px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ $item['name'] }}</h6>
                                         </div>
+                                    </td>
+                                    <td class="text-end">
+                                        <span class="item-unit-price" data-unit-price="{{ number_format($item['price'], 2, '.', '') }}">${{ number_format($item['price'], 2) }}</span>
                                     </td>
                                     <td class="quantity__item">
                                         <div class="quantity">
@@ -54,6 +72,9 @@
                                                 <button type="button" class="qtybtn inc">+</button>
                                             </div>
                                         </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="item-discount-indicator">{{ (($discountAmount ?? 0) > 0) ? 'Applied' : '-' }}</span>
                                     </td>
                                     <td class="cart__price">${{ number_format($item['price'] * $item['quantity'], 2) }}</td>
                                     <td class="cart__close">
@@ -188,12 +209,12 @@
             if (!window.jQuery || !$.fn) { return setTimeout(waitForjQuery, 50); }
 
         // Helper function to update cart item price in real-time
-        function updateCartItemPrice($row, quantity) {
-            const priceText = $row.find('.product__cart__item__text h5').text().replace('$', '').replace(',', '');
-            const price = parseFloat(priceText);
-            const total = price * quantity;
-            $row.find('.cart__price').text('$' + total.toFixed(2));
-        }
+         function updateCartItemPrice($row, quantity) {
+             const unit = parseFloat($row.find('.item-unit-price').data('unit-price')) || 0;
+             const total = unit * quantity;
+             // Price column shows original unit price; do not change it
+             $row.find('.cart__price').text('$' + total.toFixed(2));
+         }
         
         // Helper function to update cart quantity via AJAX
         function updateCartQuantity(productId, quantity) {
@@ -222,9 +243,9 @@
         function updateCartTotals() {
             let subtotal = 0;
             $('tbody tr').each(function() {
-                const priceText = $(this).find('.product__cart__item__text h5').text().replace('$', '').replace(',', '');
-                const quantity = parseInt($(this).find('.quantity-input').val());
-                const price = parseFloat(priceText);
+                 const unit = parseFloat($(this).find('.item-unit-price').data('unit-price')) || 0;
+                 const quantity = parseInt($(this).find('.quantity-input').val());
+                 const price = unit;
                 if (!isNaN(price) && !isNaN(quantity)) {
                     subtotal += price * quantity;
                 }
@@ -351,10 +372,18 @@
                         _token: $('meta[name="csrf-token"]').attr('content')
                     },
                     success: function(response) {
-                        
                         Swal.fire('Success', response.message, 'success');
                         // Update discount display without page reload
-                        updateDiscountDisplay(response.discount_amount || 0);
+                        if (typeof updateDiscountDisplay === 'function') {
+                            updateDiscountDisplay(response.discount_amount || 0);
+                        } else {
+                            // Fallback: minimally update the amounts
+                            var amt = parseFloat(response.discount_amount || 0) || 0;
+                            $('.discount-amount').text(amt > 0 ? ('-$' + amt.toFixed(2)) : '$0.00');
+                            if (amt > 0) { $('.discount-row').show(); } else { $('.discount-row').hide(); }
+                            // Recompute totals
+                            (typeof updateCartTotals === 'function') && updateCartTotals();
+                        }
                         // Update discount code input
                         if (response.discount_code) {
                             $('#discount_code').val(response.discount_code);
@@ -393,10 +422,15 @@
                         _token: $('meta[name="csrf-token"]').attr('content')
                     },
                     success: function(response) {
-                        
                         Swal.fire('Success', response.message, 'success');
                         // Update discount display without page reload
-                        updateDiscountDisplay(0);
+                        if (typeof updateDiscountDisplay === 'function') {
+                            updateDiscountDisplay(0);
+                        } else {
+                            $('.discount-amount').text('$0.00');
+                            $('.discount-row').hide();
+                            (typeof updateCartTotals === 'function') && updateCartTotals();
+                        }
                     },
                     error: function(xhr) {
                         const response = xhr.responseJSON;
@@ -414,11 +448,10 @@
             function updateCartTotals() {
                 let subtotal = 0;
                 $('tbody tr').each(function() {
-                    const priceText = $(this).find('.product__cart__item__text h5').text().replace('$', '').replace(',', '');
+                    const unit = parseFloat($(this).find('.item-unit-price').data('unit-price')) || 0;
                     const quantity = parseInt($(this).find('.quantity-input').val());
-                    const price = parseFloat(priceText);
-                    if (!isNaN(price) && !isNaN(quantity)) {
-                        subtotal += price * quantity;
+                    if (!isNaN(unit) && !isNaN(quantity)) {
+                        subtotal += unit * quantity;
                     }
                 });
                 let discountAmount = 0;
