@@ -1,37 +1,41 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+use \App\Http\Controllers\Auth\PortalLoginController;
+use \App\Http\Controllers\Auth\EmailOtpController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\MainController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\UserAddressController;
 use App\Http\Controllers\Admin\DiscountCodeController;
+use Modules\Products\Http\Controllers\StorefrontProductsController;
+use Modules\Products\Http\Controllers\CategoryController;
 
-Route::get('/', [\App\Http\Controllers\MainController::class, 'index'])->name('home');
-Route::get('/shop', [\Modules\Products\Http\Controllers\StorefrontProductsController::class, 'shop'])->name('shop');
-Route::get('/shop/{id}', [\Modules\Products\Http\Controllers\StorefrontProductsController::class, 'show'])->name('shop.details');
-// Category browsing (reuse existing module CategoryController)
-Route::get('/categories', [\Modules\Products\Http\Controllers\CategoryController::class, 'storefrontIndex'])->name('categories.index');
-Route::get('/categories/{id}', [\Modules\Products\Http\Controllers\CategoryController::class, 'storefrontShow'])->name('categories.show');
-// Friendly category routes
-// Removed duplicate/legacy category routes in favor of categories.show
-Route::post('/cart/add', [\App\Http\Controllers\CartController::class, 'add'])->name('cart.add');
-Route::patch('/cart/{productId}', [\App\Http\Controllers\CartController::class, 'update'])->name('cart.update');
-Route::delete('/cart/{productId}', [\App\Http\Controllers\CartController::class, 'remove'])->name('cart.remove');
-Route::delete('/cart', [\App\Http\Controllers\CartController::class, 'clear'])->name('cart.clear');
-Route::post('/cart/discount/apply', [\App\Http\Controllers\CartController::class, 'applyDiscount'])->name('cart.discount.apply');
-Route::delete('/cart/discount', [\App\Http\Controllers\CartController::class, 'removeDiscount'])->name('cart.discount.remove');
-Route::get('/cart/dropdown', [\App\Http\Controllers\CartController::class, 'dropdown'])->name('cart.dropdown');
-Route::get('/search', [\Modules\Products\Http\Controllers\StorefrontProductsController::class, 'search'])->name('products.search');
+Route::get('/', [MainController::class, 'index'])->name('home');
+Route::get('/shop', [StorefrontProductsController::class, 'shop'])->name('shop');
+Route::get('/shop/{id}', [StorefrontProductsController::class, 'show'])->name('shop.details');
+Route::get('/categories', [CategoryController::class, 'storefrontIndex'])->name('categories.index');
+Route::get('/categories/{id}', [CategoryController::class, 'storefrontShow'])->name('categories.show');
+
+Route::post('/cart/add', [CartController::class, 'add'])->name('cart.add');
+Route::get('/cart/data', [CartController::class, 'getCartData'])->name('cart.data');
+Route::patch('/cart/{productId}', [CartController::class, 'update'])->name('cart.update');
+Route::delete('/cart/{productId}', [CartController::class, 'remove'])->name('cart.remove');
+Route::delete('/cart', [CartController::class, 'clear'])->name('cart.clear');
+Route::post('/cart/discount/apply', [CartController::class, 'applyDiscount'])->name('cart.discount.apply');
+Route::get('/cart/discount/eligible-items', [CartController::class, 'getEligibleItems'])->name('cart.discount.eligible-items');
+Route::delete('/cart/discount', [CartController::class, 'removeDiscount'])->name('cart.discount.remove');
+Route::get('/search', [StorefrontProductsController::class, 'search'])->name('products.search');
 Route::middleware('auth')->group(function () {
-    Route::get('/cart', [\App\Http\Controllers\CartController::class, 'index'])->name('cart.index');
-    Route::get('/checkout', [\App\Http\Controllers\CheckoutController::class, 'index'])->name('checkout');
-    Route::post('/checkout', [\App\Http\Controllers\CheckoutController::class, 'store'])->name('checkout.store');
+    Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
+    Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout');
+    Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
 
     // Address management routes
-    Route::resource('addresses', \App\Http\Controllers\UserAddressController::class);
-    Route::post('/addresses/{address}/set-default', [\App\Http\Controllers\UserAddressController::class, 'setDefault'])->name('addresses.set-default');
+    Route::resource('addresses', UserAddressController::class);
+    Route::post('/addresses/{address}/set-default', [UserAddressController::class, 'setDefault'])->name('addresses.set-default');
 
     // Order success page
     Route::get('/orders/success', function () {
@@ -67,13 +71,13 @@ require __DIR__.'/auth.php';
 // Separate login portals
 Route::middleware('guest')->group(function () {
     // User portal
-    Route::get('/login', [\App\Http\Controllers\Auth\PortalLoginController::class, 'showUserLogin'])->name('login');
-    Route::post('/login', [\App\Http\Controllers\Auth\PortalLoginController::class, 'userLogin'])->name('login.submit');
-    Route::post('/login/ajax', [\App\Http\Controllers\Auth\PortalLoginController::class, 'ajaxUserLogin'])->name('login.ajax');
+    Route::get('/login', [PortalLoginController::class, 'showUserLogin'])->name('login');
+    Route::post('/login', [PortalLoginController::class, 'userLogin'])->name('login.submit');
+    Route::post('/login/ajax', [PortalLoginController::class, 'ajaxUserLogin'])->name('login.ajax');
 
     // Admin/Provider portal
-    Route::get('/admin/login', [\App\Http\Controllers\Auth\PortalLoginController::class, 'showAdminLogin'])->name('admin.login');
-    Route::post('/admin/login', [\App\Http\Controllers\Auth\PortalLoginController::class, 'adminLogin'])->name('admin.login.submit');
+    Route::get('/admin/login', [PortalLoginController::class, 'showAdminLogin'])->name('admin.login');
+    Route::post('/admin/login', [PortalLoginController::class, 'adminLogin'])->name('admin.login.submit');
 });
 
 // Location routes are handled by the Location module
@@ -81,9 +85,9 @@ Route::middleware('guest')->group(function () {
 // Note: Module routes are loaded by their own service providers; no manual glob include here
 
 // OTP verification routes (guest flow using session 'pending_user_id')
-Route::get('/verify-otp', [\App\Http\Controllers\Auth\EmailOtpController::class, 'show'])->name('verification.otp.notice');
-Route::get('/verify-otp/send', [\App\Http\Controllers\Auth\EmailOtpController::class, 'send'])->name('verification.otp.send');
-Route::post('/verify-otp', [\App\Http\Controllers\Auth\EmailOtpController::class, 'verify'])->name('verification.otp.verify');
+Route::get('/verify-otp', [EmailOtpController::class, 'show'])->name('verification.otp.notice');
+Route::get('/verify-otp/send', [EmailOtpController::class, 'send'])->name('verification.otp.send');
+Route::post('/verify-otp', [EmailOtpController::class, 'verify'])->name('verification.otp.verify');
 
 // Guest verification resend routes
 Route::get('/resend-verification', function () {
@@ -147,11 +151,11 @@ Route::get('/verify-email/link/{token}', function (string $token) {
 
 // Admin - Discount Codes
 Route::middleware(['web','auth','ensure_role:admin'])->group(function () {
-    Route::get('/admin/discount-codes', [\App\Http\Controllers\Admin\DiscountCodeController::class, 'index'])->name('admin.discounts.index');
-    Route::get('/admin/discount-codes/data', [\App\Http\Controllers\Admin\DiscountCodeController::class, 'data'])->name('admin.discounts.data');
-    Route::get('/admin/discount-codes/create', [\App\Http\Controllers\Admin\DiscountCodeController::class, 'create'])->name('admin.discounts.create');
-    Route::post('/admin/discount-codes', [\App\Http\Controllers\Admin\DiscountCodeController::class, 'store'])->name('admin.discounts.store');
-    Route::get('/admin/discount-codes/{discount_code}/edit', [\App\Http\Controllers\Admin\DiscountCodeController::class, 'edit'])->name('admin.discounts.edit');
-    Route::put('/admin/discount-codes/{discount_code}', [\App\Http\Controllers\Admin\DiscountCodeController::class, 'update'])->name('admin.discounts.update');
-    Route::delete('/admin/discount-codes/{discount_code}', [\App\Http\Controllers\Admin\DiscountCodeController::class, 'destroy'])->name('admin.discounts.destroy');
+    Route::get('/admin/discount-codes', [DiscountCodeController::class, 'index'])->name('admin.discounts.index');
+    Route::get('/admin/discount-codes/data', [DiscountCodeController::class, 'data'])->name('admin.discounts.data');
+    Route::get('/admin/discount-codes/create', [DiscountCodeController::class, 'create'])->name('admin.discounts.create');
+    Route::post('/admin/discount-codes', [DiscountCodeController::class, 'store'])->name('admin.discounts.store');
+    Route::get('/admin/discount-codes/{discount_code}/edit', [DiscountCodeController::class, 'edit'])->name('admin.discounts.edit');
+    Route::put('/admin/discount-codes/{discount_code}', [DiscountCodeController::class, 'update'])->name('admin.discounts.update');
+    Route::delete('/admin/discount-codes/{discount_code}', [DiscountCodeController::class, 'destroy'])->name('admin.discounts.destroy');
 });

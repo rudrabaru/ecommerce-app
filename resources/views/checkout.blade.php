@@ -23,164 +23,261 @@
     <section class="checkout spad">
         <div class="container">
             <div class="row">
-                <div class="col-lg-8">
-            <div class="checkout__form">
-                        <h4>Billing Details</h4>
-                <form method="post" action="{{ route('checkout.store') }}">
-                    @csrf
+                <!-- Left Column: Billing Details -->
+                <div class="col-lg-7">
+                    <div class="checkout__form">
+                        <h4 class="mb-4">Billing Details</h4>
+                        <form method="post" action="{{ route('checkout.store') }}">
+                            @csrf
                             
                             <!-- Address Selection -->
                             <div class="checkout__input">
-                                <p>Shipping Address<span>*</span></p>
+                                <p class="form-label">Shipping Address <span class="text-danger">*</span></p>
                                 @if($addresses->count() > 0)
                                     <div class="address-selection">
-                                        @foreach($addresses as $address)
-                                            <div class="address-option">
-                                                <input type="radio" name="shipping_address_id" value="{{ $address->id }}" 
-                                                       id="address_{{ $address->id }}" 
-                                                       {{ $address->is_default ? 'checked' : '' }}>
-                                                <label for="address_{{ $address->id }}" class="address-label">
-                                                    <div class="address-info">
-                                                        <strong>{{ $address->full_name }}</strong>
-                                                        @if($address->company)
-                                                            <br>{{ $address->company }}
+                                        @if($addresses->count() == 1)
+                                            <!-- Single address -->
+                                            @foreach($addresses as $address)
+                                                <div class="address-card">
+                                                    <input type="radio" name="shipping_address_id" value="{{ $address->id }}" 
+                                                           id="address_{{ $address->id }}" 
+                                                           {{ $address->is_default ? 'checked' : '' }}>
+                                                    <label for="address_{{ $address->id }}" class="address-card-label">
+                                                        <div class="address-card-content">
+                                                            <div class="address-header">
+                                                                <strong class="address-name">{{ $address->full_name }}</strong>
+                                                                @if($address->is_default)
+                                                                    <span class="badge-default">Default</span>
+                                                                @endif
+                                                            </div>
+                                                            @if($address->company)
+                                                                <div class="address-company">{{ $address->company }}</div>
+                                                            @endif
+                                                            <div class="address-text">{{ $address->full_address }}</div>
+                                                            <div class="address-phone"><i class="fa fa-phone"></i> {{ $address->phone }}</div>
+                                                        </div>
+                                                    </label>
+                                                </div>
+                                            @endforeach
+                                        @else
+                                            <!-- Multiple addresses -->
+                                            @php
+                                                $firstAddress = $addresses->first(); // First created address (oldest)
+                                                $otherAddresses = $addresses->skip(1); // All addresses except the first one
+                                            @endphp
+                                            
+                                            <!-- Primary address -->
+                                            <div class="address-card">
+                                                <input type="radio" name="shipping_address_id" value="{{ $firstAddress->id }}" 
+                                                       id="address_{{ $firstAddress->id }}" 
+                                                       checked>
+                                                <label for="address_{{ $firstAddress->id }}" class="address-card-label">
+                                                    <div class="address-card-content">
+                                                        <div class="address-header">
+                                                            <strong class="address-name">{{ $firstAddress->full_name }}</strong>
+                                                            @if($firstAddress->is_default)
+                                                                <span class="badge-default">Default</span>
+                                                            @endif
+                                                        </div>
+                                                        @if($firstAddress->company)
+                                                            <div class="address-company">{{ $firstAddress->company }}</div>
                                                         @endif
-                                                        <br>{{ $address->full_address }}
-                                                        <br>Phone: {{ $address->phone }}
-                                                        @if($address->is_default)
-                                                            <span class="default-badge">Default</span>
-                                                        @endif
+                                                        <div class="address-text">{{ $firstAddress->full_address }}</div>
+                                                        <div class="address-phone"><i class="fa fa-phone"></i> {{ $firstAddress->phone }}</div>
                                                     </div>
                                                 </label>
                                             </div>
-                                        @endforeach
+                                            
+                                            <!-- Collapsible other addresses -->
+                                            @if($otherAddresses->count() > 0)
+                                                <div class="other-addresses-wrapper">
+                                                    <button type="button" class="btn-toggle-addresses" 
+                                                            data-toggle="collapse" data-target="#otherAddresses" 
+                                                            aria-expanded="false" aria-controls="otherAddresses">
+                                                        <i class="fa fa-chevron-down"></i> 
+                                                        <span>Show {{ $otherAddresses->count() }} more address{{ $otherAddresses->count() > 1 ? 'es' : '' }}</span>
+                                                    </button>
+                                                    
+                                                    <div class="collapse" id="otherAddresses">
+                                                        <div class="other-addresses-list">
+                                                            @foreach($otherAddresses as $address)
+                                                                <div class="address-card">
+                                                                    <input type="radio" name="shipping_address_id" value="{{ $address->id }}" 
+                                                                           id="address_{{ $address->id }}">
+                                                                    <label for="address_{{ $address->id }}" class="address-card-label">
+                                                                        <div class="address-card-content">
+                                                                            <div class="address-header">
+                                                                                <strong class="address-name">{{ $address->full_name }}</strong>
+                                                                            </div>
+                                                                            @if($address->company)
+                                                                                <div class="address-company">{{ $address->company }}</div>
+                                                                            @endif
+                                                                            <div class="address-text">{{ $address->full_address }}</div>
+                                                                            <div class="address-phone"><i class="fa fa-phone"></i> {{ $address->phone }}</div>
+                                                                        </div>
+                                                                    </label>
+                                                                </div>
+                                                            @endforeach
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @endif
+                                        @endif
                                     </div>
                                     <div class="mt-3">
-                                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="openAddressModal()">
+                                        <button type="button" class="btn-add-address" onclick="openAddressModal()">
                                             <i class="fa fa-plus"></i> Add New Address
                                         </button>
                                     </div>
                                 @else
-                                    <div class="alert alert-info">
+                                    <div class="empty-address-state">
+                                        <i class="fa fa-map-marker"></i>
                                         <p>No addresses found. Please add a shipping address first.</p>
-                                        <button type="button" class="btn btn-primary" onclick="openAddressModal()">
-                                            Add Address
+                                        <button type="button" class="btn-primary-custom" onclick="openAddressModal()">
+                                            <i class="fa fa-plus"></i> Add Address
                                         </button>
                                     </div>
                                 @endif
                                 @error('shipping_address_id')
-                                    <div class="text-danger">{{ $message }}</div>
+                                    <div class="error-message">{{ $message }}</div>
                                 @enderror
                             </div>
 
                             <!-- Payment Method Selection -->
-                            <div class="checkout__input">
-                                <p>Payment Method<span>*</span></p>
+                            <div class="checkout__input mt-4">
+                                <p class="form-label">Payment Method <span class="text-danger">*</span></p>
                                 <div class="payment-methods">
                                     @foreach($paymentMethods as $method)
-                                        <div class="payment-option">
+                                        <div class="payment-card">
                                             <input type="radio" name="payment_method_id" value="{{ $method->id }}" 
                                                    id="payment_{{ $method->id }}" data-method-name="{{ $method->name }}"
                                                    {{ $loop->first ? 'checked' : '' }}>
-                                            <label for="payment_{{ $method->id }}" class="payment-label">
-                                                <div class="payment-info">
-                                                    <strong>{{ $method->display_name }}</strong>
-                                                    @if($method->description)
-                                                        <br><small class="text-muted">{{ $method->description }}</small>
-                                                    @endif
+                                            <label for="payment_{{ $method->id }}" class="payment-card-label">
+                                                <div class="payment-card-content">
+                                                    <div class="payment-icon">
+                                                        @if(strtolower($method->name) === 'cod')
+                                                            <i class="fa fa-money"></i>
+                                                        @elseif(strtolower($method->name) === 'stripe')
+                                                            <i class="fa fa-credit-card"></i>
+                                                        @elseif(strtolower($method->name) === 'razorpay')
+                                                            <i class="fa fa-credit-card-alt"></i>
+                                                        @else
+                                                            <i class="fa fa-payment"></i>
+                                                        @endif
+                                                    </div>
+                                                    <div class="payment-details">
+                                                        <strong class="payment-name">{{ $method->display_name }}</strong>
+                                                        @if($method->description)
+                                                            <small class="payment-desc">{{ $method->description }}</small>
+                                                        @endif
+                                                    </div>
                                                 </div>
                                             </label>
                                         </div>
                                     @endforeach
                                 </div>
                                 @error('payment_method_id')
-                                    <div class="text-danger">{{ $message }}</div>
+                                    <div class="error-message">{{ $message }}</div>
                                 @enderror
                             </div>
 
-                            <!-- Stripe Elements (visible only when Stripe selected) -->
-                            <div id="stripe-elements-container" style="display:none; margin-bottom: 16px;">
+                            <!-- Stripe Elements -->
+                            <div id="stripe-elements-container" class="stripe-container" style="display:none;">
                                 <div class="checkout__input">
-                                    <p>Card Details<span>*</span></p>
-                                    <div id="stripe-card-element" class="form-control" style="padding: 10px; height: auto;"></div>
-                                    <div id="stripe-card-errors" class="text-danger mt-2" role="alert"></div>
+                                    <p class="form-label">Card Details <span class="text-danger">*</span></p>
+                                    <div id="stripe-card-element" class="stripe-card-input"></div>
+                                    <div id="stripe-card-errors" class="error-message mt-2" role="alert"></div>
                                 </div>
                             </div>
 
                             <!-- Order Notes -->
-                    <div class="checkout__input">
-                                <p>Order Notes</p>
-                                <textarea name="notes" placeholder="Notes about your order (optional)" 
-                                          class="form-control" rows="3">{{ old('notes') }}</textarea>
+                            <div class="checkout__input mt-4">
+                                <p class="form-label">Order Notes <span class="text-muted">(Optional)</span></p>
+                                <textarea name="notes" placeholder="Special instructions or notes about your order..." 
+                                          class="form-control-custom" rows="4">{{ old('notes') }}</textarea>
                             </div>
 
-                            <button type="submit" class="site-btn" 
+                            <button type="submit" class="btn-place-order" 
                                     {{ $addresses->count() == 0 ? 'disabled' : '' }}>
-                                PLACE ORDER
+                                <i class="fa fa-check-circle"></i> Place Order
                             </button>
                         </form>
                     </div>
                 </div>
                 
-                <!-- Order Summary -->
-                <div class="col-lg-4">
-                    <div class="checkout__order">
-                        <h4>Your Order</h4>
-                        <div class="checkout__order__products">Products <span>Total</span></div>
-                        <ul>
-                        @php
-                                $user = Auth::user();
-                                $subtotal = 0;
-                            $discountAmount = isset($discountAmount) ? (float)$discountAmount : 0;
+                <!-- Right Column: Order Summary -->
+                <div class="col-lg-5">
+                    <div class="order-summary-section">
+                        <!-- Cart Items -->
+                        <div class="summary-card">
+                            <h5 class="summary-title"><i class="fa fa-shopping-cart"></i> Your Order</h5>
+                            
+                            <div id="cart-loading" class="loading-state">
+                                <i class="fa fa-spinner fa-spin"></i>
+                                <p>Loading your cart...</p>
+                            </div>
+                            
+                            <div id="cart-table-container" style="display: none;">
+                                <div class="cart-items-list">
+                                    <table class="cart-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Product</th>
+                                                <th class="text-center">Qty</th>
+                                                <th class="text-right">Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="cart-items-tbody">
+                                            <!-- Populated via AJAX -->
+                                        </tbody>
+                                    </table>
+                                </div>
                                 
-                                if ($user) {
-                                    // For logged-in users, get cart from database
-                                    $cart = \App\Models\Cart::where('user_id', $user->id)->first();
-                                    if ($cart) {
-                                        $cartItems = $cart->items()->with('product')->get();
-                                        $discountAmount = $discountAmount > 0 ? $discountAmount : (float) ($cart->discount_amount ?? 0);
-                                    } else {
-                                        $cartItems = collect();
-                                    }
-                                } else {
-                                    // For guests, get cart from session
-                                    $sessionCart = session('cart', []);
-                                    $cartItems = collect($sessionCart);
-                                    $discountAmount = $discountAmount > 0 ? $discountAmount : (float) session('cart_discount', 0);
-                                }
-                            @endphp
-                            @foreach($cartItems as $item)
-                                @php
-                                    if ($user) {
-                                        // Database cart item
-                                        $product = $item->product;
-                                        $itemPrice = $item->unit_price;
-                                        $itemQuantity = $item->quantity;
-                                    } else {
-                                        // Session cart item
-                                        $product = \Modules\Products\Models\Product::find($item['product_id']);
-                                        $itemPrice = $item['price'];
-                                        $itemQuantity = $item['quantity'];
-                                    }
-                                    
-                                    if ($product) {
-                                        $subtotal += $itemPrice * $itemQuantity;
-                                    }
-                                @endphp
-                                @if($product)
-                                    <li>{{ $product->title }} x{{ $itemQuantity }} 
-                                        <span>${{ number_format($itemPrice * $itemQuantity, 2) }}</span>
-                                    </li>
-                                @endif
-                            @endforeach
-                        </ul>
-                        <div class="checkout__order__subtotal">Subtotal <span>${{ number_format($subtotal, 2) }}</span></div>
-                        @if($discountAmount > 0)
-                            <div class="checkout__order__discount">Discount <span>-${{ number_format($discountAmount, 2) }}</span></div>
-                        @else
-                            <div class="checkout__order__discount" style="display:none">Discount <span>-$0.00</span></div>
-                        @endif
-                        <div class="checkout__order__total">Total <span>${{ number_format($subtotal - $discountAmount, 2) }}</span></div>
+                                <div class="order-totals">
+                                    <div class="total-row">
+                                        <span>Subtotal</span>
+                                        <span id="checkout-subtotal" class="total-value">$0.00</span>
+                                    </div>
+                                    <div class="total-row discount-row" id="checkout-discount-row" style="display:none">
+                                        <span>Discount</span>
+                                        <span id="checkout-discount" class="discount-value">-$0.00</span>
+                                    </div>
+                                    <div class="total-row grand-total">
+                                        <span>Total</span>
+                                        <span id="checkout-total" class="total-amount">$0.00</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="empty-cart-message" class="empty-state" style="display: none;">
+                                <i class="fa fa-shopping-cart"></i>
+                                <p>Your cart is empty</p>
+                                <a href="{{ route('shop') }}" class="btn-shop-now">Continue Shopping</a>
+                            </div>
+                        </div>
+                        
+                        <!-- Order Summary Info -->
+                        <div id="order-summary-box" class="summary-card" style="display: none;">
+                            <h5 class="summary-title"><i class="fa fa-user"></i> Customer Details</h5>
+                            <div class="info-list">
+                                <div class="info-item">
+                                    <span class="info-label">Name:</span>
+                                    <span class="info-value" id="order-user-name">{{ Auth::user()->name ?? 'Guest' }}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Email:</span>
+                                    <span class="info-value" id="order-email">{{ Auth::user()->email ?? 'guest@example.com' }}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Phone:</span>
+                                    <span class="info-value" id="order-phone">{{ Auth::user()->phone ?? 'N/A' }}</span>
+                                </div>
+                                <div class="info-item address-item">
+                                    <span class="info-label">Address:</span>
+                                    <span class="info-value" id="order-address">Please select an address</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -203,27 +300,642 @@
     </div>
     <!-- Search End -->
 
+    <style>
+        /* ========== Modern Checkout Styles ========== */
+        
+        /* Form Elements */
+        .form-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .form-control-custom {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            resize: vertical;
+        }
+
+        .form-control-custom:focus {
+            outline: none;
+            border-color: #e7ab3c;
+            box-shadow: 0 0 0 3px rgba(231, 171, 60, 0.1);
+        }
+
+        /* Address Cards */
+        .address-selection {
+            margin-bottom: 20px;
+        }
+
+        .address-card {
+            margin-bottom: 12px;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .address-card input[type="radio"] {
+            display: none;
+        }
+
+        .address-card-label {
+            display: block;
+            padding: 20px;
+            border: 2px solid #e8e8e8;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #fff;
+        }
+
+        .address-card-label:hover {
+            border-color: #e7ab3c;
+            box-shadow: 0 4px 12px rgba(231, 171, 60, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .address-card input[type="radio"]:checked + .address-card-label {
+            border-color: #e7ab3c;
+            background: linear-gradient(135deg, #fff9f0 0%, #ffffff 100%);
+            box-shadow: 0 4px 16px rgba(231, 171, 60, 0.2);
+        }
+
+        .address-card-content {
+            position: relative;
+        }
+
+        .address-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .address-name {
+            font-size: 16px;
+            color: #1a1a1a;
+            font-weight: 600;
+        }
+
+        .badge-default {
+            background: linear-gradient(135deg, #e7ab3c 0%, #d4a853 100%);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .address-company {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 6px;
+        }
+
+        .address-text {
+            font-size: 14px;
+            color: #555;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+
+        .address-phone {
+            font-size: 13px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .address-phone i {
+            color: #e7ab3c;
+        }
+
+        /* Other Addresses Toggle */
+        .other-addresses-wrapper {
+            margin-top: 16px;
+        }
+
+        .btn-toggle-addresses {
+            width: 100%;
+            padding: 12px 20px;
+            background: #f8f9fa;
+            border: 1px dashed #d0d0d0;
+            border-radius: 8px;
+            color: #e7ab3c;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-toggle-addresses:hover {
+            background: #fff9f0;
+            border-color: #e7ab3c;
+        }
+
+        .btn-toggle-addresses i {
+            transition: transform 0.3s ease;
+        }
+
+        .btn-toggle-addresses[aria-expanded="true"] i {
+            transform: rotate(180deg);
+        }
+
+        .other-addresses-list {
+            margin-top: 12px;
+            padding-top: 12px;
+        }
+
+        /* Add Address Button */
+        .btn-add-address {
+            padding: 12px 24px;
+            background: white;
+            border: 2px solid #e7ab3c;
+            border-radius: 8px;
+            color: #e7ab3c;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-add-address:hover {
+            background: #e7ab3c;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(231, 171, 60, 0.3);
+        }
+
+        /* Empty Address State */
+        .empty-address-state {
+            text-align: center;
+            padding: 40px 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border: 2px dashed #d0d0d0;
+        }
+
+        .empty-address-state i {
+            font-size: 48px;
+            color: #d0d0d0;
+            margin-bottom: 16px;
+        }
+
+        .empty-address-state p {
+            color: #666;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        /* Payment Cards */
+        .payment-methods {
+            display: grid;
+            gap: 12px;
+        }
+
+        .payment-card {
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .payment-card input[type="radio"] {
+            display: none;
+        }
+
+        .payment-card-label {
+            display: block;
+            padding: 18px 20px;
+            border: 2px solid #e8e8e8;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #fff;
+        }
+
+        .payment-card-label:hover {
+            border-color: #e7ab3c;
+            box-shadow: 0 4px 12px rgba(231, 171, 60, 0.15);
+        }
+
+        .payment-card input[type="radio"]:checked + .payment-card-label {
+            border-color: #e7ab3c;
+            background: linear-gradient(135deg, #fff9f0 0%, #ffffff 100%);
+            box-shadow: 0 4px 16px rgba(231, 171, 60, 0.2);
+        }
+
+        .payment-card-content {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .payment-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #e7ab3c 0%, #d4a853 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .payment-icon i {
+            font-size: 22px;
+            color: white;
+        }
+
+        .payment-details {
+            flex: 1;
+        }
+
+        .payment-name {
+            display: block;
+            font-size: 15px;
+            color: #1a1a1a;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .payment-desc {
+            display: block;
+            font-size: 12px;
+            color: #888;
+            line-height: 1.4;
+        }
+
+        /* Stripe Elements */
+        .stripe-container {
+            margin-top: 20px;
+        }
+
+        .stripe-card-input {
+            padding: 14px 16px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background: white;
+            transition: all 0.3s ease;
+        }
+
+        .stripe-card-input:focus-within {
+            border-color: #e7ab3c;
+            box-shadow: 0 0 0 3px rgba(231, 171, 60, 0.1);
+        }
+
+        /* Place Order Button */
+        .btn-place-order {
+            width: 100%;
+            padding: 16px 32px;
+            margin-top: 30px;
+            background: linear-gradient(135deg, #e7ab3c 0%, #d4a853 100%);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-size: 16px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 4px 16px rgba(231, 171, 60, 0.3);
+        }
+
+        .btn-place-order:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(231, 171, 60, 0.4);
+        }
+
+        .btn-place-order:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        /* Order Summary Section */
+        .order-summary-section {
+            position: sticky;
+            top: 20px;
+        }
+
+        .summary-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
+        }
+
+        .summary-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .summary-title i {
+            color: #e7ab3c;
+            font-size: 20px;
+        }
+
+        /* Cart Table */
+        .cart-items-list {
+            margin-bottom: 20px;
+        }
+
+        .cart-table {
+            width: 100%;
+            font-size: 13px;
+        }
+
+        .cart-table thead th {
+            background: #f8f9fa;
+            padding: 12px 8px;
+            font-weight: 600;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 11px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .cart-table tbody td {
+            padding: 16px 8px;
+            border-bottom: 1px solid #f0f0f0;
+            vertical-align: middle;
+        }
+
+        .cart-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Quantity Controls */
+        .quantity-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .qty-btn {
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #555;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .qty-btn:hover {
+            background: #e7ab3c;
+            border-color: #e7ab3c;
+            color: white;
+        }
+
+        .quantity-input {
+            width: 50px;
+            height: 28px;
+            text-align: center;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        /* Order Totals */
+        .order-totals {
+            padding-top: 20px;
+            border-top: 2px solid #f0f0f0;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            font-size: 14px;
+        }
+
+        .total-value {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .discount-row {
+            color: #28a745;
+        }
+
+        .discount-value {
+            color: #dc3545;
+            font-weight: 600;
+        }
+
+        .grand-total {
+            margin-top: 12px;
+            padding-top: 16px;
+            border-top: 2px solid #e7ab3c;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .total-amount {
+            color: #e7ab3c;
+            font-size: 20px;
+        }
+
+        /* Info List */
+        .info-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .info-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #666;
+            font-size: 13px;
+            min-width: 80px;
+        }
+
+        .info-value {
+            color: #333;
+            font-size: 13px;
+            text-align: right;
+            flex: 1;
+        }
+
+        .address-item .info-value {
+            max-width: 220px;
+            word-wrap: break-word;
+        }
+
+        /* Loading and Empty States */
+        .loading-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #e7ab3c;
+        }
+
+        .loading-state i {
+            font-size: 32px;
+            margin-bottom: 12px;
+        }
+
+        .loading-state p {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .empty-state i {
+            font-size: 64px;
+            color: #d0d0d0;
+            margin-bottom: 16px;
+        }
+
+        .empty-state p {
+            color: #888;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .btn-shop-now {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #e7ab3c;
+            color: white;
+            border-radius: 8px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .btn-shop-now:hover {
+            background: #d4a853;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(231, 171, 60, 0.3);
+            color: white;
+        }
+
+        /* Error Messages */
+        .error-message {
+            color: #dc3545;
+            font-size: 13px;
+            margin-top: 8px;
+            display: block;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 991px) {
+            .order-summary-section {
+                position: static;
+                margin-top: 40px;
+            }
+        }
+
+        @media (max-width: 767px) {
+            .summary-card {
+                padding: 20px;
+            }
+
+            .address-card-label,
+            .payment-card-label {
+                padding: 16px;
+            }
+
+            .btn-place-order {
+                padding: 14px 24px;
+                font-size: 14px;
+            }
+
+            .cart-table {
+                font-size: 12px;
+            }
+
+            .cart-table thead th {
+                padding: 10px 6px;
+                font-size: 10px;
+            }
+
+            .cart-table tbody td {
+                padding: 12px 6px;
+            }
+        }
+
+        /* Primary Button Variant */
+        .btn-primary-custom {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #e7ab3c 0%, #d4a853 100%);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(231, 171, 60, 0.3);
+        }
+    </style>
+
     <!-- Js Plugins -->
     <script src="{{ asset('js/jquery-3.3.1.min.js') }}" onerror="loadJQueryFromCDN()"></script>
     <script>
-        // Test jQuery loading
-        console.log('jQuery test - typeof $:', typeof $);
-        console.log('jQuery test - typeof jQuery:', typeof jQuery);
-        if (typeof $ !== 'undefined') {
-            console.log('jQuery version:', $.fn.jquery);
-        }
-        
-        // Fallback function to load jQuery from CDN
         function loadJQueryFromCDN() {
-            console.log('Local jQuery failed, loading from CDN...');
             var script = document.createElement('script');
             script.src = 'https://code.jquery.com/jquery-3.3.1.min.js';
-            script.onload = function() {
-                console.log('jQuery loaded from CDN successfully');
-            };
-            script.onerror = function() {
-                console.error('Failed to load jQuery from CDN as well');
-            };
             document.head.appendChild(script);
         }
     </script>
@@ -237,7 +949,7 @@
     <script src="{{ asset('js/owl.carousel.min.js') }}"></script>
     <script src="{{ asset('js/main.js') }}"></script>
 
-    <!-- Payment SDKs (loaded lazily when needed) -->
+    <!-- Payment & Checkout Scripts -->
     <script>
     (function() {
         var stripeJsLoaded = false;
@@ -246,6 +958,7 @@
         var stripeInstance = null;
         var stripeElements = null;
         var stripeCardElement = null;
+
         function loadScript(src) {
             return new Promise(function(resolve, reject) {
                 var s = document.createElement('script');
@@ -256,35 +969,233 @@
             });
         }
 
-        function getSelectedPaymentMethodId() {
-            var el = document.querySelector('input[name="payment_method_id"]:checked');
-            return el ? el.value : null;
-        }
-
         function showLoading(btn, on) {
             if (!btn) return;
             btn.disabled = !!on;
-            if (on) { btn.setAttribute('data-original-text', btn.innerText); btn.innerText = 'Processing...'; }
-            else { btn.innerText = btn.getAttribute('data-original-text') || 'PLACE ORDER'; }
+            if (on) {
+                btn.setAttribute('data-original-text', btn.innerHTML);
+                btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Processing...';
+            } else {
+                btn.innerHTML = btn.getAttribute('data-original-text') || '<i class="fa fa-check-circle"></i> Place Order';
+            }
         }
 
         function toast(msg, type) {
             alert(msg);
         }
 
+        // Load cart data via AJAX
+        function loadCartData() {
+            fetch('/cart/data', {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                displayCartData(data);
+            })
+            .catch(error => {
+                console.error('Error loading cart data:', error);
+                document.getElementById('cart-loading').style.display = 'none';
+                document.getElementById('empty-cart-message').style.display = 'block';
+            });
+        }
+
+        // Display cart data
+        function displayCartData(data) {
+            const loadingEl = document.getElementById('cart-loading');
+            const tableContainer = document.getElementById('cart-table-container');
+            const emptyMessage = document.getElementById('empty-cart-message');
+            const tbody = document.getElementById('cart-items-tbody');
+            const orderSummaryBox = document.getElementById('order-summary-box');
+            
+            loadingEl.style.display = 'none';
+            
+            if (!data.items || data.items.length === 0) {
+                emptyMessage.style.display = 'block';
+                return;
+            }
+            
+            tableContainer.style.display = 'block';
+            orderSummaryBox.style.display = 'block';
+            
+            tbody.innerHTML = '';
+            
+            data.items.forEach(item => {
+                const row = document.createElement('tr');
+                row.setAttribute('data-product-id', item.product_id);
+                
+                const imageSrc = item.image_url || '{{ asset("img/product/product-1.jpg") }}';
+                
+                row.innerHTML = `
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <img src="${imageSrc}" alt="${item.name}" 
+                                 style="width: 45px; height: 45px; object-fit: cover; border-radius: 8px; flex-shrink: 0;"
+                                 onerror="this.src='{{ asset("img/product/product-1.jpg") }}';">
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-weight: 600; font-size: 13px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.name}</div>
+                                <div style="font-size: 12px; color: #888; margin-top: 2px;">${item.price.toFixed(2)} each</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="text-center">
+                        <div class="quantity-controls">
+                            <button type="button" class="qty-btn dec" data-product-id="${item.product_id}">-</button>
+                            <input type="number" value="${item.quantity}" min="1" 
+                                   class="quantity-input" data-product-id="${item.product_id}">
+                            <button type="button" class="qty-btn inc" data-product-id="${item.product_id}">+</button>
+                        </div>
+                    </td>
+                    <td class="text-right">
+                        <span class="item-total" style="font-weight: 600; color: #333;">${(item.price * item.quantity).toFixed(2)}</span>
+                        <input type="hidden" class="item-unit-price" data-unit-price="${item.price.toFixed(2)}">
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+            
+            updateCheckoutTotals(data);
+            bindQuantityEvents();
+        }
+
+        // Update checkout totals
+        function updateCheckoutTotals(data) {
+            document.getElementById('checkout-subtotal').textContent = '$' + data.subtotal.toFixed(2);
+            
+            const discountRow = document.getElementById('checkout-discount-row');
+            const discountAmount = document.getElementById('checkout-discount');
+            
+            if (data.discountAmount > 0) {
+                discountRow.style.display = 'flex';
+                discountAmount.textContent = '-$' + data.discountAmount.toFixed(2);
+            } else {
+                discountRow.style.display = 'none';
+            }
+            
+            document.getElementById('checkout-total').textContent = '$' + data.total.toFixed(2);
+        }
+
+        // Bind quantity events
+        function bindQuantityEvents() {
+            document.addEventListener('change', function(e) {
+                if (e.target.classList.contains('quantity-input')) {
+                    const productId = e.target.getAttribute('data-product-id');
+                    const quantity = parseInt(e.target.value);
+                    updateCartQuantity(productId, quantity);
+                }
+            });
+            
+            document.addEventListener('click', function(e) {
+                if (e.target.classList.contains('qty-btn')) {
+                    const productId = e.target.getAttribute('data-product-id');
+                    const input = document.querySelector(`input.quantity-input[data-product-id="${productId}"]`);
+                    const currentQty = parseInt(input.value);
+                    
+                    if (e.target.classList.contains('inc')) {
+                        input.value = currentQty + 1;
+                    } else if (e.target.classList.contains('dec') && currentQty > 1) {
+                        input.value = currentQty - 1;
+                    }
+                    
+                    input.dispatchEvent(new Event('change'));
+                }
+            });
+        }
+
+        // Update cart quantity via AJAX
+        function updateCartQuantity(productId, quantity) {
+            fetch(`/cart/${productId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({ quantity: quantity })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const row = document.querySelector(`tr[data-product-id="${productId}"]`);
+                const unitPrice = parseFloat(row.querySelector('.item-unit-price').getAttribute('data-unit-price'));
+                const newTotal = unitPrice * quantity;
+                row.querySelector('.item-total').textContent = '$' + newTotal.toFixed(2);
+                
+                loadCartData();
+            })
+            .catch(error => {
+                console.error('Error updating quantity:', error);
+                toast('Error updating quantity', 'error');
+            });
+        }
+
+        // Handle address selection
+        function handleAddressSelection() {
+            document.addEventListener('change', function(e) {
+                if (e.target.name === 'shipping_address_id') {
+                    updateOrderSummaryAddress(e.target.value);
+                }
+            });
+            
+            const selectedAddress = document.querySelector('input[name="shipping_address_id"]:checked');
+            if (selectedAddress) {
+                updateOrderSummaryAddress(selectedAddress.value);
+            }
+        }
+
+        // Update order summary address
+        function updateOrderSummaryAddress(addressId) {
+            if (!addressId) {
+                document.getElementById('order-address').textContent = 'Please select an address';
+                document.getElementById('order-phone').textContent = 'N/A';
+                return;
+            }
+            
+            const addressInput = document.querySelector(`input[name="shipping_address_id"][value="${addressId}"]`);
+            if (!addressInput) return;
+            
+            const addressLabel = addressInput.nextElementSibling;
+            const addressContent = addressLabel.querySelector('.address-card-content');
+            
+            if (addressContent) {
+                const addressText = addressContent.querySelector('.address-text');
+                const phoneElement = addressContent.querySelector('.address-phone');
+                
+                if (addressText) {
+                    document.getElementById('order-address').textContent = addressText.textContent.trim();
+                }
+                
+                if (phoneElement) {
+                    // Extract phone number from the phone element (remove the icon and "Phone:" text)
+                    const phoneText = phoneElement.textContent.trim();
+                    const phoneNumber = phoneText.replace(/^.*?(\d+.*)$/, '$1'); // Extract phone number part
+                    document.getElementById('order-phone').textContent = phoneNumber;
+                }
+            }
+        }
+
         function toggleStripeElementsVisible(show) {
             var el = document.getElementById('stripe-elements-container');
-            if (el) el.style.display = show ? '' : 'none';
+            if (el) el.style.display = show ? 'block' : 'none';
         }
 
         async function ensureStripeElementsReady() {
-            if (!stripeJsLoaded) { await loadScript('https://js.stripe.com/v3/'); stripeJsLoaded = true; }
+            if (!stripeJsLoaded) {
+                await loadScript('https://js.stripe.com/v3/');
+                stripeJsLoaded = true;
+            }
             if (!stripeInstance) {
                 var key = STRIPE_PUBLISHABLE_KEY || '';
-                if (!key) { throw new Error('Stripe publishable key missing'); }
+                if (!key) throw new Error('Stripe publishable key missing');
                 stripeInstance = window.Stripe(key);
             }
-            if (!stripeElements) { stripeElements = stripeInstance.elements(); }
+            if (!stripeElements) {
+                stripeElements = stripeInstance.elements();
+            }
             if (!stripeCardElement) {
                 stripeCardElement = stripeElements.create('card');
                 stripeCardElement.mount('#stripe-card-element');
@@ -297,24 +1208,19 @@
 
         async function initiateStripe(orderIds) {
             await ensureStripeElementsReady();
-            const token = (document.querySelector('meta[name="csrf-token"]')||{}).getAttribute ? document.querySelector('meta[name="csrf-token"]').getAttribute('content') : '';
+            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             const res = await fetch('/payment/stripe/initiate', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': token },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': token
+                },
                 body: JSON.stringify({ order_ids: orderIds })
             });
             if (!res.ok) throw new Error('Stripe initiate failed');
             const data = await res.json();
-            // Ensure instance matches publishable key returned
-            if (!stripeInstance || (data.publishableKey && STRIPE_PUBLISHABLE_KEY !== data.publishableKey)) {
-                STRIPE_PUBLISHABLE_KEY = data.publishableKey;
-                stripeInstance = window.Stripe(STRIPE_PUBLISHABLE_KEY);
-                stripeElements = stripeInstance.elements();
-                if (!stripeCardElement) {
-                    stripeCardElement = stripeElements.create('card');
-                    stripeCardElement.mount('#stripe-card-element');
-                }
-            }
+            
             const { error, paymentIntent } = await stripeInstance.confirmCardPayment(data.clientSecret, {
                 payment_method: { card: stripeCardElement }
             });
@@ -327,48 +1233,78 @@
         }
 
         async function initiateRazorpay(orderIds) {
-            if (!razorpayJsLoaded) { await loadScript('https://checkout.razorpay.com/v1/checkout.js'); razorpayJsLoaded = true; }
-            const token = (document.querySelector('meta[name="csrf-token"]')||{}).getAttribute ? document.querySelector('meta[name="csrf-token"]').getAttribute('content') : '';
+            if (!razorpayJsLoaded) {
+                await loadScript('https://checkout.razorpay.com/v1/checkout.js');
+                razorpayJsLoaded = true;
+            }
+            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             const res = await fetch('/payment/razorpay/initiate', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': token },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': token
+                },
                 body: JSON.stringify({ order_ids: orderIds })
             });
             if (!res.ok) throw new Error('Razorpay initiate failed');
             const data = await res.json();
+            
             return new Promise(function(resolve, reject) {
                 const options = {
                     key: data.key,
                     amount: data.amount,
                     currency: data.currency,
                     order_id: data.razorpayOrderId,
-                    handler: function (response){ resolve(response); },
-                    modal: { ondismiss: function(){ reject(new Error('Payment cancelled')); } }
+                    handler: function(response) { resolve(response); },
+                    modal: {
+                        ondismiss: function() { reject(new Error('Payment cancelled')); }
+                    }
                 };
                 const rz = new window.Razorpay(options);
                 rz.open();
-            }).then(function(){ window.location.href = '/orders/success'; });
+            }).then(function() {
+                window.location.href = '/orders/success';
+            });
         }
 
         document.addEventListener('DOMContentLoaded', function() {
             var form = document.querySelector('.checkout__form form');
             if (!form) return;
             var submitBtn = form.querySelector('button[type="submit"]');
-            // Show Stripe card inputs when Stripe is selected
+            
+            loadCartData();
+            handleAddressSelection();
+            
+            // Payment method change handler
             document.addEventListener('change', function(e) {
                 var target = e.target;
                 if (target && target.name === 'payment_method_id') {
                     var name = target.getAttribute('data-method-name');
-                    if (name === 'stripe') { toggleStripeElementsVisible(true); ensureStripeElementsReady().catch(function(err){ console.error(err); }); }
-                    else { toggleStripeElementsVisible(false); }
+                    if (name === 'stripe') {
+                        toggleStripeElementsVisible(true);
+                        ensureStripeElementsReady().catch(function(err) {
+                            console.error(err);
+                        });
+                    } else {
+                        toggleStripeElementsVisible(false);
+                    }
                 }
             });
-            // Initialize visibility on load
-            (function initStripeVisibility(){
+            
+            // Initialize Stripe visibility on load
+            (function initStripeVisibility() {
                 var checked = document.querySelector('input[name="payment_method_id"]:checked');
                 var name = checked ? checked.getAttribute('data-method-name') : null;
-                if (name === 'stripe') { toggleStripeElementsVisible(true); ensureStripeElementsReady().catch(function(err){ console.error(err); }); }
+                if (name === 'stripe') {
+                    toggleStripeElementsVisible(true);
+                    ensureStripeElementsReady().catch(function(err) {
+                        console.error(err);
+                    });
+                }
             })();
+            
+            // Form submission
             form.addEventListener('submit', async function(e) {
                 try {
                     e.preventDefault();
@@ -376,18 +1312,23 @@
                     const formData = new FormData(form);
                     const res = await fetch(form.action, {
                         method: 'POST',
-                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
                         body: formData
                     });
-                    // COD path will redirect (non-ajax) or return HTML; online returns JSON
+                    
                     const contentType = res.headers.get('content-type') || '';
                     if (!contentType.includes('application/json')) {
-                        // Likely COD, follow redirect by reloading
                         window.location.reload();
                         return;
                     }
+                    
                     const data = await res.json();
-                    if (!data || !data.success) { throw new Error('Checkout initiation failed'); }
+                    if (!data || !data.success) {
+                        throw new Error('Checkout initiation failed');
+                    }
+                    
                     const orderIds = data.order_ids || [];
                     if (data.payment_method === 'stripe') {
                         await initiateStripe(orderIds);
@@ -408,44 +1349,21 @@
 
     <!-- Address Modal JavaScript -->
     <script>
-    // Global, safe, idempotent initializer for checkout address modal
     (function() {
         var INIT_KEY = '__address_modal_initialized__';
-        // Toggleable debug flag (set to true to see detailed traces)
-        window.ADDRESS_DEBUG = window.ADDRESS_DEBUG !== undefined ? window.ADDRESS_DEBUG : true;
+        window.ADDRESS_DEBUG = false;
 
-        function dbgLevel() { return window.ADDRESS_DEBUG; }
-        function dbg() { if (!dbgLevel()) return; try { console.log.apply(console, formatArgs(arguments)); } catch(e) {} }
-        function dbgWarn() { if (!dbgLevel()) return; try { console.warn.apply(console, formatArgs(arguments)); } catch(e) {} }
-        function dbgError() { if (!dbgLevel()) return; try { console.error.apply(console, formatArgs(arguments)); } catch(e) {} }
-        function formatArgs(args) {
-            var a = Array.prototype.slice.call(args);
-            a.unshift('[AddressModal]');
-            return a;
-        }
+        function dbg() { if (window.ADDRESS_DEBUG) console.log.apply(console, arguments); }
 
-        // Expose a global open function immediately (will initialize lazily if needed)
         window.openAddressModal = function(id) {
-            dbg('open requested. id=', id);
-            if (!window[INIT_KEY]) {
-                dbgWarn('Not initialized yet. Initializing now...');
-                safeInitialize();
-            }
-            if (typeof jQuery === 'undefined') {
-                dbgError('jQuery not available; cannot open modal yet');
-                return;
-            }
-            if (!document.getElementById('addressModal')) {
-                dbgError('#addressModal element not found in DOM');
-                return;
-            }
-            console.groupCollapsed && console.groupCollapsed('[AddressModal] Open flow');
+            if (!window[INIT_KEY]) safeInitialize();
+            if (typeof jQuery === 'undefined' || !document.getElementById('addressModal')) return;
+            
             resetAddressForm();
             if (id) {
                 $('#addressModalLabel').text('Edit Address');
                 $('#addressMethod').val('PUT');
                 $('#addressId').val(id);
-                dbg('Fetching address for edit', { id: id });
                 $.ajax({
                     url: '/addresses/' + id + '/edit',
                     method: 'GET',
@@ -454,30 +1372,23 @@
                         'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
                     }
                 }).done(function(response) {
-                    dbg('Edit fetch response received', response);
                     if (response && response.success) {
                         fillAddressForm(response.address || {});
-                    } else {
-                        dbgError('Unexpected edit response payload', response);
                     }
-                }).fail(function(xhr) {
-                    dbgError('Failed to fetch address for edit', xhr.status, xhr.responseText);
+                }).fail(function() {
                     alert('Failed to load address data');
                 }).always(function() {
                     $('#addressModal').modal('show');
-                    console.groupEnd && console.groupEnd();
                 });
             } else {
                 $('#addressModalLabel').text('Add New Address');
                 $('#addressMethod').val('POST');
                 $('#addressId').val('');
                 $('#addressModal').modal('show');
-                console.groupEnd && console.groupEnd();
             }
         };
 
-        // Provide location data globally so it can be reused anywhere
-        window.ADDRESS_LOCATION_DATA = window.ADDRESS_LOCATION_DATA || {
+        window.ADDRESS_LOCATION_DATA = {
             'India': {
                 'states': {
                     'Delhi': ['New Delhi', 'Central Delhi', 'East Delhi', 'North Delhi', 'South Delhi', 'West Delhi'],
@@ -505,17 +1416,14 @@
         };
 
         function safeInitialize() {
-            if (window[INIT_KEY]) return; // already initialized
+            if (window[INIT_KEY]) return;
             if (typeof jQuery === 'undefined') {
-                dbgWarn('Waiting for jQuery to load...');
-                // Retry shortly until jQuery is present
                 setTimeout(safeInitialize, 50);
                 return;
             }
 
             $(function() {
                 if (window[INIT_KEY]) return;
-                dbg('Initializing bindings');
                 bindDropdownHandlers();
                 bindValidationHandlers();
                 bindModalHandlers();
@@ -525,105 +1433,77 @@
         }
 
         function bindDropdownHandlers() {
-            dbg('Binding dropdown handlers');
-            // Country change
             $(document).on('change', '#country', function() {
-                console.groupCollapsed && console.groupCollapsed('[AddressModal] Country change');
                 var country = $(this).val();
                 var stateSelect = $('#state');
                 var citySelect = $('#city');
-                dbg('Country changed to:', country, 'stateSelect exists:', !!stateSelect.length, 'citySelect exists:', !!citySelect.length);
-                if (!stateSelect.length || !citySelect.length) {
-                    dbgError('State/City selects not found');
-                    console.groupEnd && console.groupEnd();
-                    return;
-                }
+                
                 stateSelect.html('<option value="">Select State</option>');
                 citySelect.html('<option value="">Select City</option>');
 
                 var data = window.ADDRESS_LOCATION_DATA || {};
                 if (!country || !data[country]) {
-                    dbgWarn('No state data for country:', country, 'Using data keys:', Object.keys(data || {}));
                     validateAddressForm();
-                    console.groupEnd && console.groupEnd();
                     return;
                 }
+                
                 var states = Object.keys((data[country] && data[country].states) || {});
-                dbg('Resolved states for', country, 'count:', states.length);
-                if (!states.length) { dbgWarn('States list empty for country:', country); }
-                states.forEach(function(s) { stateSelect.append('<option value="' + s + '">' + s + '</option>'); });
-                dbg('States appended');
+                states.forEach(function(s) {
+                    stateSelect.append('<option value="' + s + '">' + s + '</option>');
+                });
                 validateAddressForm();
-                console.groupEnd && console.groupEnd();
             });
 
-            // State change
             $(document).on('change', '#state', function() {
-                console.groupCollapsed && console.groupCollapsed('[AddressModal] State change');
                 var country = $('#country').val();
                 var state = $(this).val();
-                dbg('State changed to:', state, 'under country:', country);
                 var citySelect = $('#city');
-                if (!citySelect.length) {
-                    dbgError('City select not found');
-                    console.groupEnd && console.groupEnd();
-                    return;
-                }
+                
                 citySelect.html('<option value="">Select City</option>');
 
                 var data = window.ADDRESS_LOCATION_DATA || {};
                 if (!country || !state || !data[country] || !data[country].states[state]) {
-                    dbgWarn('No city data for', country, state);
                     validateAddressForm();
-                    console.groupEnd && console.groupEnd();
                     return;
                 }
+                
                 (data[country].states[state] || []).forEach(function(city) {
                     citySelect.append('<option value="' + city + '">' + city + '</option>');
                 });
-                dbg('Cities appended for', state, 'count:', (data[country].states[state] || []).length);
                 validateAddressForm();
-                console.groupEnd && console.groupEnd();
             });
 
-            // City change
-            $(document).on('change', '#city', function() {
-                dbg('City changed to:', $(this).val());
-            });
-
-            // If Nice Select is enhancing selects, proxy its option clicks back to the native select change
             $(document).on('click', '#addressModal .nice-select .option', function() {
                 var select = $(this).closest('.nice-select').prev('select');
                 if (select && select.length) {
-                    dbg('Proxying nice-select change for', select.attr('id'));
-                    setTimeout(function(){ select.trigger('change'); }, 0);
+                    setTimeout(function() {
+                        select.trigger('change');
+                    }, 0);
                 }
             });
         }
 
         function bindValidationHandlers() {
-            // Phone formatting and validation
             $(document).on('input', '#phone', function() {
                 var value = String($(this).val() || '').replace(/\D/g, '');
                 var code = $('#country_code').val();
-                if (code === '+91' && value.length > 10) value = value.substring(0, 10);
-                if (code === '+1' && value.length > 10) value = value.substring(0, 10);
+                if ((code === '+91' || code === '+1') && value.length > 10) {
+                    value = value.substring(0, 10);
+                }
                 $(this).val(value);
                 validateAddressForm();
             });
-            $(document).on('change', '#country_code', function() { validateAddressForm(); });
-            $(document).on('input change', '#addressForm input, #addressForm select', function() { validateAddressForm(); });
+            
+            $(document).on('input change', '#addressForm input, #addressForm select', function() {
+                validateAddressForm();
+            });
         }
 
         function bindModalHandlers() {
             $('#addressModal').on('shown.bs.modal', function() {
-                dbg('Modal shown. Current selections:', {
-                    country: $('#country').val(),
-                    state: $('#state').val(),
-                    city: $('#city').val()
-                });
                 validateAddressForm();
             });
+            
             $('#addressModal').on('hidden.bs.modal', function() {
                 $('.is-invalid').removeClass('is-invalid');
                 $('.invalid-feedback').text('');
@@ -633,18 +1513,18 @@
         function bindSaveHandler() {
             window.saveAddress = function() {
                 var form = document.getElementById('addressForm');
-                if (!form) {
-                    dbgError('#addressForm not found');
-                    return;
-                }
+                if (!form) return;
+                
                 var id = $('#addressId').val();
                 var method = $('#addressMethod').val();
                 var url = id ? '/addresses/' + id : '/addresses';
                 var formData = new FormData(form);
+                
                 if (id) formData.append('_method', method);
+                
                 $('#addressSpinner').removeClass('d-none');
                 $('#addressSaveBtn').prop('disabled', true);
-                dbg('Submitting address', { url: url, method: id ? method : 'POST' });
+                
                 $.ajax({
                     url: url,
                     method: 'POST',
@@ -656,12 +1536,10 @@
                         'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
                     }
                 }).done(function(response) {
-                    dbg('Save response', response);
                     if (response && response.success) {
                         $('#addressModal').modal('hide');
                         location.reload();
                     } else {
-                        dbgError('Save response did not indicate success', response);
                         alert('Failed to save address.');
                     }
                 }).fail(function(xhr) {
@@ -673,7 +1551,6 @@
                             input.siblings('.invalid-feedback').text(response.errors[key][0]);
                         });
                     } else {
-                        dbgError('Save failed', xhr.status, xhr.responseText);
                         alert('An error occurred. Please try again.');
                     }
                 }).always(function() {
@@ -693,15 +1570,17 @@
             $('#phone').val(address.phone || '');
             $('#is_default').prop('checked', !!address.is_default);
 
-            // Set country/state/city in order to repopulate dependent dropdowns
             var country = address.country || '';
             var state = address.state || '';
             var city = address.city || '';
-            dbg('fillAddressForm applying values', { country: country, state: state, city: city });
+            
             $('#country').val(country).trigger('change');
-            // After states populated, set state and trigger change to populate cities
-            if (state) setTimeout(function(){ $('#state').val(state).trigger('change'); }, 0);
-            if (city) setTimeout(function(){ $('#city').val(city); }, 0);
+            if (state) setTimeout(function() {
+                $('#state').val(state).trigger('change');
+            }, 0);
+            if (city) setTimeout(function() {
+                $('#city').val(city);
+            }, 0);
 
             validateAddressForm();
         }
@@ -731,65 +1610,9 @@
             $('#addressSaveBtn').prop('disabled', !isValid);
         }
 
-        // Kick off initialization
         safeInitialize();
     })();
     </script>
 
-    <style>
-    /* Stripe Elements box */
-    #stripe-card-element {
-        background: #fff;
-    }
-    #stripe-card-errors {
-        font-size: 14px;
-    }
-    /* Order Summary Alignment Fix */
-    .checkout__order__subtotal,
-    .checkout__order__discount,
-    .checkout__order__total {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 8px 0;
-        border-bottom: 1px solid #f0f0f0;
-    }
-
-    .checkout__order__discount {
-        color: #28a745;
-        font-weight: 500;
-    }
-
-    .checkout__order__discount span {
-        color: #dc3545;
-        font-weight: 600;
-    }
-
-    .checkout__order__total {
-        font-weight: 700;
-        font-size: 18px;
-        color: #e7ab3c;
-        border-bottom: 2px solid #e7ab3c;
-        margin-top: 10px;
-    }
-
-    .checkout__order__total span {
-        color: #e7ab3c;
-    }
-
-    /* Address Modal Dropdown Fix */
-    .form-control {
-        appearance: auto !important;
-        -webkit-appearance: menulist !important;
-        -moz-appearance: menulist !important;
-    }
-
-    .form-control:focus {
-        border-color: #e7ab3c !important;
-        box-shadow: 0 0 0 0.2rem rgba(231, 171, 60, 0.25) !important;
-        outline: none !important;
-    }
-    </style>
 </body>
-
 </html>

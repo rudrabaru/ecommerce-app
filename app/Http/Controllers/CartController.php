@@ -51,12 +51,12 @@ class CartController extends Controller
             // For logged-in users, get count from database
             $cart = Cart::where('user_id', Auth::id())->first();
             if ($cart) {
-                return $cart->items()->sum('quantity');
+                return $cart->items()->count();
             }
         } else {
             // For guests, get count from session
             $cart = session('cart', []);
-            return collect($cart)->sum('quantity');
+            return count($cart);
         }
         return 0;
     }
@@ -76,6 +76,8 @@ class CartController extends Controller
                         'image' => $item->product->image ?? null,
                         'image_url' => $imageUrl,
                         'quantity' => $item->quantity,
+                        'category_id' => $item->product->category_id ?? null,
+                        'product' => $item->product, // Keep product object for calculateAffectedItemsCount
                     ];
                 });
                 $subtotal = $items->reduce(fn($c,$i)=> $c + ($i['price'] * $i['quantity']), 0);
@@ -94,6 +96,11 @@ class CartController extends Controller
                 $image = $i['image'] ?? null;
                 $imageUrl = $this->resolveImageUrl($image);
                 $i['image_url'] = $imageUrl;
+                // Add category_id for discount calculation
+                if (isset($i['product_id'])) {
+                    $product = \Modules\Products\Models\Product::find($i['product_id']);
+                    $i['category_id'] = $product ? $product->category_id : null;
+                }
                 return $i;
             });
             $subtotal = $items->reduce(fn($c,$i)=> $c + ($i['price'] * $i['quantity']), 0);
@@ -103,11 +110,22 @@ class CartController extends Controller
 
         // Get discount code for display
         $discountCode = '';
+        $affectedItemsCount = 0;
         if (Auth::check()) {
             $cart = Cart::where('user_id', Auth::id())->first();
             $discountCode = $cart ? ($cart->discount_code ?? '') : '';
+            
+            // Calculate affected items count for logged-in users
+            if ($discountCode && $cart) {
+                $affectedItemsCount = $this->calculateAffectedItemsCount($discountCode, $items);
+            }
         } else {
             $discountCode = session('cart_discount_code', '');
+            
+            // Calculate affected items count for guests
+            if ($discountCode) {
+                $affectedItemsCount = $this->calculateAffectedItemsCount($discountCode, $items);
+            }
         }
 
         return view('shopping-cart', [
@@ -116,7 +134,179 @@ class CartController extends Controller
             'discountAmount' => $discountAmount,
             'total' => $total,
             'discountCode' => $discountCode,
+            'affectedItemsCount' => $affectedItemsCount,
         ]);
+    }
+
+    public function getCartData()
+    {
+        if (Auth::check()) {
+            // For logged-in users, get cart from database
+            $cart = Cart::where('user_id', Auth::id())->first();
+            if ($cart) {
+                $items = $cart->items()->with('product')->get()->map(function ($item) {
+                    $imageUrl = $item->product ? $item->product->image_url : $this->resolveImageUrl(null);
+                    return [
+                        'product_id' => $item->product_id,
+                        'name' => $item->product->title ?? $item->product->name,
+                        'price' => (float) $item->unit_price,
+                        'image' => $item->product->image ?? null,
+                        'image_url' => $imageUrl,
+                        'quantity' => $item->quantity,
+                        'category_id' => $item->product->category_id ?? null,
+                    ];
+                });
+                $subtotal = $items->reduce(fn($c,$i)=> $c + ($i['price'] * $i['quantity']), 0);
+                $discountAmount = (float) ($cart->discount_amount ?? 0);
+                $total = $subtotal - $discountAmount;
+            } else {
+                $items = collect();
+                $subtotal = 0;
+                $discountAmount = 0;
+                $total = 0;
+            }
+        } else {
+            // For guests, get cart from session
+            $cart = session('cart', []);
+            $items = collect($cart)->values()->map(function($i){
+                $image = $i['image'] ?? null;
+                $imageUrl = $this->resolveImageUrl($image);
+                $i['image_url'] = $imageUrl;
+                // Add category_id for discount calculation
+                if (isset($i['product_id'])) {
+                    $product = \Modules\Products\Models\Product::find($i['product_id']);
+                    $i['category_id'] = $product ? $product->category_id : null;
+                }
+                return $i;
+            });
+            $subtotal = $items->reduce(fn($c,$i)=> $c + ($i['price'] * $i['quantity']), 0);
+            $discountAmount = (float) session('cart_discount', 0);
+            $total = $subtotal - $discountAmount;
+        }
+
+        // Get discount code for display
+        $discountCode = '';
+        $affectedItemsCount = 0;
+        if (Auth::check()) {
+            $cart = Cart::where('user_id', Auth::id())->first();
+            $discountCode = $cart ? ($cart->discount_code ?? '') : '';
+            
+            // Calculate affected items count for logged-in users
+            if ($discountCode && $cart) {
+                $affectedItemsCount = $this->calculateAffectedItemsCount($discountCode, $items);
+            }
+        } else {
+            $discountCode = session('cart_discount_code', '');
+            
+            // Calculate affected items count for guests
+            if ($discountCode) {
+                $affectedItemsCount = $this->calculateAffectedItemsCount($discountCode, $items);
+            }
+        }
+
+        return response()->json([
+            'items' => $items,
+            'subtotal' => $subtotal,
+            'discountAmount' => $discountAmount,
+            'total' => $total,
+            'discountCode' => $discountCode,
+            'affectedItemsCount' => $affectedItemsCount,
+        ]);
+    }
+
+    public function getEligibleItems(Request $request)
+    {
+        $discountCode = $request->input('discount_code');
+        if (!$discountCode) {
+            return response()->json(['eligible_items' => []]);
+        }
+
+        // Get discount details
+        $discount = \App\Models\DiscountCode::whereRaw('upper(code) = ?', [strtoupper($discountCode)])->first();
+        if (!$discount) {
+            return response()->json(['eligible_items' => []]);
+        }
+
+        // Get allowed category IDs
+        $allowedCategoryIds = $discount->categories()->pluck('categories.id')->all();
+        if (empty($allowedCategoryIds) && $discount->category_id) {
+            $allowedCategoryIds = [$discount->category_id];
+        }
+
+        if (Auth::check()) {
+            // For logged-in users, get cart from database
+            $cart = Cart::where('user_id', Auth::id())->first();
+            if ($cart) {
+                $items = $cart->items()->with('product')->get();
+            } else {
+                $items = collect();
+            }
+        } else {
+            // For guests, get cart from session
+            $cart = session('cart', []);
+            $items = collect($cart)->map(function($item) {
+                $product = \Modules\Products\Models\Product::find($item['product_id']);
+                return (object) [
+                    'product_id' => $item['product_id'],
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $item['price'],
+                    'product' => $product
+                ];
+            });
+        }
+
+        // Filter eligible items
+        $eligibleItems = [];
+        foreach ($items as $item) {
+            $product = $item->product ?? null;
+            if (!$product) continue;
+
+            $isEligible = empty($allowedCategoryIds) || in_array($product->category_id, $allowedCategoryIds);
+            if ($isEligible) {
+                $eligibleItems[] = [
+                    'name' => $product->title,
+                    'price' => (float) ($item->unit_price ?? $item->price),
+                    'quantity' => (int) ($item->quantity ?? 1),
+                    'total' => (float) ($item->unit_price ?? $item->price) * (int) ($item->quantity ?? 1)
+                ];
+            }
+        }
+
+        return response()->json(['eligible_items' => $eligibleItems]);
+    }
+
+    /**
+     * Calculate the count of unique items affected by a discount code
+     */
+    private function calculateAffectedItemsCount(string $discountCode, $items)
+    {
+        $discount = \App\Models\DiscountCode::whereRaw('upper(code) = ?', [strtoupper($discountCode)])->first();
+        if (!$discount) {
+            return 0;
+        }
+
+        $allowedCategoryIds = $discount->categories()->pluck('categories.id')->all();
+        if (empty($allowedCategoryIds) && $discount->category_id) {
+            $allowedCategoryIds = [$discount->category_id];
+        }
+
+        $affectedCount = 0;
+        foreach ($items as $item) {
+            // Handle both object and array structures
+            if (is_array($item)) {
+                $categoryId = $item['category_id'] ?? null;
+            } else {
+                $product = $item->product ?? null;
+                $categoryId = $product ? $product->category_id : null;
+            }
+
+            $isEligible = empty($allowedCategoryIds) || in_array($categoryId, $allowedCategoryIds);
+            if ($isEligible) {
+                $affectedCount++;
+            }
+        }
+
+        return $affectedCount;
     }
 
     public function add(Request $request)
@@ -474,54 +664,6 @@ class CartController extends Controller
         }
     }
 
-    public function dropdown()
-    {
-        if (Auth::check()) {
-            $cart = Cart::where('user_id', Auth::id())->first();
-            if ($cart) {
-                $items = $cart->items()->with('product')->get()->take(3);
-                $total = $cart->items()->sum('quantity');
-            } else {
-                $items = collect();
-                $total = 0;
-            }
-        } else {
-            $cart = session('cart', []);
-            $items = collect($cart)->values()->take(3);
-            $total = collect($cart)->sum('quantity');
-        }
-
-        $subtotal = $items->reduce(function($carry, $item) {
-            return $carry + (($item['price'] ?? $item->unit_price) * ($item['quantity'] ?? $item->quantity));
-        }, 0);
-
-        $html = '';
-        foreach ($items as $item) {
-            $name = $item['name'] ?? $item->product->title;
-            $price = $item['price'] ?? $item->unit_price;
-            $quantity = $item['quantity'] ?? $item->quantity;
-            $image = $item['image_url'] ?? ($item['image'] ?? $item->product->image);
-            
-            $html .= '<div class="cart-dropdown-item" style="padding: 10px 15px; border-bottom: 1px solid #eee; display: flex; align-items: center;">
-                <img src="' . $image . '" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; margin-right: 10px;">
-                <div class="flex-fill">
-                    <div style="font-size: 14px; font-weight: 500;">' . $name . '</div>
-                    <div style="font-size: 12px; color: #666;">Qty: ' . $quantity . ' × $' . number_format($price, 2) . '</div>
-                </div>
-                <div style="font-weight: 600;">$' . number_format($price * $quantity, 2) . '</div>
-            </div>';
-        }
-
-        if ($items->isEmpty()) {
-            $html = '<div style="padding: 20px; text-align: center; color: #666;">Your cart is empty</div>';
-        }
-
-        return response()->json([
-            'items' => $html,
-            'total' => $subtotal,
-            'itemCount' => $total
-        ]);
-    }
 }
 
 

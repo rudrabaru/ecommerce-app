@@ -11,21 +11,19 @@ class Order extends Model
     protected $fillable = [
         'order_number',
         'user_id',
-        'provider_id',
-        'product_id',
-        'quantity',
-        'unit_price',
         'total_amount',
         'status',
         'shipping_address',
         'shipping_address_id',
         'payment_method_id',
-        'notes'
+        'notes',
+        'discount_code',
+        'discount_amount'
     ];
 
     protected $casts = [
-        'unit_price' => 'decimal:2',
         'total_amount' => 'decimal:2',
+        'discount_amount' => 'decimal:2',
     ];
 
     public function user(): BelongsTo
@@ -33,14 +31,9 @@ class Order extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function provider(): BelongsTo
+    public function orderItems(): HasMany
     {
-        return $this->belongsTo(User::class, 'provider_id');
-    }
-
-    public function product(): BelongsTo
-    {
-        return $this->belongsTo(\Modules\Products\Models\Product::class);
+        return $this->hasMany(OrderItem::class);
     }
 
     public function shippingAddress(): BelongsTo

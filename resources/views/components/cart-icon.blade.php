@@ -4,9 +4,6 @@
         <i class="fa fa-shopping-cart"></i>
         <span class="cart-count" id="cart-count" style="position: absolute; top: -5px; right: -5px; background: #e7ab3c; color: white; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; min-width: 22px;">{{ \App\Http\Controllers\CartController::getCartCount() }}</span>
     </a>
-    
-    {{-- Cart Dropdown --}}
-    @include('components.cart-dropdown')
 </div>
 
 <style>

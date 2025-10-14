@@ -31,7 +31,6 @@
                                     <th>Product</th>
                                     <th>Price</th>
                                     <th>Quantity</th>
-                                    <th>Discount</th>
                                     <th>Total</th>
                                     <th></th>
                                 </tr>
@@ -73,9 +72,6 @@
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="text-center">
-                                        <span class="item-discount-indicator">{{ (($discountAmount ?? 0) > 0) ? 'Applied' : '-' }}</span>
-                                    </td>
                                     <td class="cart__price">${{ number_format($item['price'] * $item['quantity'], 2) }}</td>
                                     <td class="cart__close">
                                         <button class="btn btn-sm btn-outline-danger remove-item" data-product-id="{{ $item['product_id'] }}">
@@ -85,7 +81,7 @@
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="4" class="text-center py-5">
+                                    <td colspan="5" class="text-center py-5">
                                         <h4>Your cart is empty</h4>
                                         <p>Add some products to get started!</p>
                                     </td>
@@ -120,11 +116,38 @@
                         <div class="mt-2 applied-discount" style="{{ (($discountAmount ?? 0) > 0) ? '' : 'display: none;' }}">
                             <small class="text-success">
                                 <span class="applied-label">Applied</span>: <span class="applied-code">{{ $discountCode }}</span>
-                                <span class="applied-affects" style="margin-left:6px;"></span>
+                                <span class="applied-affects" style="margin-left:6px;">
+                                    @if(($discountAmount ?? 0) > 0)
+                                        <a href="#" id="show-affected-items" style="color: #007bff; text-decoration: underline;">(applies to {{ $affectedItemsCount ?? 0 }} item{{ ($affectedItemsCount ?? 0) > 1 ? 's' : '' }})</a>
+                                    @endif
+                                </span>
                                 <a href="#" id="remove-discount" class="text-danger" style="margin-left:8px;">Remove</a>
                             </small>
                         </div>
                     </div>
+                    
+                    <!-- Affected Items Modal -->
+                    <div class="modal fade" id="affectedItemsModal" tabindex="-1" role="dialog" aria-labelledby="affectedItemsModalLabel" aria-hidden="true">
+                        <div class="modal-dialog" role="document">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="affectedItemsModalLabel">Discount Applied To</h5>
+                                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                        <span aria-hidden="true">&times;</span>
+                                    </button>
+                                </div>
+                                <div class="modal-body">
+                                    <div id="affected-items-list">
+                                        <!-- Affected items will be populated here -->
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="cart__total">
                         <h6>Cart total</h6>
                         <ul>
@@ -392,7 +415,7 @@
                         if (typeof response.affected_items !== 'undefined') {
                             const n = parseInt(response.affected_items, 10) || 0;
                             if (n > 0) {
-                                $('.applied-discount .applied-affects').text('(applies to ' + n + ' item' + (n>1?'s':'') + ')');
+                                $('.applied-discount .applied-affects').html('<a href="#" id="show-affected-items" style="color: #007bff; text-decoration: underline;">(applies to ' + n + ' item' + (n>1?'s':'') + ')</a>');
                             } else {
                                 $('.applied-discount .applied-affects').text('');
                             }
@@ -466,12 +489,9 @@
 
             // Function to update discount display
             function updateDiscountDisplay(discountAmount) {
-                
-                
                 if (discountAmount > 0) {
                     $('.discount-amount').text('-$' + discountAmount.toFixed(2));
                     $('.discount-row').show();
-                    // Keep user-entered code in the input, do not force static code
                     $('.applied-discount').show();
                 } else {
                     $('.discount-amount').text('$0.00');
@@ -484,6 +504,55 @@
                 // Update totals after discount change
                 updateCartTotals();
             }
+
+            // Show affected items modal
+            $(document).on('click', '#show-affected-items', function(e) {
+                e.preventDefault();
+                
+                // Get the discount code to determine eligibility
+                const discountCode = $('.applied-code').text().trim();
+                if (!discountCode) {
+                    $('#affected-items-list').html('<p class="text-muted">No discount code applied.</p>');
+                    $('#affectedItemsModal').modal('show');
+                    return;
+                }
+                
+                // Fetch eligible items from server
+                $.ajax({
+                    url: '/cart/discount/eligible-items',
+                    method: 'GET',
+                    data: { discount_code: discountCode },
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                    },
+                    success: function(response) {
+                        let modalContent = '';
+                        if (response.eligible_items && response.eligible_items.length > 0) {
+                            modalContent = '<div class="table-responsive"><table class="table table-sm">';
+                            modalContent += '<thead><tr><th>Product</th><th>Original Price</th><th>Qty</th><th>Total</th></tr></thead><tbody>';
+                            response.eligible_items.forEach(function(item) {
+                                modalContent += '<tr>';
+                                modalContent += '<td>' + item.name + '</td>';
+                                modalContent += '<td>$' + item.price.toFixed(2) + '</td>';
+                                modalContent += '<td>' + item.quantity + '</td>';
+                                modalContent += '<td>$' + item.total.toFixed(2) + '</td>';
+                                modalContent += '</tr>';
+                            });
+                            modalContent += '</tbody></table></div>';
+                        } else {
+                            modalContent = '<p class="text-muted">No eligible items found for this discount.</p>';
+                        }
+                        
+                        $('#affected-items-list').html(modalContent);
+                        $('#affectedItemsModal').modal('show');
+                    },
+                    error: function() {
+                        $('#affected-items-list').html('<p class="text-muted">Error loading eligible items.</p>');
+                        $('#affectedItemsModal').modal('show');
+                    }
+                });
+            });
         });
 
         })();

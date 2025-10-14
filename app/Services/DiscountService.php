@@ -12,27 +12,27 @@ class DiscountService
         // Fetch by code first to provide precise error messages
         $discount = DiscountCode::whereRaw('upper(code) = ?', [strtoupper($code)])->first();
         if (!$discount) {
-            return [false, 'Invalid discount code', 0.0, null];
+            return [false, 'Invalid discount code', 0.0, null, 0];
         }
         if (!$discount->is_active) {
-            return [false, 'Inactive discount code', 0.0, $discount];
+            return [false, 'Inactive discount code', 0.0, $discount, 0];
         }
         if (!$discount->isWithinDateRange()) {
             // Not yet active or expired
             $now = now();
             if ($discount->valid_from && $now->lt($discount->valid_from)) {
-                return [false, 'Discount code not yet active', 0.0, $discount];
+                return [false, 'Discount code not yet active', 0.0, $discount, 0];
             }
-            return [false, 'Discount code expired', 0.0, $discount];
+            return [false, 'Discount code expired', 0.0, $discount, 0];
         }
         if (!$discount->hasRemainingUses()) {
-            return [false, 'Discount usage limit reached', 0.0, $discount];
+            return [false, 'Discount usage limit reached', 0.0, $discount, 0];
         }
         if (!$discount->appliesToCategoryIds($cartCategoryIds)) {
-            return [false, 'This code is not applicable to your cart items', 0.0, $discount];
+            return [false, 'This code is not applicable to your cart items', 0.0, $discount, 0];
         }
         if (!empty($discount->minimum_order_amount) && $subtotal < (float)$discount->minimum_order_amount) {
-            return [false, 'Minimum order amount not met for this code', 0.0, $discount];
+            return [false, 'Minimum order amount not met for this code', 0.0, $discount, 0];
         }
 
         // Eligible subtotal: only items in allowed categories
@@ -46,7 +46,7 @@ class DiscountService
             $eligibleSubtotal = 0.0;
             foreach ($cartItems as $item) {
                 if (in_array($item['category_id'] ?? null, $allowedCategoryIds)) {
-                    $affectedItemCount += (int)($item['quantity'] ?? 0);
+                    $affectedItemCount++; // Count unique items, not sum of quantities
                     $eligibleSubtotal += ($item['price'] * $item['quantity']);
                 }
             }

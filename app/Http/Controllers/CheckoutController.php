@@ -55,7 +55,7 @@ class CheckoutController extends Controller
             });
         }
 
-        $addresses = $user->addresses()->with(['country', 'state', 'city'])->where('type', 'shipping')->get();
+        $addresses = $user->addresses()->with(['country', 'state', 'city'])->where('type', 'shipping')->orderBy('created_at', 'asc')->get();
         $paymentMethods = PaymentMethod::getActiveMethods();
 
         // Calculate cart total
@@ -96,7 +96,23 @@ class CheckoutController extends Controller
             }
         }
 
-        return view('checkout', compact('addresses', 'paymentMethods', 'cartTotal', 'discountAmount'));
+        // Calculate affected items count for discount display
+        $affectedItemsCount = 0;
+        $discountCode = '';
+        if ($user) {
+            $cartModel = Cart::where('user_id', $user->id)->first();
+            if ($cartModel && $cartModel->discount_code) {
+                $discountCode = $cartModel->discount_code;
+                $affectedItemsCount = $this->calculateAffectedItemsCount($cartModel->discount_code, $cartItems);
+            }
+        } else {
+            $discountCode = session('cart_discount_code', '');
+            if ($discountCode) {
+                $affectedItemsCount = $this->calculateAffectedItemsCount($discountCode, $cartItems);
+            }
+        }
+
+        return view('checkout', compact('addresses', 'paymentMethods', 'cartTotal', 'discountAmount', 'affectedItemsCount', 'discountCode'));
     }
 
     public function store(Request $request)
@@ -181,6 +197,10 @@ class CheckoutController extends Controller
                 $perItemAllocation = $service->allocatePerItem(\App\Models\DiscountCode::whereRaw('upper(code) = ?', [strtoupper($discountCode)])->first(), $normItems);
                 $discountAmountTotal = array_sum($perItemAllocation);
             }
+            // Calculate total order amount
+            $totalOrderAmount = 0;
+            $orderItems = [];
+            
             foreach ($cartItems as $item) {
                 // Handle both database cart items and session cart items
                 if ($user) {
@@ -201,32 +221,56 @@ class CheckoutController extends Controller
                     $lineDiscount = min($perItemAllocation[$product->id], $lineTotal);
                 }
                 $total = $lineTotal - $lineDiscount;
-
-                $order = Order::create([
-                    'user_id' => $userId,
-                    'provider_id' => $product->provider_id,
+                $totalOrderAmount += $total;
+                
+                $orderItems[] = [
                     'product_id' => $product->id,
                     'quantity' => $quantity,
                     'unit_price' => $unitPrice,
-                    'total_amount' => $total,
-                    'status' => 'pending',
-                    'shipping_address' => $address->full_address,
-                    'shipping_address_id' => $address->id,
-                    'payment_method_id' => $paymentMethod->id,
-                    'notes' => $validated['notes'] ?? null,
-                ]);
-
-                // Create payment record
-                Payment::create([
-                    'order_id' => $order->id,
-                    'payment_method_id' => $paymentMethod->id,
-                    'amount' => $total,
-                    'currency' => $paymentMethod->name === 'razorpay' ? 'INR' : 'USD',
-                    'status' => 'pending',
-                ]);
-
-                $created[] = $order->order_number;
+                    'line_total' => $lineTotal,
+                    'line_discount' => $lineDiscount,
+                    'total' => $total,
+                    'provider_id' => $product->provider_id,
+                ];
             }
+
+            // Create single order
+            $order = Order::create([
+                'user_id' => $userId,
+                'total_amount' => $totalOrderAmount,
+                'status' => 'pending',
+                'shipping_address' => $address->full_address,
+                'shipping_address_id' => $address->id,
+                'payment_method_id' => $paymentMethod->id,
+                'notes' => $validated['notes'] ?? null,
+                'discount_code' => $discountCode,
+                'discount_amount' => $discountAmountTotal,
+            ]);
+
+            // Create order items
+            foreach ($orderItems as $orderItem) {
+                \App\Models\OrderItem::create([
+                    'order_id' => $order->id,
+                    'product_id' => $orderItem['product_id'],
+                    'provider_id' => $orderItem['provider_id'],
+                    'quantity' => $orderItem['quantity'],
+                    'unit_price' => $orderItem['unit_price'],
+                    'line_total' => $orderItem['line_total'],
+                    'line_discount' => $orderItem['line_discount'],
+                    'total' => $orderItem['total'],
+                ]);
+            }
+
+            // Create payment record
+            Payment::create([
+                'order_id' => $order->id,
+                'payment_method_id' => $paymentMethod->id,
+                'amount' => $totalOrderAmount,
+                'currency' => $paymentMethod->name === 'razorpay' ? 'INR' : 'USD',
+                'status' => 'pending',
+            ]);
+
+            $created[] = $order->order_number;
 
             // Increment discount usage once per checkout if discount used
             if ($discountCode && $discountAmountTotal > 0) {
@@ -280,5 +324,31 @@ class CheckoutController extends Controller
                 ->with('error', 'Failed to place order. Please try again.')
                 ->withInput();
         }
+    }
+
+    /**
+     * Calculate the count of unique items affected by a discount code
+     */
+    private function calculateAffectedItemsCount(string $discountCode, $cartItems)
+    {
+        $discount = \App\Models\DiscountCode::whereRaw('upper(code) = ?', [strtoupper($discountCode)])->first();
+        if (!$discount) {
+            return 0;
+        }
+
+        $allowedCategoryIds = $discount->categories()->pluck('categories.id')->all();
+        if (empty($allowedCategoryIds) && $discount->category_id) {
+            $allowedCategoryIds = [$discount->category_id];
+        }
+
+        $affectedCount = 0;
+        foreach ($cartItems as $item) {
+            $isEligible = empty($allowedCategoryIds) || in_array($item['category_id'], $allowedCategoryIds);
+            if ($isEligible) {
+                $affectedCount++;
+            }
+        }
+
+        return $affectedCount;
     }
 }
