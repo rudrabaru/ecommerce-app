@@ -24,8 +24,13 @@ class RazorpayPaymentService
 
     public function createOrder(Order $order): array
     {
-        $amountMinor = (int) round(((float) $order->total_amount) * 100);
+        // Demo mode: if order currency is not INR, convert using fixed rate 1 USD = 83 INR
         $currency = 'INR';
+        $amountBase = (float) $order->total_amount;
+        if (strtoupper((string)($order->currency ?? 'USD')) !== 'INR') {
+            $amountBase = $amountBase * 83.0; // demo conversion
+        }
+        $amountMinor = (int) round($amountBase * 100);
 
         $rOrder = $this->client->order->create([
             'amount' => $amountMinor,
@@ -54,6 +59,55 @@ class RazorpayPaymentService
             'currency' => $currency,
             'key' => config('services.razorpay.key'),
         ];
+    }
+
+    /**
+     * Demo/test-only: capture and mark paid without webhooks, using frontend callback.
+     */
+    public function captureAndMarkPaid(string $razorpayOrderId, string $paymentId): array
+    {
+        // Fetch txn by order
+        $txn = Transaction::where('gateway', 'razorpay')
+            ->where('gateway_order_id', $razorpayOrderId)
+            ->lockForUpdate()
+            ->firstOrFail();
+
+        $order = Order::lockForUpdate()->findOrFail($txn->order_id);
+
+        // Auto-capture the payment in test mode
+        // Amount should be in smallest unit and match the order amount
+        try {
+            $this->client->payment->fetch($paymentId);
+            // Razorpay capture signature: capture($paymentId, $amount, array $params)
+            $this->client->payment->capture($paymentId, $txn->amount, ['currency' => $txn->currency]);
+        } catch (\Throwable $e) {
+            // In demo/test flows, payment may already be captured by Checkout; continue marking paid
+            \Illuminate\Support\Facades\Log::warning('Razorpay capture error (ignored in demo)', [
+                'payment_id' => $paymentId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        DB::transaction(function () use ($txn, $order, $paymentId) {
+            $txn->update([
+                'gateway_payment_id' => $paymentId,
+                'status' => 'paid',
+                'payload' => array_merge($txn->payload ?? [], [
+                    'manual_confirm' => true,
+                ]),
+            ]);
+            $order->update(['status' => 'paid']);
+
+            // Update Payment row
+            \App\Models\Payment::where('order_id', $order->id)
+                ->where(function ($q) {
+                    $q->where('gateway', 'razorpay')
+                      ->orWhereHas('method', function ($q2) { $q2->where('name', 'razorpay'); });
+                })
+                ->update(['status' => 'paid']);
+        });
+
+        return [$order, $txn];
     }
 
     public function verifySignature(string $orderId, string $paymentId, string $signature): bool

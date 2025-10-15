@@ -26,4 +26,5 @@ Route::middleware(['web','auth'])->group(function () {
     // Initiation endpoints for logged-in users (session auth)
     Route::post('/payment/stripe/initiate', [StripeController::class, 'initiate'])->name('payment.stripe.initiate');
     Route::post('/payment/razorpay/initiate', [RazorpayController::class, 'initiate'])->name('payment.razorpay.initiate');
+    Route::post('/payment/razorpay/confirm', [RazorpayController::class, 'confirm'])->name('payment.razorpay.confirm');
 });

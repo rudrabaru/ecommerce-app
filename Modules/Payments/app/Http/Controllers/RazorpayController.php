@@ -64,6 +64,36 @@ class RazorpayController extends Controller
         $service->handleWebhook($request->all());
         return response()->json(['received' => true]);
     }
+
+    /**
+     * Demo/test-mode confirmation without webhook.
+     * Frontend posts razorpay_order_id and razorpay_payment_id after success.
+     */
+    public function confirm(Request $request, RazorpayPaymentService $service)
+    {
+        $validated = $request->validate([
+            'razorpay_order_id' => ['required', 'string'],
+            'razorpay_payment_id' => ['required', 'string'],
+        ]);
+
+        try {
+            [$order, $txn] = $service->captureAndMarkPaid(
+                $validated['razorpay_order_id'],
+                $validated['razorpay_payment_id']
+            );
+
+            return response()->json([
+                'success' => true,
+                'order_id' => $order->id,
+                'transaction_id' => $txn->id,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to confirm Razorpay payment',
+            ], 422);
+        }
+    }
 }
 
 

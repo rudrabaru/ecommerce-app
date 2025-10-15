@@ -41,7 +41,7 @@ $(document).ready(function() {
                             $('#loginModal').modal('show');
                         } else {
                             // Fallback: redirect to login
-                            window.location.href = '{{ route('login') }}';
+                            window.location.href = "{{ route('login') }}";
                         }
                     }
                 } else {

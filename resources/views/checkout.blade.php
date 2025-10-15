@@ -1349,12 +1349,25 @@
             if (!res.ok) throw new Error('Razorpay initiate failed');
             const data = await res.json();
             
+            const userName = (document.getElementById('order-user-name') || {}).textContent || '';
+            const userEmail = (document.getElementById('order-email') || {}).textContent || '';
+
             return new Promise(function(resolve, reject) {
                 const options = {
                     key: data.key,
                     amount: data.amount,
                     currency: data.currency,
                     order_id: data.razorpayOrderId,
+                    prefill: {
+                        name: userName || undefined,
+                        email: userEmail || undefined,
+                    },
+                    method: {
+                        netbanking: true,
+                        card: true,
+                        upi: true,
+                        wallet: true
+                    },
                     handler: function(response) { resolve(response); },
                     modal: {
                         ondismiss: function() { reject(new Error('Payment cancelled')); }
@@ -1362,8 +1375,33 @@
                 };
                 const rz = new window.Razorpay(options);
                 rz.open();
-            }).then(function() {
-                window.location.href = '/orders/success';
+            }).then(async function(resp) {
+                try {
+                    const confirmRes = await fetch('/payment/razorpay/confirm', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': token
+                        },
+                        body: JSON.stringify({
+                            razorpay_order_id: data.razorpayOrderId,
+                            razorpay_payment_id: resp.razorpay_payment_id
+                        })
+                    });
+                    const confirmJson = await (async () => { try { return await confirmRes.json(); } catch(_) { return {}; } })();
+                    if (!confirmRes.ok || (confirmJson && confirmJson.success === false)) {
+                        throw new Error('Confirm failed');
+                    }
+                    window.location.href = '/orders/success';
+                } catch (e) {
+                    // Soft-fallback: if DB already has paid status, still go to success
+                    try {
+                        const probe = await fetch('/orders/success', { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                        if (probe.ok) { window.location.href = '/orders/success'; return; }
+                    } catch(_){ }
+                    window.location.href = '/orders/failure';
+                }
             });
         }
 

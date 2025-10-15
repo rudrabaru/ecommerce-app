@@ -41,6 +41,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/orders/success', function () {
         return view('orders.success');
     })->name('orders.success');
+    // Order failure page (demo)
+    Route::get('/orders/failure', function () {
+        return view('orders.failure');
+    })->name('orders.failure');
 });
 
 // Provide a common dashboard route for auth flows/tests; redirect by role
