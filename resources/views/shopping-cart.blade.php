@@ -67,7 +67,7 @@
                                         <div class="quantity">
                                             <div class="pro-qty-2">
                                                 <button type="button" class="qtybtn dec">-</button>
-                                                <input type="number" value="{{ $item['quantity'] }}" min="1" class="quantity-input" data-product-id="{{ $item['product_id'] }}" readonly>
+                                                <input type="number" value="{{ $item['quantity'] }}" min="1" class="quantity-input" data-product-id="{{ $item['product_id'] }}">
                                                 <button type="button" class="qtybtn inc">+</button>
                                             </div>
                                         </div>
@@ -224,6 +224,17 @@
         .pro-qty .qtybtn.inc, .pro-qty-2 .qtybtn.inc {
             border-left: 1px solid #e5e5e5;
         }
+        
+        /* Hide number input arrows */
+        .quantity-input::-webkit-outer-spin-button,
+        .quantity-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        
+        .quantity-input[type=number] {
+            -moz-appearance: textfield;
+        }
     </style>
     
     <script>
@@ -250,7 +261,11 @@
                 },
                 success: function(response) {
                     updateCartCount(response.cart_count);
-                    if (typeof response.discount_amount !== 'undefined') {
+                    
+                    // Update totals with fresh cart data if available
+                    if (response.cart_data) {
+                        updateCartTotalsFromData(response.cart_data);
+                    } else if (typeof response.discount_amount !== 'undefined') {
                         updateDiscountDisplay(parseFloat(response.discount_amount) || 0);
                     } else {
                         updateCartTotals();
@@ -260,6 +275,20 @@
                     Swal.fire('Error', 'Error updating quantity', 'error');
                 }
             });
+        }
+        
+        // Helper function to update cart totals from server data
+        function updateCartTotalsFromData(cartData) {
+            $('.subtotal-amount').text('$' + cartData.subtotal.toFixed(2));
+            $('.total-amount').text('$' + cartData.total.toFixed(2));
+            
+            // Update discount display if applicable
+            if (cartData.discountAmount > 0) {
+                updateDiscountDisplay(cartData.discountAmount);
+            } else {
+                $('.discount-row').hide();
+                $('.applied-discount').hide();
+            }
         }
         
         // Helper function to update cart totals
@@ -287,6 +316,31 @@
         }
 
         $(document).ready(function() {
+            // Handle quantity button clicks
+            $('.qtybtn').on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const $input = $(this).siblings('.quantity-input');
+                const productId = $input.data('product-id');
+                const currentQty = parseInt($input.val()) || 1;
+                let newQty = currentQty;
+                
+                if ($(this).hasClass('inc')) {
+                    newQty = currentQty + 1;
+                } else if ($(this).hasClass('dec') && currentQty > 1) {
+                    newQty = currentQty - 1;
+                }
+                
+                if (newQty !== currentQty) {
+                    $input.val(newQty);
+                    const $row = $input.closest('tr');
+                    updateCartItemPrice($row, newQty);
+                    updateCartTotals();
+                    updateCartQuantity(productId, newQty);
+                }
+            });
+            
             // Update quantity on direct input change
             $('.quantity-input').on('change', function() {
                 const productId = $(this).data('product-id');

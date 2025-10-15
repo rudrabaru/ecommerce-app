@@ -45,18 +45,22 @@ class CartController extends Controller
         }
         return asset('storage/' . ltrim($image, '/'));
     }
+    
+    /**
+     * Get cart count - returns number of UNIQUE products (not total quantity)
+     */
     public static function getCartCount()
     {
         if (Auth::check()) {
-            // For logged-in users, get count from database
+            // For logged-in users, get count of unique items from database
             $cart = Cart::where('user_id', Auth::id())->first();
             if ($cart) {
-                return $cart->items()->count();
+                return $cart->items()->count(); // Count of unique products
             }
         } else {
-            // For guests, get count from session
+            // For guests, get count of unique items from session
             $cart = session('cart', []);
-            return count($cart);
+            return count($cart); // Count of unique products
         }
         return 0;
     }
@@ -309,6 +313,85 @@ class CartController extends Controller
         return $affectedCount;
     }
 
+    /**
+     * Get updated cart data after quantity update
+     */
+    private function getUpdatedCartData()
+    {
+        if (Auth::check()) {
+            // For logged-in users, get cart from database
+            $cart = Cart::where('user_id', Auth::id())->first();
+            if ($cart) {
+                $items = $cart->items()->with('product')->get()->map(function ($item) {
+                    $imageUrl = $item->product ? $item->product->image_url : $this->resolveImageUrl(null);
+                    return [
+                        'product_id' => $item->product_id,
+                        'name' => $item->product->title ?? $item->product->name,
+                        'price' => (float) $item->unit_price,
+                        'image' => $item->product->image ?? null,
+                        'image_url' => $imageUrl,
+                        'quantity' => $item->quantity,
+                        'category_id' => $item->product->category_id ?? null,
+                    ];
+                });
+                $subtotal = $items->reduce(fn($c,$i)=> $c + ($i['price'] * $i['quantity']), 0);
+                $discountAmount = (float) ($cart->discount_amount ?? 0);
+                $total = $subtotal - $discountAmount;
+            } else {
+                $items = collect();
+                $subtotal = 0;
+                $discountAmount = 0;
+                $total = 0;
+            }
+        } else {
+            // For guests, get cart from session
+            $cart = session('cart', []);
+            $items = collect($cart)->values()->map(function($i){
+                $image = $i['image'] ?? null;
+                $imageUrl = $this->resolveImageUrl($image);
+                $i['image_url'] = $imageUrl;
+                // Add category_id for discount calculation
+                if (isset($i['product_id'])) {
+                    $product = \Modules\Products\Models\Product::find($i['product_id']);
+                    $i['category_id'] = $product ? $product->category_id : null;
+                }
+                return $i;
+            });
+            $subtotal = $items->reduce(fn($c,$i)=> $c + ($i['price'] * $i['quantity']), 0);
+            $discountAmount = (float) session('cart_discount', 0);
+            $total = $subtotal - $discountAmount;
+        }
+
+        // Get discount code for display
+        $discountCode = '';
+        $affectedItemsCount = 0;
+        if (Auth::check()) {
+            $cart = Cart::where('user_id', Auth::id())->first();
+            $discountCode = $cart ? ($cart->discount_code ?? '') : '';
+            
+            // Calculate affected items count for logged-in users
+            if ($discountCode && $cart) {
+                $affectedItemsCount = $this->calculateAffectedItemsCount($discountCode, $items);
+            }
+        } else {
+            $discountCode = session('cart_discount_code', '');
+            
+            // Calculate affected items count for guests
+            if ($discountCode) {
+                $affectedItemsCount = $this->calculateAffectedItemsCount($discountCode, $items);
+            }
+        }
+
+        return [
+            'items' => $items,
+            'subtotal' => $subtotal,
+            'discountAmount' => $discountAmount,
+            'total' => $total,
+            'discountCode' => $discountCode,
+            'affectedItemsCount' => $affectedItemsCount,
+        ];
+    }
+
     public function add(Request $request)
     {
         $validated = $request->validate([
@@ -336,8 +419,10 @@ class CartController extends Controller
             }
             
             // Revalidate discount if previously applied
-            $cartCount = $cart->items()->sum('quantity');
             $this->revalidateAndPersistDiscountForUserCart($cart);
+            
+            // Get count of unique items (not total quantity)
+            $cartCount = $cart->items()->count();
         } else {
             // For guests, use session cart
             $cart = session()->get('cart', []);
@@ -353,9 +438,12 @@ class CartController extends Controller
                 ];
             }
             session()->put('cart', $cart);
+            
             // Revalidate discount if previously applied
             $this->revalidateAndPersistDiscountForSessionCart();
-            $cartCount = collect($cart)->sum('quantity');
+            
+            // Get count of unique items (not total quantity)
+            $cartCount = count($cart);
         }
 
         if ($request->ajax()) {
@@ -384,10 +472,13 @@ class CartController extends Controller
                     $cartItem->quantity = $validated['quantity'];
                     $cartItem->save();
                 }
+                
+                // Revalidate discount if previously applied
+                $this->revalidateAndPersistDiscountForUserCart($cart);
             }
-            // Revalidate discount if previously applied
-            if ($cart) { $this->revalidateAndPersistDiscountForUserCart($cart); }
-            $cartCount = $cart ? $cart->items()->sum('quantity') : 0;
+            
+            // Get count of unique items
+            $cartCount = $cart ? $cart->items()->count() : 0;
             $discountAmount = $cart ? (float)($cart->fresh()->discount_amount ?? 0) : 0;
         } else {
             // For guests, update session cart
@@ -396,17 +487,24 @@ class CartController extends Controller
                 $cart[$productId]['quantity'] = $validated['quantity'];
                 session()->put('cart', $cart);
             }
+            
             // Revalidate discount if previously applied
             $this->revalidateAndPersistDiscountForSessionCart();
-            $cartCount = collect($cart)->sum('quantity');
+            
+            // Get count of unique items
+            $cartCount = count($cart);
             $discountAmount = (float) session('cart_discount', 0);
         }
 
         if ($request->ajax()) {
+            // Get updated cart data for complete response
+            $cartData = $this->getUpdatedCartData();
+            
             return response()->json([
                 'success' => true,
                 'cart_count' => $cartCount,
-                'discount_amount' => $discountAmount
+                'discount_amount' => $discountAmount,
+                'cart_data' => $cartData
             ]);
         }
 
@@ -420,10 +518,13 @@ class CartController extends Controller
             $cart = Cart::where('user_id', Auth::id())->first();
             if ($cart) {
                 $cart->items()->where('product_id', $productId)->delete();
+                
+                // Revalidate discount if previously applied
+                $this->revalidateAndPersistDiscountForUserCart($cart);
             }
-            // Revalidate discount if previously applied
-            if ($cart) { $this->revalidateAndPersistDiscountForUserCart($cart); }
-            $cartCount = $cart ? $cart->items()->sum('quantity') : 0;
+            
+            // Get count of unique items
+            $cartCount = $cart ? $cart->items()->count() : 0;
             $discountAmount = $cart ? (float)($cart->fresh()->discount_amount ?? 0) : 0;
         } else {
             // For guests, remove from session cart
@@ -432,9 +533,12 @@ class CartController extends Controller
                 unset($cart[$productId]);
                 session()->put('cart', $cart);
             }
+            
             // Revalidate discount if previously applied
             $this->revalidateAndPersistDiscountForSessionCart();
-            $cartCount = collect($cart)->sum('quantity');
+            
+            // Get count of unique items
+            $cartCount = count($cart);
             $discountAmount = (float) session('cart_discount', 0);
         }
 
@@ -665,5 +769,3 @@ class CartController extends Controller
     }
 
 }
-
-

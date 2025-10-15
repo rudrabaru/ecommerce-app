@@ -25,10 +25,10 @@
             <div class="row">
                 <!-- Left Column: Billing Details -->
                 <div class="col-lg-7">
-                    <div class="checkout__form">
+            <div class="checkout__form">
                         <h4 class="mb-4">Billing Details</h4>
-                        <form method="post" action="{{ route('checkout.store') }}">
-                            @csrf
+                <form method="post" action="{{ route('checkout.store') }}">
+                    @csrf
                             
                             <!-- Address Selection -->
                             <div class="checkout__input">
@@ -37,11 +37,11 @@
                                     <div class="address-selection">
                                         @if($addresses->count() == 1)
                                             <!-- Single address -->
-                                            @foreach($addresses as $address)
+                                        @foreach($addresses as $address)
                                                 <div class="address-card">
-                                                    <input type="radio" name="shipping_address_id" value="{{ $address->id }}" 
-                                                           id="address_{{ $address->id }}" 
-                                                           {{ $address->is_default ? 'checked' : '' }}>
+                                                <input type="radio" name="shipping_address_id" value="{{ $address->id }}" 
+                                                       id="address_{{ $address->id }}" 
+                                                       {{ $address->is_default ? 'checked' : '' }}>
                                                     <label for="address_{{ $address->id }}" class="address-card-label">
                                                         <div class="address-card-content">
                                                             <div class="address-header">
@@ -50,9 +50,9 @@
                                                                     <span class="badge-default">Default</span>
                                                                 @endif
                                                             </div>
-                                                            @if($address->company)
+                                                        @if($address->company)
                                                                 <div class="address-company">{{ $address->company }}</div>
-                                                            @endif
+                                                        @endif
                                                             <div class="address-text">{{ $address->full_address }}</div>
                                                             <div class="address-phone"><i class="fa fa-phone"></i> {{ $address->phone }}</div>
                                                         </div>
@@ -62,8 +62,8 @@
                                         @else
                                             <!-- Multiple addresses -->
                                             @php
-                                                $firstAddress = $addresses->first(); // First created address (oldest)
-                                                $otherAddresses = $addresses->skip(1); // All addresses except the first one
+                                                $firstAddress = $addresses->first();
+                                                $otherAddresses = $addresses->skip(1);
                                             @endphp
                                             
                                             <!-- Primary address -->
@@ -77,7 +77,7 @@
                                                             <strong class="address-name">{{ $firstAddress->full_name }}</strong>
                                                             @if($firstAddress->is_default)
                                                                 <span class="badge-default">Default</span>
-                                                            @endif
+                                                        @endif
                                                         </div>
                                                         @if($firstAddress->company)
                                                             <div class="address-company">{{ $firstAddress->company }}</div>
@@ -114,10 +114,10 @@
                                                                             @endif
                                                                             <div class="address-text">{{ $address->full_address }}</div>
                                                                             <div class="address-phone"><i class="fa fa-phone"></i> {{ $address->phone }}</div>
-                                                                        </div>
-                                                                    </label>
-                                                                </div>
-                                                            @endforeach
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        @endforeach
                                                         </div>
                                                     </div>
                                                 </div>
@@ -167,9 +167,9 @@
                                                     </div>
                                                     <div class="payment-details">
                                                         <strong class="payment-name">{{ $method->display_name }}</strong>
-                                                        @if($method->description)
+                                                    @if($method->description)
                                                             <small class="payment-desc">{{ $method->description }}</small>
-                                                        @endif
+                                                    @endif
                                                     </div>
                                                 </div>
                                             </label>
@@ -183,7 +183,7 @@
 
                             <!-- Stripe Elements -->
                             <div id="stripe-elements-container" class="stripe-container" style="display:none;">
-                                <div class="checkout__input">
+                    <div class="checkout__input">
                                     <p class="form-label">Card Details <span class="text-danger">*</span></p>
                                     <div id="stripe-card-element" class="stripe-card-input"></div>
                                     <div id="stripe-card-errors" class="error-message mt-2" role="alert"></div>
@@ -231,13 +231,13 @@
                                             <!-- Populated via AJAX -->
                                         </tbody>
                                     </table>
-                                </div>
+                    </div>
                                 
                                 <div class="order-totals">
                                     <div class="total-row">
                                         <span>Subtotal</span>
                                         <span id="checkout-subtotal" class="total-value">$0.00</span>
-                                    </div>
+                </div>
                                     <div class="total-row discount-row" id="checkout-discount-row" style="display:none">
                                         <span>Discount</span>
                                         <span id="checkout-discount" class="discount-value">-$0.00</span>
@@ -871,6 +871,17 @@
             display: block;
         }
 
+        /* Hide number input arrows */
+        .quantity-input::-webkit-outer-spin-button,
+        .quantity-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        
+        .quantity-input[type=number] {
+            -moz-appearance: textfield;
+        }
+
         /* Responsive Design */
         @media (max-width: 991px) {
             .order-summary-section {
@@ -1065,19 +1076,26 @@
 
         // Update checkout totals
         function updateCheckoutTotals(data) {
-            document.getElementById('checkout-subtotal').textContent = '$' + data.subtotal.toFixed(2);
+            const subtotalEl = document.getElementById('checkout-subtotal');
+            const totalEl = document.getElementById('checkout-total');
+            
+            if (subtotalEl) {
+                subtotalEl.textContent = '$' + data.subtotal.toFixed(2);
+            }
             
             const discountRow = document.getElementById('checkout-discount-row');
             const discountAmount = document.getElementById('checkout-discount');
             
             if (data.discountAmount > 0) {
-                discountRow.style.display = 'flex';
-                discountAmount.textContent = '-$' + data.discountAmount.toFixed(2);
+                if (discountRow) discountRow.style.display = 'flex';
+                if (discountAmount) discountAmount.textContent = '-$' + data.discountAmount.toFixed(2);
             } else {
-                discountRow.style.display = 'none';
+                if (discountRow) discountRow.style.display = 'none';
             }
             
-            document.getElementById('checkout-total').textContent = '$' + data.total.toFixed(2);
+            if (totalEl) {
+                totalEl.textContent = '$' + data.total.toFixed(2);
+            }
         }
 
         // Bind quantity events
@@ -1086,23 +1104,40 @@
                 if (e.target.classList.contains('quantity-input')) {
                     const productId = e.target.getAttribute('data-product-id');
                     const quantity = parseInt(e.target.value);
-                    updateCartQuantity(productId, quantity);
+                    if (quantity && quantity > 0) {
+                        updateCartQuantity(productId, quantity);
+                    }
                 }
             });
             
             document.addEventListener('click', function(e) {
                 if (e.target.classList.contains('qty-btn')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
                     const productId = e.target.getAttribute('data-product-id');
                     const input = document.querySelector(`input.quantity-input[data-product-id="${productId}"]`);
-                    const currentQty = parseInt(input.value);
+                    const currentQty = parseInt(input.value) || 1;
+                    let newQty = currentQty;
                     
                     if (e.target.classList.contains('inc')) {
-                        input.value = currentQty + 1;
+                        newQty = currentQty + 1;
                     } else if (e.target.classList.contains('dec') && currentQty > 1) {
-                        input.value = currentQty - 1;
+                        newQty = currentQty - 1;
                     }
                     
-                    input.dispatchEvent(new Event('change'));
+                    if (newQty !== currentQty) {
+                        input.value = newQty;
+                        
+                        // Update row total immediately for instant feedback
+                        const row = input.closest('tr');
+                        const unitPrice = parseFloat(row.querySelector('.item-unit-price').getAttribute('data-unit-price'));
+                        const newTotal = unitPrice * newQty;
+                        row.querySelector('.item-total').textContent = '$' + newTotal.toFixed(2);
+                        
+                        // Then update cart via AJAX which will refresh all totals
+                        updateCartQuantity(productId, newQty);
+                    }
                 }
             });
         }
@@ -1120,12 +1155,19 @@
             })
             .then(response => response.json())
             .then(data => {
-                const row = document.querySelector(`tr[data-product-id="${productId}"]`);
-                const unitPrice = parseFloat(row.querySelector('.item-unit-price').getAttribute('data-unit-price'));
-                const newTotal = unitPrice * quantity;
-                row.querySelector('.item-total').textContent = '$' + newTotal.toFixed(2);
-                
-                loadCartData();
+                if (data.success && data.cart_data) {
+                    // Update all totals with fresh server data
+                    updateCheckoutTotals(data.cart_data);
+                    
+                    // Update cart count in navbar if present
+                    const cartCountEl = document.getElementById('cart-count');
+                    if (cartCountEl && data.cart_count !== undefined) {
+                        cartCountEl.textContent = data.cart_count;
+                    }
+                } else {
+                    console.error('Cart update failed:', data.message);
+                    toast('Error updating quantity', 'error');
+                }
             })
             .catch(error => {
                 console.error('Error updating quantity:', error);
@@ -1170,9 +1212,8 @@
                 }
                 
                 if (phoneElement) {
-                    // Extract phone number from the phone element (remove the icon and "Phone:" text)
                     const phoneText = phoneElement.textContent.trim();
-                    const phoneNumber = phoneText.replace(/^.*?(\d+.*)$/, '$1'); // Extract phone number part
+                    const phoneNumber = phoneText.replace(/^.*?(\d+.*)$/, '$1');
                     document.getElementById('order-phone').textContent = phoneNumber;
                 }
             }
@@ -1184,25 +1225,55 @@
         }
 
         async function ensureStripeElementsReady() {
-            if (!stripeJsLoaded) {
-                await loadScript('https://js.stripe.com/v3/');
-                stripeJsLoaded = true;
-            }
-            if (!stripeInstance) {
-                var key = STRIPE_PUBLISHABLE_KEY || '';
-                if (!key) throw new Error('Stripe publishable key missing');
-                stripeInstance = window.Stripe(key);
-            }
-            if (!stripeElements) {
-                stripeElements = stripeInstance.elements();
-            }
-            if (!stripeCardElement) {
-                stripeCardElement = stripeElements.create('card');
-                stripeCardElement.mount('#stripe-card-element');
-                stripeCardElement.on('change', function(event) {
-                    var err = document.getElementById('stripe-card-errors');
-                    if (err) err.textContent = event.error ? event.error.message : '';
-                });
+            try {
+                if (!stripeJsLoaded) {
+                    await loadScript('https://js.stripe.com/v3/');
+                    stripeJsLoaded = true;
+                }
+                if (!stripeInstance) {
+                    var key = STRIPE_PUBLISHABLE_KEY || '';
+                    if (!key) {
+                        console.error('Stripe publishable key is missing');
+                        throw new Error('Stripe publishable key missing');
+                    }
+                    stripeInstance = window.Stripe(key);
+                }
+                if (!stripeElements) {
+                    stripeElements = stripeInstance.elements();
+                }
+                if (!stripeCardElement) {
+                    var cardElementContainer = document.getElementById('stripe-card-element');
+                    if (!cardElementContainer) {
+                        console.error('Stripe card element container not found');
+                        return;
+                    }
+                    stripeCardElement = stripeElements.create('card', {
+                        style: {
+                            base: {
+                                fontSize: '16px',
+                                color: '#32325d',
+                                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                                '::placeholder': {
+                                    color: '#aab7c4'
+                                }
+                            },
+                            invalid: {
+                                color: '#fa755a',
+                                iconColor: '#fa755a'
+                            }
+                        }
+                    });
+                    stripeCardElement.mount('#stripe-card-element');
+                    stripeCardElement.on('change', function(event) {
+                        var err = document.getElementById('stripe-card-errors');
+                        if (err) {
+                            err.textContent = event.error ? event.error.message : '';
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error initializing Stripe elements:', error);
+                throw error;
             }
         }
 
@@ -1351,9 +1422,7 @@
     <script>
     (function() {
         var INIT_KEY = '__address_modal_initialized__';
-        window.ADDRESS_DEBUG = false;
-
-        function dbg() { if (window.ADDRESS_DEBUG) console.log.apply(console, arguments); }
+        // Address modal script (production mode)
 
         window.openAddressModal = function(id) {
             if (!window[INIT_KEY]) safeInitialize();
