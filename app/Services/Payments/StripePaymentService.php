@@ -3,6 +3,9 @@
 namespace App\Services\Payments;
 
 use App\Models\Order;
+use App\Models\Payment;
+use App\Models\Cart;
+use App\Mail\OrderConfirmationMail;
 use App\Models\Transaction;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -93,6 +96,29 @@ class StripePaymentService
                         'payload' => array_merge($txn->payload ?? [], ['event' => $type, 'data' => $data->toArray()]),
                     ]);
                     $order->update(['status' => 'paid']);
+
+                    // Mark payment as paid if present
+                    Payment::where('order_id', $order->id)
+                        ->where('gateway', 'stripe')
+                        ->orWhereHas('method', function ($q) {
+                            $q->where('name', 'stripe');
+                        })
+                        ->update(['status' => 'paid']);
+
+                    // Clear cart for the user (if any)
+                    if ($order->user_id) {
+                        if ($cart = Cart::where('user_id', $order->user_id)->first()) {
+                            $cart->items()->delete();
+                            $cart->update(['discount_code' => null, 'discount_amount' => 0]);
+                        }
+                    }
+
+                    // Send confirmation email
+                    try {
+                        \Illuminate\Support\Facades\Mail::to(optional($order->user)->email)->send(new OrderConfirmationMail($order));
+                    } catch (\Throwable $e) {
+                        // swallow mail errors to not break webhook
+                    }
                 } else {
                     $txn->update([
                         'status' => 'failed',
@@ -101,6 +127,14 @@ class StripePaymentService
                         'payload' => array_merge($txn->payload ?? [], ['event' => $type, 'data' => $data->toArray()]),
                     ]);
                     $order->update(['status' => 'failed']);
+
+                    // Mark payment as failed
+                    Payment::where('order_id', $order->id)
+                        ->where(function ($q) {
+                            $q->where('gateway', 'stripe')
+                              ->orWhereHas('method', function ($q2) { $q2->where('name', 'stripe'); });
+                        })
+                        ->update(['status' => 'failed']);
                 }
             });
         }

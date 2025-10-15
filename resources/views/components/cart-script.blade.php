@@ -1,7 +1,7 @@
 <script>
 $(document).ready(function() {
     // Add to cart functionality for both .add-to-cart and .add-to-cart-btn classes
-    $('.add-to-cart, .add-to-cart-btn').on('click', function(e) {
+    $(document).on('click', '.add-to-cart, .add-to-cart-btn', function(e) {
         e.preventDefault();
         
         const form = $(this).closest('form');

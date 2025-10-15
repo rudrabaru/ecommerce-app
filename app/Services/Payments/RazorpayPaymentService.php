@@ -4,6 +4,8 @@ namespace App\Services\Payments;
 
 use App\Models\Order;
 use App\Models\Transaction;
+use App\Models\Payment;
+use App\Models\Cart;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Razorpay\Api\Api as RazorpayClient;
@@ -100,6 +102,22 @@ class RazorpayPaymentService
                     'payload' => array_merge($txn->payload ?? [], ['event' => $event, 'data' => $payload]),
                 ]);
                 $order->update(['status' => 'paid']);
+
+                // Mark payment as paid
+                Payment::where('order_id', $order->id)
+                    ->where(function ($q) {
+                        $q->where('gateway', 'razorpay')
+                          ->orWhereHas('method', function ($q2) { $q2->where('name', 'razorpay'); });
+                    })
+                    ->update(['status' => 'paid']);
+
+                // Clear cart for the user
+                if ($order->user_id) {
+                    if ($cart = \App\Models\Cart::where('user_id', $order->user_id)->first()) {
+                        $cart->items()->delete();
+                        $cart->update(['discount_code' => null, 'discount_amount' => 0]);
+                    }
+                }
             } elseif (in_array($event, ['payment.failed'])) {
                 $txn->update([
                     'gateway_payment_id' => $paymentId,
@@ -107,6 +125,14 @@ class RazorpayPaymentService
                     'payload' => array_merge($txn->payload ?? [], ['event' => $event, 'data' => $payload]),
                 ]);
                 $order->update(['status' => 'failed']);
+
+                // Mark payment as failed
+                Payment::where('order_id', $order->id)
+                    ->where(function ($q) {
+                        $q->where('gateway', 'razorpay')
+                          ->orWhereHas('method', function ($q2) { $q2->where('name', 'razorpay'); });
+                    })
+                    ->update(['status' => 'failed']);
             }
         });
     }

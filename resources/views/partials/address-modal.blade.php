@@ -19,12 +19,14 @@
                             <div class="form-group">
                                 <label for="first_name">First Name <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" id="first_name" name="first_name" required>
+                                <div class="invalid-feedback"></div>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label for="last_name">Last Name <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" id="last_name" name="last_name" required>
+                                <div class="invalid-feedback"></div>
                             </div>
                         </div>
                     </div>
@@ -39,11 +41,13 @@
                             </div>
                             <input type="tel" class="form-control" id="phone" name="phone" required>
                         </div>
+                        <div class="invalid-feedback"></div>
                     </div>
 
                     <div class="form-group">
                         <label for="email">Email</label>
                         <input type="email" class="form-control" id="email" name="email">
+                        <div class="invalid-feedback"></div>
                     </div>
 
                     <div class="row">
@@ -53,6 +57,7 @@
                                 <select class="form-control address-dropdown" id="country" name="country_id" required data-no-nice-select="1">
                                     <option value="">Select Country</option>
                                 </select>
+                                <div class="invalid-feedback"></div>
                             </div>
                         </div>
                         <div class="col-md-4">
@@ -61,6 +66,7 @@
                                 <select class="form-control address-dropdown" id="state" name="state_id" required disabled data-no-nice-select="1">
                                     <option value="">Select State</option>
                                 </select>
+                                <div class="invalid-feedback"></div>
                             </div>
                         </div>
                         <div class="col-md-4">
@@ -69,6 +75,7 @@
                                 <select class="form-control address-dropdown" id="city" name="city_id" required disabled data-no-nice-select="1">
                                     <option value="">Select City</option>
                                 </select>
+                                <div class="invalid-feedback"></div>
                             </div>
                         </div>
                     </div>
@@ -76,23 +83,27 @@
                     <div class="form-group">
                         <label for="postal_code">Pin Code <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="postal_code" name="postal_code" placeholder="eg. 900001" required>
+                        <div class="invalid-feedback"></div>
                     </div>
 
                     <div class="form-group">
                         <label for="address_line_1">Address <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="address_line_1" name="address_line_1" 
                                placeholder="eg. 123 Elm Street, Springfield" required>
+                        <div class="invalid-feedback"></div>
                     </div>
 
                     <div class="form-group">
                         <label for="address_line_2">Address Line 2</label>
                         <input type="text" class="form-control" id="address_line_2" name="address_line_2" 
                                placeholder="Apartment, suite, unit, etc. (optional)">
+                        <div class="invalid-feedback"></div>
                     </div>
 
                     <div class="form-group">
                         <label for="company">Company</label>
                         <input type="text" class="form-control" id="company" name="company" placeholder="Company (optional)">
+                        <div class="invalid-feedback"></div>
                     </div>
 
                     <div class="form-group">
@@ -149,6 +160,315 @@ waitForJQuery(function() {
     });
 });
 
+// Current user context for autofill (server-provided)
+try {
+    window.ADDRESS_MODAL_USER = {
+        name: {!! json_encode(Auth::user()->name ?? '') !!},
+        email: {!! json_encode(Auth::user()->email ?? '') !!}
+    };
+} catch (e) {
+    window.ADDRESS_MODAL_USER = window.ADDRESS_MODAL_USER || { name: '', email: '' };
+}
+
+// Comprehensive validation rules
+const VALIDATION_RULES = {
+    first_name: {
+        required: true,
+        minLength: 2,
+        maxLength: 50,
+        pattern: /^[a-zA-Z\s'-]+$/,
+        messages: {
+            required: 'First name is required',
+            minLength: 'First name must be at least 2 characters',
+            maxLength: 'First name cannot exceed 50 characters',
+            pattern: 'First name can only contain letters, spaces, hyphens, and apostrophes'
+        }
+    },
+    last_name: {
+        required: true,
+        minLength: 2,
+        maxLength: 50,
+        pattern: /^[a-zA-Z\s'-]+$/,
+        messages: {
+            required: 'Last name is required',
+            minLength: 'Last name must be at least 2 characters',
+            maxLength: 'Last name cannot exceed 50 characters',
+            pattern: 'Last name can only contain letters, spaces, hyphens, and apostrophes'
+        }
+    },
+    company: {
+        required: false,
+        minLength: 2,
+        maxLength: 100,
+        pattern: /^[a-zA-Z0-9\s.,'&()-]+$/,
+        messages: {
+            minLength: 'Company name must be at least 2 characters',
+            maxLength: 'Company name cannot exceed 100 characters',
+            pattern: 'Company name contains invalid characters'
+        }
+    },
+    email: {
+        required: false,
+        pattern: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+        messages: {
+            pattern: 'Please enter a valid email address'
+        }
+    },
+    country_code: {
+        required: true,
+        messages: {
+            required: 'Country code is required'
+        }
+    },
+    phone: {
+        required: true,
+        minLength: 6,
+        maxLength: 15,
+        pattern: /^\d+$/,
+        messages: {
+            required: 'Phone number is required',
+            minLength: 'Phone number must be at least 6 digits',
+            maxLength: 'Phone number cannot exceed 15 digits',
+            pattern: 'Phone number can only contain digits'
+        }
+    },
+    country: {
+        required: true,
+        messages: {
+            required: 'Country is required'
+        }
+    },
+    state: {
+        required: true,
+        messages: {
+            required: 'State is required'
+        }
+    },
+    city: {
+        required: true,
+        messages: {
+            required: 'City is required'
+        }
+    },
+    postal_code: {
+        required: true,
+        minLength: 3,
+        maxLength: 10,
+        pattern: /^[0-9A-Za-z\s-]+$/,
+        messages: {
+            required: 'Postal code is required',
+            minLength: 'Postal code must be at least 3 characters',
+            maxLength: 'Postal code cannot exceed 10 characters',
+            pattern: 'Postal code can only contain letters, numbers, spaces, and hyphens'
+        }
+    },
+    address_line_1: {
+        required: true,
+        minLength: 5,
+        maxLength: 200,
+        pattern: /^[a-zA-Z0-9\s.,'#/-]+$/,
+        messages: {
+            required: 'Address line 1 is required',
+            minLength: 'Address must be at least 5 characters',
+            maxLength: 'Address cannot exceed 200 characters',
+            pattern: 'Address contains invalid characters'
+        }
+    },
+    address_line_2: {
+        required: false,
+        minLength: 3,
+        maxLength: 200,
+        pattern: /^[a-zA-Z0-9\s.,'#/-]+$/,
+        messages: {
+            minLength: 'Address line 2 must be at least 3 characters',
+            maxLength: 'Address line 2 cannot exceed 200 characters',
+            pattern: 'Address contains invalid characters'
+        }
+    }
+};
+
+// Validate individual field
+function validateField(fieldId) {
+    const field = $('#' + fieldId);
+    if (!field.length) return true;
+    
+    const value = String(field.val() || '').trim();
+    const rules = VALIDATION_RULES[fieldId];
+    
+    if (!rules) return true;
+    
+    let isValid = true;
+    let errorMessage = '';
+    
+    // Required validation
+    if (rules.required && !value) {
+        isValid = false;
+        errorMessage = rules.messages.required;
+    }
+    
+    // Only validate other rules if field has value
+    if (isValid && value) {
+        // Min length validation
+        if (rules.minLength && value.length < rules.minLength) {
+            isValid = false;
+            errorMessage = rules.messages.minLength;
+        }
+        
+        // Max length validation
+        if (isValid && rules.maxLength && value.length > rules.maxLength) {
+            isValid = false;
+            errorMessage = rules.messages.maxLength;
+        }
+        
+        // Pattern validation
+        if (isValid && rules.pattern && !rules.pattern.test(value)) {
+            isValid = false;
+            errorMessage = rules.messages.pattern;
+        }
+    }
+    
+    // Update UI
+    if (!isValid) {
+        field.addClass('is-invalid');
+        field.removeClass('is-valid');
+        field.siblings('.invalid-feedback').first().text(errorMessage);
+        field.siblings('.valid-feedback').first().text('');
+    } else if (value || rules.required) {
+        field.removeClass('is-invalid');
+        field.addClass('is-valid');
+        field.siblings('.invalid-feedback').first().text('');
+        field.siblings('.valid-feedback').first().text('Looks good!');
+    } else {
+        field.removeClass('is-invalid is-valid');
+        field.siblings('.invalid-feedback').first().text('');
+        field.siblings('.valid-feedback').first().text('');
+    }
+    
+    return isValid;
+}
+
+// Validate entire form
+function validateForm() {
+    let isFormValid = true;
+    
+    // Validate all fields with rules
+    Object.keys(VALIDATION_RULES).forEach(function(fieldId) {
+        const isValid = validateField(fieldId);
+        if (!isValid) {
+            isFormValid = false;
+        }
+    });
+    
+    // Enable/disable save button
+    $('#addressSaveBtn').prop('disabled', !isFormValid);
+    
+    return isFormValid;
+}
+
+// Real-time validation on input
+function setupRealtimeValidation() {
+    // Text inputs - validate on blur and input (with debounce)
+    $('#addressForm input[type="text"], #addressForm input[type="email"]').each(function() {
+        const fieldId = $(this).attr('id');
+        let typingTimer;
+        const doneTypingInterval = 500; // ms
+        
+        // Validate on blur
+        $(this).on('blur', function() {
+            validateField(fieldId);
+            validateForm();
+        });
+        
+        // Validate on input (debounced)
+        $(this).on('input', function() {
+            clearTimeout(typingTimer);
+            const self = this;
+            typingTimer = setTimeout(function() {
+                validateField($(self).attr('id'));
+                validateForm();
+            }, doneTypingInterval);
+        });
+    });
+    
+    // Select dropdowns - validate on change
+    $('#addressForm select').on('change', function() {
+        const fieldId = $(this).attr('id');
+        validateField(fieldId);
+        validateForm();
+    });
+    
+    // Checkbox - no validation needed but trigger form validation
+    $('#is_default').on('change', function() {
+        validateForm();
+    });
+}
+
+// Phone number formatting and validation
+function setupPhoneValidation() {
+    const phoneInput = $('#phone');
+    
+    // Format phone number as user types
+    phoneInput.on('input', function() {
+        let value = $(this).val().replace(/\D/g, ''); // Remove non-digits
+        
+        // Limit to 15 digits
+        if (value.length > 15) {
+            value = value.substring(0, 15);
+        }
+        
+        $(this).val(value);
+        
+        // Trigger validation
+        setTimeout(function() {
+            validateField('phone');
+            validateForm();
+        }, 100);
+    });
+    
+    // Prevent non-numeric input
+    phoneInput.on('keypress', function(e) {
+        const charCode = e.which ? e.which : e.keyCode;
+        // Allow: backspace, delete, tab, escape, enter
+        if ([8, 9, 27, 13, 46].indexOf(charCode) !== -1 ||
+            // Allow: Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
+            (charCode === 65 && e.ctrlKey === true) ||
+            (charCode === 67 && e.ctrlKey === true) ||
+            (charCode === 86 && e.ctrlKey === true) ||
+            (charCode === 88 && e.ctrlKey === true)) {
+            return;
+        }
+        // Ensure that it is a number and stop the keypress
+        if ((charCode < 48 || charCode > 57)) {
+            e.preventDefault();
+        }
+    });
+}
+
+// Postal code formatting
+function setupPostalCodeValidation() {
+    const postalInput = $('#postal_code');
+    
+    postalInput.on('input', function() {
+        let value = $(this).val().toUpperCase(); // Convert to uppercase
+        
+        // Remove invalid characters
+        value = value.replace(/[^0-9A-Z\s-]/g, '');
+        
+        // Limit to 10 characters
+        if (value.length > 10) {
+            value = value.substring(0, 10);
+        }
+        
+        $(this).val(value);
+        
+        // Trigger validation
+        setTimeout(function() {
+            validateField('postal_code');
+            validateForm();
+        }, 100);
+    });
+}
+
 // Function to prevent nice-select from interfering
 function preventNiceSelectInterference() {
     // Override the nice-select initialization for our dropdowns
@@ -198,7 +518,7 @@ function loadPhoneCodes() {
                 });
                 // Enable the dropdown
                 select.prop('disabled', false);
-                select.removeClass('disabled');
+                select.removeClass('disabled is-invalid is-valid');
                 console.log('[AddressModal] Phone codes dropdown enabled');
             }
         },
@@ -229,7 +549,7 @@ function loadCountries() {
                 });
                 // Enable the dropdown
                 select.prop('disabled', false);
-                select.removeClass('disabled');
+                select.removeClass('disabled is-invalid is-valid');
                 console.log('[AddressModal] Countries dropdown enabled');
             }
         },
@@ -244,6 +564,10 @@ function loadCountries() {
 function loadStates(countryId) {
     console.log('[AddressModal] Loading states for country:', countryId);
     
+    // Reset and disable dependent dropdowns
+    $('#state').empty().append('<option value="">Loading...</option>').prop('disabled', true);
+    $('#city').empty().append('<option value="">Select City</option>').prop('disabled', true).addClass('disabled');
+    
     $.ajax({
         url: '{{ route("locations.states", ["country" => "_id_"]) }}'.replace('_id_', countryId),
         method: 'GET',
@@ -253,17 +577,20 @@ function loadStates(countryId) {
             const select = $('#state');
             select.empty().append('<option value="">Select State</option>');
             
-            if (Array.isArray(data)) {
+            if (Array.isArray(data) && data.length > 0) {
                 data.forEach(state => {
                     select.append(`<option value="${state.id}">${state.name}</option>`);
                 });
                 select.prop('disabled', false);
-                select.removeClass('disabled');
+                select.removeClass('disabled is-invalid is-valid');
                 console.log('[AddressModal] States dropdown enabled');
+            } else {
+                select.append('<option value="">No states available</option>');
+                select.prop('disabled', true);
             }
             
-            // Reset city dropdown
-            $('#city').empty().append('<option value="">Select City</option>').prop('disabled', true).addClass('disabled');
+            validateField('state');
+            validateForm();
         },
         error: function(xhr, status, error) {
             console.error('[AddressModal] Error loading states:', {xhr, status, error});
@@ -277,6 +604,9 @@ function loadStates(countryId) {
 function loadCities(stateId) {
     console.log('[AddressModal] Loading cities for state:', stateId);
     
+    // Reset and show loading
+    $('#city').empty().append('<option value="">Loading...</option>').prop('disabled', true);
+    
     $.ajax({
         url: '{{ route("locations.cities", ["state" => "_id_"]) }}'.replace('_id_', stateId),
         method: 'GET',
@@ -286,14 +616,20 @@ function loadCities(stateId) {
             const select = $('#city');
             select.empty().append('<option value="">Select City</option>');
             
-            if (Array.isArray(data)) {
+            if (Array.isArray(data) && data.length > 0) {
                 data.forEach(city => {
                     select.append(`<option value="${city.id}">${city.name}</option>`);
                 });
                 select.prop('disabled', false);
-                select.removeClass('disabled');
+                select.removeClass('disabled is-invalid is-valid');
                 console.log('[AddressModal] Cities dropdown enabled');
+            } else {
+                select.append('<option value="">No cities available</option>');
+                select.prop('disabled', true);
             }
+            
+            validateField('city');
+            validateForm();
         },
         error: function(xhr, status, error) {
             console.error('[AddressModal] Error loading cities:', {xhr, status, error});
@@ -323,13 +659,18 @@ function bindEventHandlers() {
         const countryId = $(this).val();
         console.log('[AddressModal] Country changed:', countryId);
         
+        // Clear state and city
+        $('#state').empty().append('<option value="">Select State</option>').prop('disabled', true).addClass('disabled').removeClass('is-valid is-invalid');
+        $('#city').empty().append('<option value="">Select City</option>').prop('disabled', true).addClass('disabled').removeClass('is-valid is-invalid');
+        
         if (!countryId) {
-            $('#state').empty().append('<option value="">Select State</option>').prop('disabled', true).addClass('disabled');
-            $('#city').empty().append('<option value="">Select City</option>').prop('disabled', true).addClass('disabled');
+            validateField('country');
+            validateForm();
             return;
         }
         
         loadStates(countryId);
+        validateField('country');
     });
     
     // State change handler
@@ -337,39 +678,23 @@ function bindEventHandlers() {
         const stateId = $(this).val();
         console.log('[AddressModal] State changed:', stateId);
         
+        // Clear city
+        $('#city').empty().append('<option value="">Select City</option>').prop('disabled', true).addClass('disabled').removeClass('is-valid is-invalid');
+        
         if (!stateId) {
-            $('#city').empty().append('<option value="">Select City</option>').prop('disabled', true).addClass('disabled');
+            validateField('state');
+            validateForm();
             return;
         }
         
         loadCities(stateId);
+        validateField('state');
     });
     
-    // Form validation
-    $('#addressForm').on('input change', function() {
-        validateForm();
-    });
-}
-
-// Validate form and enable/disable save button
-function validateForm() {
-    const requiredFields = ['first_name', 'last_name', 'phone', 'country_id', 'state_id', 'city_id', 'postal_code', 'address_line_1'];
-    let isValid = true;
-    
-    requiredFields.forEach(field => {
-        const value = $(`#${field}`).val();
-        if (!value || value.trim() === '') {
-            isValid = false;
-        }
-    });
-    
-    // Check if country code is selected
-    const countryCode = $('#country_code').val();
-    if (!countryCode) {
-        isValid = false;
-    }
-    
-    $('#addressSaveBtn').prop('disabled', !isValid);
+    // Setup real-time validation
+    setupRealtimeValidation();
+    setupPhoneValidation();
+    setupPostalCodeValidation();
 }
 
 // Global function to open address modal
@@ -417,6 +742,9 @@ window.openAddressModal = function(id) {
 
 // Load address data for editing
 function loadAddressForEdit(id) {
+    // Show loading state
+    $('#addressSaveBtn').prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Loading...');
+    
     $.ajax({
         url: `/addresses/${id}/edit`,
         method: 'GET',
@@ -424,22 +752,54 @@ function loadAddressForEdit(id) {
         success: function(response) {
             if (response.success && response.address) {
                 fillAddressForm(response.address);
+            } else {
+                alert('Failed to load address data');
             }
         },
         error: function(xhr, status, error) {
             console.error('[AddressModal] Error loading address for edit:', {xhr, status, error});
             alert('Failed to load address data');
+        },
+        complete: function() {
+            $('#addressSaveBtn').html('<i class="fa fa-save"></i> Save Address');
         }
     });
 }
 
 // Fill form with address data
 function fillAddressForm(address) {
-    $('#first_name').val(address.first_name || '');
-    $('#last_name').val(address.last_name || '');
+    // Clear all validation states first
+    $('#addressForm .form-control').removeClass('is-valid is-invalid');
+    $('#addressForm .invalid-feedback').text('');
+    $('#addressForm .valid-feedback').text('');
+    
+    // Split name if first/last not provided
+    var first = address.first_name || '';
+    var last = address.last_name || '';
+    if ((!first || !last) && address.full_name) {
+        var parts = String(address.full_name).trim().split(/\s+/);
+        if (parts.length === 1) { 
+            first = parts[0]; 
+        } else if (parts.length >= 2) { 
+            first = parts.shift(); 
+            last = parts.join(' '); 
+        }
+    }
+    
+    $('#first_name').val(first);
+    $('#last_name').val(last);
     $('#country_code').val(address.country_code || '');
     $('#phone').val(address.phone || '');
-    $('#email').val(address.email || '');
+    
+    // Email fallback
+    if (address.email) {
+        $('#email').val(address.email);
+    } else if (window.ADDRESS_MODAL_USER && window.ADDRESS_MODAL_USER.email) {
+        $('#email').val(window.ADDRESS_MODAL_USER.email);
+    } else {
+        $('#email').val('');
+    }
+    
     $('#postal_code').val(address.postal_code || '');
     $('#address_line_1').val(address.address_line_1 || '');
     $('#address_line_2').val(address.address_line_2 || '');
@@ -452,37 +812,102 @@ function fillAddressForm(address) {
         loadStates(address.country_id);
         
         // Set state and load cities after states are loaded
-        setTimeout(() => {
+        setTimeout(function() {
             if (address.state_id) {
                 $('#state').val(address.state_id);
                 loadCities(address.state_id);
                 
                 // Set city after cities are loaded
-                setTimeout(() => {
+                setTimeout(function() {
                     if (address.city_id) {
                         $('#city').val(address.city_id);
+                        validateField('city');
                     }
-                }, 500);
+                    
+                    // Validate all fields after loading
+                    setTimeout(function() {
+                        validateForm();
+                    }, 200);
+                }, 600);
             }
-        }, 500);
+        }, 600);
     }
     
-    validateForm();
+    // Validate text fields immediately
+    setTimeout(function() {
+        ['first_name', 'last_name', 'company', 'email', 'phone', 'postal_code', 'address_line_1', 'address_line_2', 'country_code'].forEach(function(fieldId) {
+            validateField(fieldId);
+        });
+    }, 100);
 }
 
 // Reset form
 function resetAddressForm() {
     $('#addressForm')[0].reset();
-    $('#state, #city').prop('disabled', true).addClass('disabled');
+    
+    // Clear all validation states
+    $('#addressForm .form-control, #addressForm select').removeClass('is-valid is-invalid');
+    $('#addressForm .invalid-feedback').text('');
+    $('#addressForm .valid-feedback').text('');
+    
+    // Reset dropdowns
+    $('#state, #city').empty().append('<option value="">Select State</option>').prop('disabled', true).addClass('disabled');
     $('#addressSaveBtn').prop('disabled', true);
     
     // Reload initial data
     loadPhoneCodes();
     loadCountries();
+
+    // Autofill from current user
+    try {
+        var fullName = (window.ADDRESS_MODAL_USER && window.ADDRESS_MODAL_USER.name) ? String(window.ADDRESS_MODAL_USER.name) : '';
+        var email = (window.ADDRESS_MODAL_USER && window.ADDRESS_MODAL_USER.email) ? String(window.ADDRESS_MODAL_USER.email) : '';
+        var first = '', last = '';
+        if (fullName) {
+            var parts = fullName.trim().split(/\s+/);
+            if (parts.length === 1) { 
+                first = parts[0]; 
+            } else if (parts.length >= 2) { 
+                first = parts.shift(); 
+                last = parts.join(' '); 
+            }
+        }
+        $('#first_name').val(first);
+        $('#last_name').val(last);
+        $('#email').val(email);
+        
+        // Validate pre-filled fields
+        setTimeout(function() {
+            if (first) validateField('first_name');
+            if (last) validateField('last_name');
+            if (email) validateField('email');
+            validateForm();
+        }, 100);
+    } catch (e) {
+        console.error('[AddressModal] Error autofilling user data:', e);
+    }
 }
 
 // Global save address function
 window.saveAddress = function() {
+    console.log('[AddressModal] Save address clicked');
+    
+    // Validate form before submission
+    if (!validateForm()) {
+        console.log('[AddressModal] Form validation failed');
+        
+        // Scroll to first invalid field
+        const firstInvalid = $('#addressForm .is-invalid').first();
+        if (firstInvalid.length) {
+            firstInvalid.focus();
+            $('#addressModal .modal-body').animate({
+                scrollTop: firstInvalid.offset().top - $('#addressModal .modal-body').offset().top + $('#addressModal .modal-body').scrollTop() - 100
+            }, 300);
+        }
+        
+        return;
+    }
+    
     const form = $('#addressForm');
     const formData = new FormData(form[0]);
     const method = $('#addressMethod').val();
@@ -491,15 +916,16 @@ window.saveAddress = function() {
     let url = '/addresses';
     if (method === 'PUT' && addressId) {
         url = `/addresses/${addressId}`;
+        formData.append('_method', 'PUT');
     }
     
     // Show loading state
     $('#addressSpinner').removeClass('d-none');
-    $('#addressSaveBtn').prop('disabled', true);
+    $('#addressSaveBtn').prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Saving...');
     
     $.ajax({
         url: url,
-        method: method,
+        method: 'POST',
         data: formData,
         processData: false,
         contentType: false,
@@ -507,24 +933,46 @@ window.saveAddress = function() {
             console.log('[AddressModal] Address saved successfully:', response);
             $('#addressModal').modal('hide');
             
-            // Reload addresses if function exists
-            if (typeof window.reloadAddresses === 'function') {
-                window.reloadAddresses();
-            }
-            
-            // Show success message
-            if (response.message) {
-                alert(response.message);
-            }
+            // Reload page to show new/updated address
+            setTimeout(function() {
+                location.reload();
+            }, 300);
         },
         error: function(xhr, status, error) {
             console.error('[AddressModal] Error saving address:', {xhr, status, error});
-            const message = xhr.responseJSON?.message || 'Error saving address';
-            alert(message);
+            
+            // Handle validation errors
+            if (xhr.status === 422 && xhr.responseJSON && xhr.responseJSON.errors) {
+                const errors = xhr.responseJSON.errors;
+                
+                // Display server-side validation errors
+                Object.keys(errors).forEach(function(fieldName) {
+                    const fieldId = fieldName;
+                    const field = $('#' + fieldId);
+                    
+                    if (field.length) {
+                        field.addClass('is-invalid');
+                        field.removeClass('is-valid');
+                        field.siblings('.invalid-feedback').first().text(errors[fieldName][0]);
+                    }
+                });
+                
+                // Scroll to first error
+                const firstInvalid = $('#addressForm .is-invalid').first();
+                if (firstInvalid.length) {
+                    firstInvalid.focus();
+                    $('#addressModal .modal-body').animate({
+                        scrollTop: firstInvalid.offset().top - $('#addressModal .modal-body').offset().top + $('#addressModal .modal-body').scrollTop() - 100
+                    }, 300);
+                }
+            } else {
+                const message = xhr.responseJSON?.message || 'Error saving address. Please try again.';
+                alert(message);
+            }
         },
         complete: function() {
             $('#addressSpinner').addClass('d-none');
-            $('#addressSaveBtn').prop('disabled', false);
+            $('#addressSaveBtn').prop('disabled', false).html('<i class="fa fa-save"></i> Save Address');
         }
     });
 };

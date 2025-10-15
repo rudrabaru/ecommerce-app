@@ -461,9 +461,11 @@
                             // Recompute totals
                             (typeof updateCartTotals === 'function') && updateCartTotals();
                         }
-                        // Update discount code input
+                        // Update discount code input and visible applied code label
                         if (response.discount_code) {
                             $('#discount_code').val(response.discount_code);
+                            $('.applied-code').text(response.discount_code);
+                            $('.applied-discount').show();
                         }
                         // Show affected items info if provided and > 0
                         if (typeof response.affected_items !== 'undefined') {

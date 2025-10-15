@@ -42,13 +42,17 @@
                                                 <input type="radio" name="shipping_address_id" value="{{ $address->id }}" 
                                                        id="address_{{ $address->id }}" 
                                                        {{ $address->is_default ? 'checked' : '' }}>
-                                                    <label for="address_{{ $address->id }}" class="address-card-label">
+                                                <label for="address_{{ $address->id }}" class="address-card-label">
                                                         <div class="address-card-content">
                                                             <div class="address-header">
                                                                 <strong class="address-name">{{ $address->full_name }}</strong>
                                                                 @if($address->is_default)
                                                                     <span class="badge-default">Default</span>
                                                                 @endif
+                                                            <div class="address-actions">
+                                                                <button type="button" class="icon-btn btn-edit-address" title="Edit" data-id="{{ $address->id }}"><i class="fa fa-pencil"></i></button>
+                                                                <button type="button" class="icon-btn btn-delete-address" title="Delete" data-id="{{ $address->id }}"><i class="fa fa-trash"></i></button>
+                                                            </div>
                                                             </div>
                                                         @if($address->company)
                                                                 <div class="address-company">{{ $address->company }}</div>
@@ -77,7 +81,11 @@
                                                             <strong class="address-name">{{ $firstAddress->full_name }}</strong>
                                                             @if($firstAddress->is_default)
                                                                 <span class="badge-default">Default</span>
-                                                        @endif
+                                                            @endif
+                                                            <div class="address-actions">
+                                                                <button type="button" class="icon-btn btn-edit-address" title="Edit" data-id="{{ $firstAddress->id }}"><i class="fa fa-pencil"></i></button>
+                                                                <button type="button" class="icon-btn btn-delete-address" title="Delete" data-id="{{ $firstAddress->id }}"><i class="fa fa-trash"></i></button>
+                                                            </div>
                                                         </div>
                                                         @if($firstAddress->company)
                                                             <div class="address-company">{{ $firstAddress->company }}</div>
@@ -108,6 +116,10 @@
                                                                         <div class="address-card-content">
                                                                             <div class="address-header">
                                                                                 <strong class="address-name">{{ $address->full_name }}</strong>
+                                                                                <div class="address-actions">
+                                                                                    <button type="button" class="icon-btn btn-edit-address" title="Edit" data-id="{{ $address->id }}"><i class="fa fa-pencil"></i></button>
+                                                                                    <button type="button" class="icon-btn btn-delete-address" title="Delete" data-id="{{ $address->id }}"><i class="fa fa-trash"></i></button>
+                                                                                </div>
                                                                             </div>
                                                                             @if($address->company)
                                                                                 <div class="address-company">{{ $address->company }}</div>
@@ -376,6 +388,22 @@
             justify-content: space-between;
             margin-bottom: 8px;
         }
+
+        .address-actions {
+            display: inline-flex;
+            gap: 8px;
+            margin-left: 8px;
+        }
+
+        .icon-btn {
+            background: transparent;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            padding: 4px 6px;
+        }
+
+        .icon-btn:hover { color: #e7ab3c; }
 
         .address-name {
             font-size: 16px;
@@ -1374,6 +1402,52 @@
                     });
                 }
             })();
+
+            // Address edit/delete handlers (AJAX)
+            document.addEventListener('click', async function(e) {
+                var btn;
+                if (e.target.closest) {
+                    btn = e.target.closest('.btn-edit-address, .btn-delete-address');
+                }
+                if (!btn) return;
+                e.preventDefault();
+                var id = btn.getAttribute('data-id');
+                if (btn.classList.contains('btn-edit-address')) {
+                    // Open existing modal in edit mode via AJAX
+                    if (typeof window.openAddressModal === 'function') {
+                        window.openAddressModal(id);
+                    }
+                } else if (btn.classList.contains('btn-delete-address')) {
+                    if (!confirm('Delete this address?')) return;
+                    try {
+                        const res = await fetch('/addresses/' + id, {
+                            method: 'POST',
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                                'Accept': 'application/json'
+                            },
+                            body: new URLSearchParams({ _method: 'DELETE' })
+                        });
+                        if (!res.ok) throw new Error('Failed to delete');
+                        // Remove address card from DOM
+                        var input = document.querySelector('input#address_' + id);
+                        if (input) {
+                            var card = input.closest('.address-card');
+                            if (card && card.parentNode) card.parentNode.removeChild(card);
+                        }
+                        // Recompute order summary address if the selected was deleted
+                        var selected = document.querySelector('input[name="shipping_address_id"]:checked');
+                        if (!selected) {
+                            var firstRadio = document.querySelector('input[name="shipping_address_id"]');
+                            if (firstRadio) { firstRadio.checked = true; updateOrderSummaryAddress(firstRadio.value); }
+                            else { updateOrderSummaryAddress(null); }
+                        }
+                    } catch (err) {
+                        alert('Unable to delete address.');
+                    }
+                }
+            });
             
             // Form submission
             form.addEventListener('submit', async function(e) {
@@ -1405,8 +1479,13 @@
                         await initiateStripe(orderIds);
                     } else if (data.payment_method === 'razorpay') {
                         await initiateRazorpay(orderIds);
+                    } else if (data.payment_method === 'cod' && data.redirect_url) {
+                        window.location.href = data.redirect_url;
+                        return;
                     } else {
-                        throw new Error('Unsupported payment method');
+                        // Fallback redirect if server already handled COD
+                        window.location.href = '/orders/success';
+                        return;
                     }
                 } catch (err) {
                     toast(err && err.message ? err.message : 'Something went wrong', 'error');
@@ -1638,6 +1717,12 @@
             $('#postal_code').val(address.postal_code || '');
             $('#phone').val(address.phone || '');
             $('#is_default').prop('checked', !!address.is_default);
+            // Email: prefer address email; else fallback to user's email
+            try {
+                var userEmail = {{ json_encode(Auth::user()->email ?? '') }};
+                var emailToSet = (address.email && String(address.email).trim()) ? address.email : userEmail;
+                $('#email').val(emailToSet || '');
+            } catch(e) { $('#email').val(address.email || ''); }
 
             var country = address.country || '';
             var state = address.state || '';
@@ -1663,6 +1748,19 @@
             $('.invalid-feedback').text('');
             $('.form-control').removeClass('is-invalid');
             validateAddressForm();
+            // Autofill from current user: first name from user's full name, last name blank, email from user
+            try {
+                var fullName = {{ json_encode(Auth::user()->name ?? '') }};
+                var email = {{ json_encode(Auth::user()->email ?? '') }};
+                var first = '';
+                if (fullName) {
+                    var parts = String(fullName).trim().split(/\s+/);
+                    if (parts.length) first = parts[0];
+                }
+                $('#first_name').val(first);
+                $('#last_name').val('');
+                $('#email').val(email || '');
+            } catch(e) {}
         }
 
         function validateAddressForm() {

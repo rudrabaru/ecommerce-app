@@ -238,7 +238,8 @@ class CheckoutController extends Controller
             $order = Order::create([
                 'user_id' => $userId,
                 'total_amount' => $totalOrderAmount,
-                'status' => 'pending',
+                // Set initial status: paid for online gateways (Stripe/Razorpay), pending for COD
+                'status' => in_array($paymentMethod->name, ['stripe','razorpay']) ? 'paid' : 'pending',
                 'shipping_address' => $address->full_address,
                 'shipping_address_id' => $address->id,
                 'payment_method_id' => $paymentMethod->id,
@@ -261,13 +262,13 @@ class CheckoutController extends Controller
                 ]);
             }
 
-            // Create payment record
+            // Create payment record with status based on payment method
             Payment::create([
                 'order_id' => $order->id,
                 'payment_method_id' => $paymentMethod->id,
                 'amount' => $totalOrderAmount,
                 'currency' => $paymentMethod->name === 'razorpay' ? 'INR' : 'USD',
-                'status' => 'pending',
+                'status' => in_array($paymentMethod->name, ['stripe','razorpay']) ? 'paid' : 'pending',
             ]);
 
             $created[] = $order->order_number;
@@ -279,16 +280,14 @@ class CheckoutController extends Controller
                 }
             }
 
-            // Clear cart immediately only for COD; online payments clear on success via webhook
-            if ($paymentMethod->name === 'cod') {
-                if ($user) {
-                    $cart->items()->delete();
-                    if (isset($cart)) {
-                        $cart->update(['discount_code' => null, 'discount_amount' => 0]);
-                    }
-                } else {
-                    session()->forget(['cart', 'cart_discount_code', 'cart_discount']);
+            // Clear cart immediately for all payment methods after order creation
+            if ($user) {
+                $cart->items()->delete();
+                if (isset($cart)) {
+                    $cart->update(['discount_code' => null, 'discount_amount' => 0]);
                 }
+            } else {
+                session()->forget(['cart', 'cart_discount_code', 'cart_discount']);
             }
             
             DB::commit();
@@ -301,6 +300,18 @@ class CheckoutController extends Controller
                         Mail::to($order->user->email)->send(new OrderConfirmationMail($order));
                     }
                 }
+
+                // If AJAX, return JSON so frontend can redirect
+                if ($request->wantsJson() || $request->ajax()) {
+                    $orderIds = Order::whereIn('order_number', $created)->pluck('id');
+                    return response()->json([
+                        'success' => true,
+                        'payment_method' => 'cod',
+                        'order_ids' => $orderIds,
+                        'redirect_url' => route('orders.success'),
+                    ]);
+                }
+
                 return redirect()->route('orders.success')
                     ->with('success', 'Order placed successfully! Order numbers: ' . implode(', ', $created));
             }
