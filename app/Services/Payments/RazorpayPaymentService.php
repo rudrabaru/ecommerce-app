@@ -81,9 +81,29 @@ class RazorpayPaymentService
                 throw new \Exception('Order not found for transaction: ' . $txn->id);
             }
 
+            // Idempotency check: if already paid, skip processing
+            if ($order->status === 'paid') {
+                Log::info('Razorpay captureAndMarkPaid: Order already marked as paid, skipping duplicate processing', [
+                    'order_id' => $order->id,
+                    'razorpay_order_id' => $razorpayOrderId,
+                    'payment_id' => $paymentId
+                ]);
+                DB::commit();
+                return [
+                    'success' => true,
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'duplicate' => true
+                ];
+            }
+
             // Attempt to fetch payment to check its status
             try {
                 $payment = $this->client->payment->fetch($paymentId);
+                Log::info('Razorpay payment fetched successfully', [
+                    'payment_id' => $paymentId,
+                    'payment_status' => $payment->status ?? 'unknown'
+                ]);
             } catch (\Exception $e) {
                 Log::warning('Razorpay payment fetch failed: ' . $e->getMessage(), ['payment_id' => $paymentId]);
                 // Continue anyway - this might be a test mode payment
@@ -99,6 +119,11 @@ class RazorpayPaymentService
                     // Log and proceed if already captured (common in test mode)
                     Log::warning('Razorpay payment capture failed or already captured: ' . $e->getMessage(), ['payment_id' => $paymentId]);
                 }
+            } else {
+                Log::info('Razorpay payment not in authorized state, assuming already captured or test mode', [
+                    'payment_id' => $paymentId,
+                    'payment_status' => $payment->status ?? 'fetch_failed'
+                ]);
             }
 
             $txn->update([
@@ -115,6 +140,8 @@ class RazorpayPaymentService
                 Payment::where('order_id', $order->id)
                     ->where('payment_method_id', $paymentMethod->id)
                     ->update(['status' => 'paid']);
+            } else {
+                Payment::where('order_id', $order->id)->update(['status' => 'paid']);
             }
 
             // Clear cart
@@ -127,12 +154,13 @@ class RazorpayPaymentService
                 }
             }
 
-            // Send confirmation email
-            try {
-                Mail::to($order->user->email)->send(new OrderConfirmationMail($order));
-            } catch (\Exception $e) {
-                Log::error('Failed to send order confirmation email: ' . $e->getMessage());
-            }
+            // Queue order confirmation email with logging
+            Log::info('Razorpay captureAndMarkPaid: Dispatching order confirmation email job', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'user_email' => $order->user->email ?? 'N/A'
+            ]);
+            dispatch(new \App\Jobs\SendOrderConfirmationEmail($order));
 
             DB::commit();
             
@@ -154,5 +182,3 @@ class RazorpayPaymentService
 
     // Webhook handling removed by requirement; confirmation is handled via confirm endpoint only
 }
-
-

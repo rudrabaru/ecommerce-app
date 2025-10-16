@@ -91,17 +91,26 @@
         
         <div class="order-details">
             <h3>Order Details</h3>
-            <div class="product-item">
-                <div>
-                    <strong>{{ $order->product->title }}</strong><br>
-                    <small>Quantity: {{ $order->quantity }}</small>
+            @php($items = $order->orderItems ?? [])
+            @forelse($items as $item)
+                <div class="product-item">
+                    <div>
+                        <strong>{{ optional($item->product)->title ?? 'Product' }}</strong><br>
+                        <small>Quantity: {{ (int) $item->quantity }} @ ${{ number_format((float) $item->unit_price, 2) }}</small>
+                    </div>
+                    <div>
+                        ${{ number_format((float) ($item->total ?? ($item->unit_price * $item->quantity)), 2) }}
+                    </div>
                 </div>
-                <div>
-                    ${{ number_format($order->unit_price * $order->quantity, 2) }}
+            @empty
+                <div class="product-item">
+                    <div>
+                        <strong>Items not available</strong>
+                    </div>
                 </div>
-            </div>
+            @endforelse
             <div class="total">
-                Total: ${{ number_format($order->total_amount, 2) }}
+                Total: ${{ number_format((float) $order->total_amount, 2) }}
             </div>
         </div>
         

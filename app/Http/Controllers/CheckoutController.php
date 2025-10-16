@@ -294,27 +294,33 @@ class CheckoutController extends Controller
             DB::commit();
 
             if ($paymentMethod->name === 'cod') {
-                // Send confirmation email for each order
+                // Send confirmation email for each order (queue for resilience)
                 foreach ($created as $orderNumber) {
-                    $order = Order::where('order_number', $orderNumber)->first();
-                    if ($order) {
-                        Mail::to($order->user->email)->send(new OrderConfirmationMail($order));
+                    $order = Order::where('order_number', $orderNumber)
+                        ->with(['orderItems.product','paymentMethod','user'])
+                        ->first();
+                    if ($order && $order->user && $order->user->email) {
+                        try {
+                            dispatch(new \App\Jobs\SendOrderConfirmationEmail($order));
+                        } catch (\Throwable $e) {
+                            // fallback to sync send
+                            try { Mail::to($order->user->email)->send(new OrderConfirmationMail($order)); } catch (\Throwable $_) {}
+                        }
                     }
                 }
 
-                // If AJAX, return JSON so frontend can redirect
+                // If AJAX, return JSON for SweetAlert handling on frontend
                 if ($request->wantsJson() || $request->ajax()) {
                     $orderIds = Order::whereIn('order_number', $created)->pluck('id');
                     return response()->json([
                         'success' => true,
                         'payment_method' => 'cod',
                         'order_ids' => $orderIds,
-                        'redirect_url' => route('orders.success'),
                     ]);
                 }
 
-                return redirect()->route('orders.success')
-                    ->with('success', 'Order placed successfully! Order numbers: ' . implode(', ', $created));
+                // Non-AJAX fallback: keep user on checkout with a flash message
+                return redirect()->route('checkout')->with('status', 'Order placed successfully');
             }
 
             // For online payments, return payload for client to initiate gateway

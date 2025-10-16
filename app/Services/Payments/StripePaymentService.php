@@ -77,9 +77,11 @@ class StripePaymentService
 
                 // Idempotency: if already marked paid/failed accordingly, skip
                 if ($type === 'payment_intent.succeeded' && $order->status === 'paid') {
+                    Log::info('Stripe webhook: Order already marked as paid, skipping duplicate processing', ['order_id' => $orderId]);
                     return;
                 }
                 if ($type === 'payment_intent.payment_failed' && $order->status === 'failed') {
+                    Log::info('Stripe webhook: Order already marked as failed, skipping duplicate processing', ['order_id' => $orderId]);
                     return;
                 }
 
@@ -120,12 +122,13 @@ class StripePaymentService
                         }
                     }
 
-                    // Send confirmation email
-                    try {
-                        \Illuminate\Support\Facades\Mail::to(optional($order->user)->email)->send(new OrderConfirmationMail($order));
-                    } catch (\Throwable $e) {
-                        // swallow mail errors to not break webhook
-                    }
+                    // Queue order confirmation email with logging
+                    Log::info('Stripe webhook: Dispatching order confirmation email job', [
+                        'order_id' => $order->id,
+                        'order_number' => $order->order_number,
+                        'user_email' => $order->user->email ?? 'N/A'
+                    ]);
+                    dispatch(new \App\Jobs\SendOrderConfirmationEmail($order));
                 } else {
                     $txn->update([
                         'status' => 'failed',
@@ -139,6 +142,12 @@ class StripePaymentService
                     Payment::where('order_id', $order->id)
                         ->whereHas('paymentMethod', function ($q) { $q->where('name', 'stripe'); })
                         ->update(['status' => 'failed']);
+                    
+                    Log::error('Stripe webhook: Payment failed for order', [
+                        'order_id' => $orderId,
+                        'error_code' => $data->last_payment_error->code ?? null,
+                        'error_message' => $data->last_payment_error->message ?? null
+                    ]);
                 }
             });
         }
@@ -184,6 +193,16 @@ class StripePaymentService
                 throw new \RuntimeException('PaymentIntent not succeeded');
             }
 
+            // Idempotency check: if already paid, skip
+            if ($order->status === 'paid') {
+                Log::info('Order already marked as paid, skipping duplicate confirmation', [
+                    'order_id' => $order->id,
+                    'payment_intent_id' => $paymentIntentId
+                ]);
+                DB::commit();
+                return ['success' => true, 'order_id' => $order->id, 'order_number' => $order->order_number];
+            }
+
             $txn->update([
                 'status' => 'paid',
                 'payload' => array_merge($txn->payload ?? [], ['confirm_without_webhook' => true]),
@@ -207,20 +226,24 @@ class StripePaymentService
                 $cart->update(['discount_code' => null, 'discount_amount' => 0]);
             }
 
-            // Send email (best-effort)
-            try {
-                Mail::to(optional($order->user)->email)->send(new OrderConfirmationMail($order));
-            } catch (\Throwable $e) {
-                Log::warning('Stripe confirm: mail send failed', ['order_id' => $order->id, 'error' => $e->getMessage()]);
-            }
+            // Queue order confirmation email with logging
+            Log::info('Stripe confirmAndMarkPaid: Dispatching order confirmation email job', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'user_email' => $order->user->email ?? 'N/A'
+            ]);
+            dispatch(new \App\Jobs\SendOrderConfirmationEmail($order));
 
             DB::commit();
             return ['success' => true, 'order_id' => $order->id, 'order_number' => $order->order_number];
         } catch (\Throwable $e) {
             DB::rollBack();
+            Log::error('Stripe payment confirmation failed: ' . $e->getMessage(), [
+                'payment_intent_id' => $paymentIntentId,
+                'order_id' => $orderId ?? null,
+                'error' => $e->getMessage()
+            ]);
             throw $e;
         }
     }
 }
-
-

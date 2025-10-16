@@ -1644,12 +1644,19 @@
                     });
                     
                     const contentType = res.headers.get('content-type') || '';
-                    if (!contentType.includes('application/json')) {
-                        window.location.reload();
-                        return;
+                    let data;
+                    if (contentType.includes('application/json')) {
+                        data = await res.json();
+                    } else {
+                        // Try to parse anyway; if fails, stay on checkout and show error
+                        try {
+                            const text = await res.text();
+                            data = JSON.parse(text);
+                        } catch (_) {
+                            toast('Unexpected response. Please try again.', 'error');
+                            return;
+                        }
                     }
-                    
-                    const data = await res.json();
                     if (!data || !data.success) {
                         throw new Error(data.message || 'Checkout initiation failed');
                     }
