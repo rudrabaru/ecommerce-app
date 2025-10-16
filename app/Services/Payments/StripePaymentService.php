@@ -4,11 +4,13 @@ namespace App\Services\Payments;
 
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\PaymentMethod;
 use App\Models\Cart;
 use App\Mail\OrderConfirmationMail;
 use App\Models\Transaction;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Stripe\StripeClient;
 use Stripe\Webhook;
 
@@ -73,6 +75,14 @@ class StripePaymentService
                     return;
                 }
 
+                // Idempotency: if already marked paid/failed accordingly, skip
+                if ($type === 'payment_intent.succeeded' && $order->status === 'paid') {
+                    return;
+                }
+                if ($type === 'payment_intent.payment_failed' && $order->status === 'failed') {
+                    return;
+                }
+
                 $txn = Transaction::where('gateway', 'stripe')
                     ->where('gateway_payment_id', $intentId)
                     ->lockForUpdate()
@@ -97,12 +107,9 @@ class StripePaymentService
                     ]);
                     $order->update(['status' => 'paid']);
 
-                    // Mark payment as paid if present
+                    // Mark payment as paid via method name to avoid relying on non-existent columns
                     Payment::where('order_id', $order->id)
-                        ->where('gateway', 'stripe')
-                        ->orWhereHas('method', function ($q) {
-                            $q->where('name', 'stripe');
-                        })
+                        ->whereHas('paymentMethod', function ($q) { $q->where('name', 'stripe'); })
                         ->update(['status' => 'paid']);
 
                     // Clear cart for the user (if any)
@@ -128,15 +135,90 @@ class StripePaymentService
                     ]);
                     $order->update(['status' => 'failed']);
 
-                    // Mark payment as failed
+                    // Mark payment as failed via method name
                     Payment::where('order_id', $order->id)
-                        ->where(function ($q) {
-                            $q->where('gateway', 'stripe')
-                              ->orWhereHas('method', function ($q2) { $q2->where('name', 'stripe'); });
-                        })
+                        ->whereHas('paymentMethod', function ($q) { $q->where('name', 'stripe'); })
                         ->update(['status' => 'failed']);
                 }
             });
+        }
+    }
+
+    /**
+     * Demo/local helper: confirm success without relying on webhooks.
+     * Retrieves the PaymentIntent and marks Order/Payment/Transaction as paid,
+     * clears cart and sends confirmation email.
+     */
+    public function confirmAndMarkPaid(string $paymentIntentId): array
+    {
+        $intent = $this->client->paymentIntents->retrieve($paymentIntentId);
+
+        $orderId = (int) ($intent->metadata['order_id'] ?? 0);
+        if (! $orderId) {
+            throw new \RuntimeException('Order id missing in intent metadata');
+        }
+
+        DB::beginTransaction();
+        try {
+            $order = Order::lockForUpdate()->findOrFail($orderId);
+
+            $txn = Transaction::where('gateway', 'stripe')
+                ->where('gateway_payment_id', $intent->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $txn) {
+                $txn = Transaction::create([
+                    'order_id' => $order->id,
+                    'user_id' => $order->user_id,
+                    'gateway' => 'stripe',
+                    'gateway_payment_id' => $intent->id,
+                    'amount' => (int) $intent->amount_received,
+                    'currency' => strtoupper($intent->currency ?? 'USD'),
+                    'status' => 'pending',
+                    'payload' => ['intent' => $intent->toArray()],
+                ]);
+            }
+
+            if ($intent->status !== 'succeeded') {
+                throw new \RuntimeException('PaymentIntent not succeeded');
+            }
+
+            $txn->update([
+                'status' => 'paid',
+                'payload' => array_merge($txn->payload ?? [], ['confirm_without_webhook' => true]),
+            ]);
+
+            $order->update(['status' => 'paid']);
+
+            // Update Payment status
+            $methodId = optional(PaymentMethod::where('name', 'stripe')->first())->id;
+            if ($methodId) {
+                Payment::where('order_id', $order->id)
+                    ->where('payment_method_id', $methodId)
+                    ->update(['status' => 'paid']);
+            } else {
+                Payment::where('order_id', $order->id)->update(['status' => 'paid']);
+            }
+
+            // Clear cart
+            if ($order->user_id && ($cart = Cart::where('user_id', $order->user_id)->first())) {
+                $cart->items()->delete();
+                $cart->update(['discount_code' => null, 'discount_amount' => 0]);
+            }
+
+            // Send email (best-effort)
+            try {
+                Mail::to(optional($order->user)->email)->send(new OrderConfirmationMail($order));
+            } catch (\Throwable $e) {
+                Log::warning('Stripe confirm: mail send failed', ['order_id' => $order->id, 'error' => $e->getMessage()]);
+            }
+
+            DB::commit();
+            return ['success' => true, 'order_id' => $order->id, 'order_number' => $order->order_number];
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            throw $e;
         }
     }
 }

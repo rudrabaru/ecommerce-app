@@ -32,19 +32,20 @@ Route::middleware('auth')->group(function () {
     Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
     Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout');
     Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.store');
+    Route::post('/checkout/cancel-pending', [CheckoutController::class, 'cancelPending'])->name('checkout.cancel');
 
     // Address management routes
     Route::resource('addresses', UserAddressController::class);
     Route::post('/addresses/{address}/set-default', [UserAddressController::class, 'setDefault'])->name('addresses.set-default');
 
-    // Order success page
-    Route::get('/orders/success', function () {
-        return view('orders.success');
-    })->name('orders.success');
-    // Order failure page (demo)
-    Route::get('/orders/failure', function () {
-        return view('orders.failure');
-    })->name('orders.failure');
+    // My Orders page (replaces success/failure redirects with SweetAlerts)
+    Route::get('/myorder', function () {
+        $orders = \App\Models\Order::with(['orderItems.product','paymentMethod'])
+            ->where('user_id', Auth::id())
+            ->latest('id')
+            ->get();
+        return view('orders.myorder', compact('orders'));
+    })->name('orders.myorder');
 });
 
 // Provide a common dashboard route for auth flows/tests; redirect by role

@@ -10,6 +10,7 @@ use App\Services\Payments\StripePaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class StripeController extends Controller
 {
@@ -65,6 +66,25 @@ class StripeController extends Controller
         $sig = $request->header('Stripe-Signature');
         $service->handleWebhook($payload, (string) $sig);
         return response()->json(['received' => true]);
+    }
+
+    /**
+     * Demo/local confirmation endpoint without webhooks.
+     * Frontend posts payment_intent_id after confirmCardPayment success.
+     */
+    public function confirm(Request $request, StripePaymentService $service)
+    {
+        $validated = $request->validate([
+            'payment_intent_id' => ['required', 'string'],
+        ]);
+
+        try {
+            $res = $service->confirmAndMarkPaid($validated['payment_intent_id']);
+            return response()->json($res);
+        } catch (\Throwable $e) {
+            Log::error('Stripe payment confirm failed: ' . $e->getMessage(), ['pi' => $validated['payment_intent_id']]);
+            return response()->json(['success' => false, 'message' => 'Unable to confirm Stripe payment'], 422);
+        }
     }
 }
 

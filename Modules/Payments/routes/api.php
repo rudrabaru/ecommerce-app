@@ -21,4 +21,4 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
 });
 
 Route::post('/payment/stripe/webhook', [StripeController::class, 'webhook'])->name('payment.stripe.webhook');
-Route::post('/payment/razorpay/webhook', [RazorpayController::class, 'webhook'])->name('payment.razorpay.webhook');
+// Razorpay webhooks disabled

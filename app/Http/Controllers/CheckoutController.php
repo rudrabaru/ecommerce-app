@@ -234,12 +234,11 @@ class CheckoutController extends Controller
                 ];
             }
 
-            // Create single order
+            // Create single order (always pending initially; gateway confirm will mark paid)
             $order = Order::create([
                 'user_id' => $userId,
                 'total_amount' => $totalOrderAmount,
-                // Set initial status: paid for online gateways (Stripe/Razorpay), pending for COD
-                'status' => in_array($paymentMethod->name, ['stripe','razorpay']) ? 'paid' : 'pending',
+                'status' => 'pending',
                 'shipping_address' => $address->full_address,
                 'shipping_address_id' => $address->id,
                 'payment_method_id' => $paymentMethod->id,
@@ -262,13 +261,13 @@ class CheckoutController extends Controller
                 ]);
             }
 
-            // Create payment record with status based on payment method
+            // Create payment record (pending initially; confirm will mark paid)
             Payment::create([
                 'order_id' => $order->id,
                 'payment_method_id' => $paymentMethod->id,
                 'amount' => $totalOrderAmount,
                 'currency' => $paymentMethod->name === 'razorpay' ? 'INR' : 'USD',
-                'status' => in_array($paymentMethod->name, ['stripe','razorpay']) ? 'paid' : 'pending',
+                'status' => 'pending',
             ]);
 
             $created[] = $order->order_number;
@@ -280,14 +279,16 @@ class CheckoutController extends Controller
                 }
             }
 
-            // Clear cart immediately for all payment methods after order creation
-            if ($user) {
-                $cart->items()->delete();
-                if (isset($cart)) {
-                    $cart->update(['discount_code' => null, 'discount_amount' => 0]);
+            // Clear cart only for COD at this moment; for online gateways clear after payment success
+            if ($paymentMethod->name === 'cod') {
+                if ($user) {
+                    $cart->items()->delete();
+                    if (isset($cart)) {
+                        $cart->update(['discount_code' => null, 'discount_amount' => 0]);
+                    }
+                } else {
+                    session()->forget(['cart', 'cart_discount_code', 'cart_discount']);
                 }
-            } else {
-                session()->forget(['cart', 'cart_discount_code', 'cart_discount']);
             }
             
             DB::commit();
@@ -335,6 +336,35 @@ class CheckoutController extends Controller
                 ->with('error', 'Failed to place order. Please try again.')
                 ->withInput();
         }
+    }
+
+    /**
+     * Cancel and delete pending orders created prior to an online payment attempt.
+     */
+    public function cancelPending(Request $request)
+    {
+        $userId = Auth::id();
+        $validated = $request->validate([
+            'order_ids' => ['required','array','min:1'],
+            'order_ids.*' => ['integer']
+        ]);
+
+        DB::transaction(function () use ($validated, $userId) {
+            $orders = Order::whereIn('id', $validated['order_ids'])
+                ->where('user_id', $userId)
+                ->where('status', 'pending')
+                ->get();
+
+            foreach ($orders as $order) {
+                // Delete related rows safely
+                \App\Models\OrderItem::where('order_id', $order->id)->delete();
+                Payment::where('order_id', $order->id)->delete();
+                \App\Models\Transaction::where('order_id', $order->id)->delete();
+                $order->delete();
+            }
+        });
+
+        return response()->json(['success' => true]);
     }
 
     /**

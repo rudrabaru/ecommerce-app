@@ -1020,7 +1020,26 @@
         }
 
         function toast(msg, type) {
-            alert(msg);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: type === 'error' ? 'Error' : 'Notice',
+                    html: '<div style="font-size:14px;">' + msg + '</div>',
+                    icon: type === 'error' ? 'error' : 'info',
+                    confirmButtonText: 'OK',
+                    customClass: { confirmButton: 'btn btn-primary' },
+                    buttonsStyling: false
+                });
+            } else {
+                alert(msg);
+            }
+        }
+
+        // Update cart count in navbar
+        function updateCartCount(count) {
+            var cartCountEl = document.getElementById('cart-count');
+            if (cartCountEl) {
+                cartCountEl.textContent = count || 0;
+            }
         }
 
         // Load cart data via AJAX
@@ -1043,6 +1062,9 @@
             });
         }
 
+        // Global flag to prevent duplicate event binding
+        var quantityEventsBound = false;
+
         // Display cart data
         function displayCartData(data) {
             const loadingEl = document.getElementById('cart-loading');
@@ -1051,55 +1073,59 @@
             const tbody = document.getElementById('cart-items-tbody');
             const orderSummaryBox = document.getElementById('order-summary-box');
             
-            loadingEl.style.display = 'none';
+            if (loadingEl) loadingEl.style.display = 'none';
             
             if (!data.items || data.items.length === 0) {
-                emptyMessage.style.display = 'block';
+                if (emptyMessage) emptyMessage.style.display = 'block';
                 return;
             }
             
-            tableContainer.style.display = 'block';
-            orderSummaryBox.style.display = 'block';
+            if (tableContainer) tableContainer.style.display = 'block';
+            if (orderSummaryBox) orderSummaryBox.style.display = 'block';
+            
+            if (!tbody) return;
             
             tbody.innerHTML = '';
             
-            data.items.forEach(item => {
+            data.items.forEach(function(item) {
                 const row = document.createElement('tr');
                 row.setAttribute('data-product-id', item.product_id);
                 
                 const imageSrc = item.image_url || '{{ asset("img/product/product-1.jpg") }}';
+                const itemName = (item.name || 'Product').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
                 
-                row.innerHTML = `
-                    <td>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <img src="${imageSrc}" alt="${item.name}" 
-                                 style="width: 45px; height: 45px; object-fit: cover; border-radius: 8px; flex-shrink: 0;"
-                                 onerror="this.src='{{ asset("img/product/product-1.jpg") }}';">
-                            <div style="flex: 1; min-width: 0;">
-                                <div style="font-weight: 600; font-size: 13px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.name}</div>
-                                <div style="font-size: 12px; color: #888; margin-top: 2px;">${item.price.toFixed(2)} each</div>
-                            </div>
-                        </div>
-                    </td>
-                    <td class="text-center">
-                        <div class="quantity-controls">
-                            <button type="button" class="qty-btn dec" data-product-id="${item.product_id}">-</button>
-                            <input type="number" value="${item.quantity}" min="1" 
-                                   class="quantity-input" data-product-id="${item.product_id}">
-                            <button type="button" class="qty-btn inc" data-product-id="${item.product_id}">+</button>
-                        </div>
-                    </td>
-                    <td class="text-right">
-                        <span class="item-total" style="font-weight: 600; color: #333;">${(item.price * item.quantity).toFixed(2)}</span>
-                        <input type="hidden" class="item-unit-price" data-unit-price="${item.price.toFixed(2)}">
-                    </td>
-                `;
+                row.innerHTML = '<td>' +
+                    '<div style="display: flex; align-items: center; gap: 10px;">' +
+                    '<img src="' + imageSrc + '" alt="' + itemName + '" ' +
+                    'style="width: 45px; height: 45px; object-fit: cover; border-radius: 8px; flex-shrink: 0;" ' +
+                    'onerror="this.src=\'{{ asset("img/product/product-1.jpg") }}\';">' +
+                    '<div style="flex: 1; min-width: 0;">' +
+                    '<div style="font-weight: 600; font-size: 13px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + itemName + '</div>' +
+                    '<div style="font-size: 12px; color: #888; margin-top: 2px;">$' + item.price.toFixed(2) + ' each</div>' +
+                    '</div>' +
+                    '</div>' +
+                    '</td>' +
+                    '<td class="text-center">' +
+                    '<div class="quantity-controls">' +
+                    '<button type="button" class="qty-btn dec" data-product-id="' + item.product_id + '">-</button>' +
+                    '<input type="number" value="' + item.quantity + '" min="1" class="quantity-input" data-product-id="' + item.product_id + '">' +
+                    '<button type="button" class="qty-btn inc" data-product-id="' + item.product_id + '">+</button>' +
+                    '</div>' +
+                    '</td>' +
+                    '<td class="text-right">' +
+                    '<span class="item-total" style="font-weight: 600; color: #333;">$' + (item.price * item.quantity).toFixed(2) + '</span>' +
+                    '<input type="hidden" class="item-unit-price" data-unit-price="' + item.price.toFixed(2) + '">' +
+                    '</td>';
                 
                 tbody.appendChild(row);
             });
             
             updateCheckoutTotals(data);
-            bindQuantityEvents();
+            
+            if (!quantityEventsBound) {
+                bindQuantityEvents();
+                quantityEventsBound = true;
+            }
         }
 
         // Update checkout totals
@@ -1126,53 +1152,70 @@
             }
         }
 
-        // Bind quantity events
+        // Bind quantity events (only once)
         function bindQuantityEvents() {
-            document.addEventListener('change', function(e) {
-                if (e.target.classList.contains('quantity-input')) {
-                    const productId = e.target.getAttribute('data-product-id');
-                    const quantity = parseInt(e.target.value);
-                    if (quantity && quantity > 0) {
-                        updateCartQuantity(productId, quantity);
-                    }
-                }
-            });
+            var tbody = document.getElementById('cart-items-tbody');
+            if (!tbody) return;
             
-            document.addEventListener('click', function(e) {
-                if (e.target.classList.contains('qty-btn')) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    
-                    const productId = e.target.getAttribute('data-product-id');
-                    const input = document.querySelector(`input.quantity-input[data-product-id="${productId}"]`);
-                    const currentQty = parseInt(input.value) || 1;
-                    let newQty = currentQty;
-                    
-                    if (e.target.classList.contains('inc')) {
-                        newQty = currentQty + 1;
-                    } else if (e.target.classList.contains('dec') && currentQty > 1) {
-                        newQty = currentQty - 1;
-                    }
-                    
-                    if (newQty !== currentQty) {
-                        input.value = newQty;
-                        
-                        // Update row total immediately for instant feedback
-                        const row = input.closest('tr');
-                        const unitPrice = parseFloat(row.querySelector('.item-unit-price').getAttribute('data-unit-price'));
-                        const newTotal = unitPrice * newQty;
-                        row.querySelector('.item-total').textContent = '$' + newTotal.toFixed(2);
-                        
-                        // Then update cart via AJAX which will refresh all totals
-                        updateCartQuantity(productId, newQty);
-                    }
+            tbody.removeEventListener('change', handleQuantityChange);
+            tbody.removeEventListener('click', handleQuantityClick);
+            
+            tbody.addEventListener('change', handleQuantityChange);
+            tbody.addEventListener('click', handleQuantityClick);
+        }
+        
+        function handleQuantityChange(e) {
+            if (e.target.classList.contains('quantity-input')) {
+                const productId = e.target.getAttribute('data-product-id');
+                const quantity = parseInt(e.target.value);
+                if (quantity && quantity > 0) {
+                    updateCartQuantity(productId, quantity);
                 }
-            });
+            }
+        }
+        
+        function handleQuantityClick(e) {
+            if (e.target.classList.contains('qty-btn')) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const productId = e.target.getAttribute('data-product-id');
+                const input = e.target.parentElement.querySelector('.quantity-input[data-product-id="' + productId + '"]');
+                if (!input) return;
+                
+                const currentQty = parseInt(input.value) || 1;
+                let newQty = currentQty;
+                
+                if (e.target.classList.contains('inc')) {
+                    newQty = currentQty + 1;
+                } else if (e.target.classList.contains('dec') && currentQty > 1) {
+                    newQty = currentQty - 1;
+                }
+                
+                if (newQty !== currentQty) {
+                    input.value = newQty;
+                    
+                    const row = input.closest('tr');
+                    if (row) {
+                        const unitPriceInput = row.querySelector('.item-unit-price');
+                        if (unitPriceInput) {
+                            const unitPrice = parseFloat(unitPriceInput.getAttribute('data-unit-price'));
+                            const newTotal = unitPrice * newQty;
+                            const totalSpan = row.querySelector('.item-total');
+                            if (totalSpan) {
+                                totalSpan.textContent = '$' + newTotal.toFixed(2);
+                            }
+                        }
+                    }
+                    
+                    updateCartQuantity(productId, newQty);
+                }
+            }
         }
 
         // Update cart quantity via AJAX
         function updateCartQuantity(productId, quantity) {
-            fetch(`/cart/${productId}`, {
+            fetch('/cart/' + productId, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1184,10 +1227,8 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success && data.cart_data) {
-                    // Update all totals with fresh server data
                     updateCheckoutTotals(data.cart_data);
                     
-                    // Update cart count in navbar if present
                     const cartCountEl = document.getElementById('cart-count');
                     if (cartCountEl && data.cart_count !== undefined) {
                         cartCountEl.textContent = data.cart_count;
@@ -1225,7 +1266,7 @@
                 return;
             }
             
-            const addressInput = document.querySelector(`input[name="shipping_address_id"][value="${addressId}"]`);
+            const addressInput = document.querySelector('input[name="shipping_address_id"][value="' + addressId + '"]');
             if (!addressInput) return;
             
             const addressLabel = addressInput.nextElementSibling;
@@ -1298,6 +1339,7 @@
                             err.textContent = event.error ? event.error.message : '';
                         }
                     });
+                    console.log('Stripe card element mounted successfully');
                 }
             } catch (error) {
                 console.error('Error initializing Stripe elements:', error);
@@ -1306,142 +1348,240 @@
         }
 
         async function initiateStripe(orderIds) {
-            await ensureStripeElementsReady();
-            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-            const res = await fetch('/payment/stripe/initiate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': token
-                },
-                body: JSON.stringify({ order_ids: orderIds })
-            });
-            if (!res.ok) throw new Error('Stripe initiate failed');
-            const data = await res.json();
-            
-            const { error, paymentIntent } = await stripeInstance.confirmCardPayment(data.clientSecret, {
-                payment_method: { card: stripeCardElement }
-            });
-            if (error) {
-                var err = document.getElementById('stripe-card-errors');
-                if (err) err.textContent = error.message || 'Payment failed';
-                throw new Error(error.message || 'Payment failed');
-            }
-            window.location.href = '/orders/success';
-        }
-
-        async function initiateRazorpay(orderIds) {
-            if (!razorpayJsLoaded) {
-                await loadScript('https://checkout.razorpay.com/v1/checkout.js');
-                razorpayJsLoaded = true;
-            }
-            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-            const res = await fetch('/payment/razorpay/initiate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': token
-                },
-                body: JSON.stringify({ order_ids: orderIds })
-            });
-            if (!res.ok) throw new Error('Razorpay initiate failed');
-            const data = await res.json();
-            
-            const userName = (document.getElementById('order-user-name') || {}).textContent || '';
-            const userEmail = (document.getElementById('order-email') || {}).textContent || '';
-
-            return new Promise(function(resolve, reject) {
-                const options = {
-                    key: data.key,
-                    amount: data.amount,
-                    currency: data.currency,
-                    order_id: data.razorpayOrderId,
-                    prefill: {
-                        name: userName || undefined,
-                        email: userEmail || undefined,
+            try {
+                await ensureStripeElementsReady();
+                const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                const res = await fetch('/payment/stripe/initiate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': token
                     },
-                    method: {
-                        netbanking: true,
-                        card: true,
-                        upi: true,
-                        wallet: true
-                    },
-                    handler: function(response) { resolve(response); },
-                    modal: {
-                        ondismiss: function() { reject(new Error('Payment cancelled')); }
-                    }
-                };
-                const rz = new window.Razorpay(options);
-                rz.open();
-            }).then(async function(resp) {
+                    body: JSON.stringify({ order_ids: orderIds })
+                });
+                
+                if (!res.ok) throw new Error('Stripe initiate failed');
+                const data = await res.json();
+                
+                const { error, paymentIntent } = await stripeInstance.confirmCardPayment(data.clientSecret, {
+                    payment_method: { card: stripeCardElement }
+                });
+                
+                if (error) {
+                    var err = document.getElementById('stripe-card-errors');
+                    if (err) err.textContent = error.message || 'Payment failed';
+                    throw new Error(error.message || 'Payment failed');
+                }
+                // Call backend confirm (no webhook) to send email, mark paid, clear cart
                 try {
-                    const confirmRes = await fetch('/payment/razorpay/confirm', {
+                    await fetch('/payment/stripe/confirm', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'X-Requested-With': 'XMLHttpRequest',
                             'X-CSRF-TOKEN': token
                         },
-                        body: JSON.stringify({
-                            razorpay_order_id: data.razorpayOrderId,
-                            razorpay_payment_id: resp.razorpay_payment_id
-                        })
+                        body: JSON.stringify({ payment_intent_id: paymentIntent.id })
                     });
-                    const confirmJson = await (async () => { try { return await confirmRes.json(); } catch(_) { return {}; } })();
-                    if (!confirmRes.ok || (confirmJson && confirmJson.success === false)) {
-                        throw new Error('Confirm failed');
-                    }
-                    window.location.href = '/orders/success';
-                } catch (e) {
-                    // Soft-fallback: if DB already has paid status, still go to success
-                    try {
-                        const probe = await fetch('/orders/success', { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-                        if (probe.ok) { window.location.href = '/orders/success'; return; }
-                    } catch(_){ }
-                    window.location.href = '/orders/failure';
+                } catch (e) { /* ignore non-blocking */ }
+                
+                // Payment successful - update cart count and show success
+                updateCartCount(0);
+                
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        title: 'Payment Successful!',
+                        html: '<div style="font-size:14px;">✅ Your payment has been processed successfully.<br>Order confirmation email has been sent.</div>',
+                        icon: 'success',
+                        showCancelButton: true,
+                        confirmButtonText: 'Go to My Orders',
+                        cancelButtonText: 'Close',
+                        customClass: { 
+                            confirmButton: 'btn btn-primary', 
+                            cancelButton: 'btn btn-secondary' 
+                        },
+                        buttonsStyling: false,
+                        allowOutsideClick: false
+                    }).then(function(result) {
+                        if (result.isConfirmed) {
+                            window.location.href = '/myorder';
+                        } else {
+                            window.location.href = '/';
+                        }
+                    });
+                } else {
+                    window.location.href = '/myorder';
                 }
-            });
+            } catch (error) {
+                console.error('Stripe payment error:', error);
+                throw error;
+            }
+        }
+
+        async function initiateRazorpay(orderIds) {
+            try {
+                if (!razorpayJsLoaded) {
+                    await loadScript('https://checkout.razorpay.com/v1/checkout.js');
+                    razorpayJsLoaded = true;
+                }
+                
+                const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                const res = await fetch('/payment/razorpay/initiate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': token
+                    },
+                    body: JSON.stringify({ order_ids: orderIds })
+                });
+                
+                if (!res.ok) throw new Error('Razorpay initiate failed');
+                const data = await res.json();
+                
+                const userName = (document.getElementById('order-user-name') || {}).textContent || '';
+                const userEmail = (document.getElementById('order-email') || {}).textContent || '';
+
+                return new Promise(function(resolve, reject) {
+                    const options = {
+                        key: data.key,
+                        amount: data.amount,
+                        currency: data.currency,
+                        order_id: data.razorpayOrderId,
+                        prefill: {
+                            name: userName || undefined,
+                            email: userEmail || undefined,
+                        },
+                        method: {
+                            netbanking: true,
+                            card: true,
+                            upi: true,
+                            wallet: true
+                        },
+                        handler: function(response) { 
+                            console.log('Razorpay payment successful:', response);
+                            resolve(response); 
+                        },
+                        modal: {
+                            ondismiss: function() { 
+                                console.log('Razorpay payment cancelled by user');
+                                reject(new Error('Payment cancelled')); 
+                            }
+                        }
+                    };
+                    const rz = new window.Razorpay(options);
+                    rz.open();
+                }).then(async function(resp) {
+                    console.log('Confirming Razorpay payment...');
+                    
+                    try {
+                        const confirmRes = await fetch('/payment/razorpay/confirm', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'X-CSRF-TOKEN': token
+                            },
+                            body: JSON.stringify({
+                                razorpay_order_id: data.razorpayOrderId,
+                                razorpay_payment_id: resp.razorpay_payment_id
+                            })
+                        });
+                        
+                        const confirmJson = await confirmRes.json();
+                        console.log('Razorpay confirmation response:', confirmJson);
+                        
+                        if (!confirmRes.ok || (confirmJson && confirmJson.success === false)) {
+                            throw new Error(confirmJson.message || 'Confirmation failed');
+                        }
+                        
+                        // Payment confirmed successfully - update cart count
+                        updateCartCount(0);
+                        
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                title: 'Payment Successful!',
+                                html: '<div style="font-size:14px;">✅ Your payment has been processed successfully.<br>Order confirmation email has been sent.</div>',
+                                icon: 'success',
+                                showCancelButton: true,
+                                confirmButtonText: 'Go to My Orders',
+                                cancelButtonText: 'Close',
+                                customClass: { 
+                                    confirmButton: 'btn btn-primary', 
+                                    cancelButton: 'btn btn-secondary' 
+                                },
+                                buttonsStyling: false,
+                                allowOutsideClick: false
+                            }).then(function(result) {
+                                if (result.isConfirmed) {
+                                    window.location.href = '/myorder';
+                                } else {
+                                    window.location.href = '/';
+                                }
+                            });
+                        } else {
+                            window.location.href = '/myorder';
+                        }
+                    } catch (e) {
+                        console.error('Razorpay confirmation error:', e);
+                        throw new Error('Payment confirmation failed: ' + e.message);
+                    }
+                });
+            } catch (error) {
+                console.error('Razorpay payment error:', error);
+                throw error;
+            }
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('Checkout page loaded');
+            
             var form = document.querySelector('.checkout__form form');
-            if (!form) return;
+            if (!form) {
+                console.error('Checkout form not found');
+                return;
+            }
             var submitBtn = form.querySelector('button[type="submit"]');
             
             loadCartData();
             handleAddressSelection();
             
             // Payment method change handler
-            document.addEventListener('change', function(e) {
-                var target = e.target;
-                if (target && target.name === 'payment_method_id') {
-                    var name = target.getAttribute('data-method-name');
+            var paymentInputs = document.querySelectorAll('input[name="payment_method_id"]');
+            paymentInputs.forEach(function(input) {
+                input.addEventListener('change', function(e) {
+                    var name = e.target.getAttribute('data-method-name');
+                    console.log('Payment method changed to:', name);
+                    
                     if (name === 'stripe') {
                         toggleStripeElementsVisible(true);
                         ensureStripeElementsReady().catch(function(err) {
-                            console.error(err);
+                            console.error('Failed to initialize Stripe:', err);
                         });
                     } else {
                         toggleStripeElementsVisible(false);
                     }
-                }
+                });
             });
             
             // Initialize Stripe visibility on load
-            (function initStripeVisibility() {
-                var checked = document.querySelector('input[name="payment_method_id"]:checked');
-                var name = checked ? checked.getAttribute('data-method-name') : null;
+            var checkedPayment = document.querySelector('input[name="payment_method_id"]:checked');
+            if (checkedPayment) {
+                var name = checkedPayment.getAttribute('data-method-name');
+                console.log('Initial payment method:', name);
+                
                 if (name === 'stripe') {
                     toggleStripeElementsVisible(true);
-                    ensureStripeElementsReady().catch(function(err) {
-                        console.error(err);
-                    });
+                    setTimeout(function() {
+                        ensureStripeElementsReady().catch(function(err) {
+                            console.error('Failed to initialize Stripe on load:', err);
+                        });
+                    }, 100);
                 }
-            })();
+            }
 
-            // Address edit/delete handlers (AJAX)
+            // Address edit/delete handlers
             document.addEventListener('click', async function(e) {
                 var btn;
                 if (e.target.closest) {
@@ -1451,7 +1591,6 @@
                 e.preventDefault();
                 var id = btn.getAttribute('data-id');
                 if (btn.classList.contains('btn-edit-address')) {
-                    // Open existing modal in edit mode via AJAX
                     if (typeof window.openAddressModal === 'function') {
                         window.openAddressModal(id);
                     }
@@ -1468,18 +1607,20 @@
                             body: new URLSearchParams({ _method: 'DELETE' })
                         });
                         if (!res.ok) throw new Error('Failed to delete');
-                        // Remove address card from DOM
                         var input = document.querySelector('input#address_' + id);
                         if (input) {
                             var card = input.closest('.address-card');
                             if (card && card.parentNode) card.parentNode.removeChild(card);
                         }
-                        // Recompute order summary address if the selected was deleted
                         var selected = document.querySelector('input[name="shipping_address_id"]:checked');
                         if (!selected) {
                             var firstRadio = document.querySelector('input[name="shipping_address_id"]');
-                            if (firstRadio) { firstRadio.checked = true; updateOrderSummaryAddress(firstRadio.value); }
-                            else { updateOrderSummaryAddress(null); }
+                            if (firstRadio) { 
+                                firstRadio.checked = true; 
+                                updateOrderSummaryAddress(firstRadio.value); 
+                            } else { 
+                                updateOrderSummaryAddress(null); 
+                            }
                         }
                     } catch (err) {
                         alert('Unable to delete address.');
@@ -1489,8 +1630,9 @@
             
             // Form submission
             form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
                 try {
-                    e.preventDefault();
                     showLoading(submitBtn, true);
                     const formData = new FormData(form);
                     const res = await fetch(form.action, {
@@ -1509,24 +1651,88 @@
                     
                     const data = await res.json();
                     if (!data || !data.success) {
-                        throw new Error('Checkout initiation failed');
+                        throw new Error(data.message || 'Checkout initiation failed');
                     }
                     
                     const orderIds = data.order_ids || [];
-                    if (data.payment_method === 'stripe') {
-                        await initiateStripe(orderIds);
-                    } else if (data.payment_method === 'razorpay') {
-                        await initiateRazorpay(orderIds);
-                    } else if (data.payment_method === 'cod' && data.redirect_url) {
-                        window.location.href = data.redirect_url;
-                        return;
+                    const paymentMethod = data.payment_method;
+                    
+                    console.log('Order initiated, payment method:', paymentMethod);
+                    
+                    if (paymentMethod === 'stripe') {
+                        try {
+                            await initiateStripe(orderIds);
+                        } catch (error) {
+                            console.error('Stripe payment failed:', error);
+                            if (typeof Swal !== 'undefined') {
+                                Swal.fire({
+                                    title: 'Payment Failed',
+                                    html: '<div style="font-size:14px;">❌ Payment failed. Please try again.<br><small>' + error.message + '</small></div>',
+                                    icon: 'error',
+                                    confirmButtonText: 'Try Again',
+                                    customClass: { confirmButton: 'btn btn-primary' },
+                                    buttonsStyling: false,
+                                    allowOutsideClick: false
+                                }).then(function() { /* stay on checkout; cart persists */ });
+                            } else {
+                                alert('Payment failed: ' + error.message);
+                                window.location.href = '/checkout';
+                            }
+                        }
+                    } else if (paymentMethod === 'razorpay') {
+                        try {
+                            await initiateRazorpay(orderIds);
+                        } catch (error) {
+                            console.error('Razorpay payment failed:', error);
+                            if (typeof Swal !== 'undefined') {
+                                Swal.fire({
+                                    title: 'Payment Failed',
+                                    html: '<div style="font-size:14px;">❌ Payment failed. Please try again.<br><small>' + error.message + '</small></div>',
+                                    icon: 'error',
+                                    confirmButtonText: 'Try Again',
+                                    customClass: { confirmButton: 'btn btn-primary' },
+                                    buttonsStyling: false,
+                                    allowOutsideClick: false
+                                }).then(function() { /* stay on checkout; cart persists */ });
+                            } else {
+                                alert('Payment failed: ' + error.message);
+                                window.location.href = '/checkout';
+                            }
+                        }
+                    } else if (paymentMethod === 'cod') {
+                        // COD successful - update cart count
+                        updateCartCount(0);
+                        
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                title: 'Order Placed Successfully!',
+                                html: '<div style="font-size:14px;">✅ Thank you for your order!<br>Your order has been successfully placed.<br>Order confirmation email has been sent.</div>',
+                                icon: 'success',
+                                showCancelButton: true,
+                                confirmButtonText: 'Go to My Orders',
+                                cancelButtonText: 'Close',
+                                customClass: { 
+                                    confirmButton: 'btn btn-primary', 
+                                    cancelButton: 'btn btn-secondary' 
+                                },
+                                buttonsStyling: false,
+                                allowOutsideClick: false
+                            }).then(function(result) { 
+                        if (result.isConfirmed) {
+                            window.location.href = '/myorder';
+                        } else {
+                            window.location.href = '/';
+                        }
+                            });
+                        } else {
+                            window.location.href = '/myorder';
+                        }
                     } else {
-                        // Fallback redirect if server already handled COD
-                        window.location.href = '/orders/success';
-                        return;
+                        throw new Error('Unsupported payment method');
                     }
                 } catch (err) {
-                    toast(err && err.message ? err.message : 'Something went wrong', 'error');
+                    console.error('Checkout error:', err);
+                    toast(err && err.message ? err.message : 'Something went wrong. Please try again.', 'error');
                 } finally {
                     showLoading(submitBtn, false);
                 }

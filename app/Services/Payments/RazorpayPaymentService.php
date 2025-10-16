@@ -5,9 +5,12 @@ namespace App\Services\Payments;
 use App\Models\Order;
 use App\Models\Transaction;
 use App\Models\Payment;
+use App\Models\PaymentMethod;
 use App\Models\Cart;
+use App\Mail\OrderConfirmationMail;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Razorpay\Api\Api as RazorpayClient;
 
 class RazorpayPaymentService
@@ -66,130 +69,90 @@ class RazorpayPaymentService
      */
     public function captureAndMarkPaid(string $razorpayOrderId, string $paymentId): array
     {
-        // Fetch txn by order
-        $txn = Transaction::where('gateway', 'razorpay')
-            ->where('gateway_order_id', $razorpayOrderId)
-            ->lockForUpdate()
-            ->firstOrFail();
-
-        $order = Order::lockForUpdate()->findOrFail($txn->order_id);
-
-        // Auto-capture the payment in test mode
-        // Amount should be in smallest unit and match the order amount
+        DB::beginTransaction();
         try {
-            $this->client->payment->fetch($paymentId);
-            // Razorpay capture signature: capture($paymentId, $amount, array $params)
-            $this->client->payment->capture($paymentId, $txn->amount, ['currency' => $txn->currency]);
-        } catch (\Throwable $e) {
-            // In demo/test flows, payment may already be captured by Checkout; continue marking paid
-            \Illuminate\Support\Facades\Log::warning('Razorpay capture error (ignored in demo)', [
-                'payment_id' => $paymentId,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        DB::transaction(function () use ($txn, $order, $paymentId) {
-            $txn->update([
-                'gateway_payment_id' => $paymentId,
-                'status' => 'paid',
-                'payload' => array_merge($txn->payload ?? [], [
-                    'manual_confirm' => true,
-                ]),
-            ]);
-            $order->update(['status' => 'paid']);
-
-            // Update Payment row
-            \App\Models\Payment::where('order_id', $order->id)
-                ->where(function ($q) {
-                    $q->where('gateway', 'razorpay')
-                      ->orWhereHas('method', function ($q2) { $q2->where('name', 'razorpay'); });
-                })
-                ->update(['status' => 'paid']);
-        });
-
-        return [$order, $txn];
-    }
-
-    public function verifySignature(string $orderId, string $paymentId, string $signature): bool
-    {
-        $expectedSignature = hash_hmac('sha256', $orderId.'|'.$paymentId, config('services.razorpay.secret'));
-        return hash_equals($expectedSignature, $signature);
-    }
-
-    public function handleWebhook(array $payload): void
-    {
-        $event = $payload['event'] ?? null;
-        $entity = $payload['payload']['payment']['entity'] ?? null;
-        if (!$event || !$entity) {
-            Log::warning('Razorpay webhook: invalid payload');
-            return;
-        }
-
-        $paymentId = $entity['id'] ?? null;
-        $rOrderId = $entity['order_id'] ?? null;
-        $amount = (int) ($entity['amount'] ?? 0);
-        $currency = strtoupper($entity['currency'] ?? 'INR');
-
-        DB::transaction(function () use ($event, $paymentId, $rOrderId, $amount, $currency, $payload) {
             $txn = Transaction::where('gateway', 'razorpay')
-                ->where('gateway_order_id', $rOrderId)
+                ->where('gateway_order_id', $razorpayOrderId)
                 ->lockForUpdate()
-                ->first();
-
-            if (!$txn) {
-                Log::warning('Razorpay webhook: transaction not found', ['rOrderId' => $rOrderId]);
-                return;
-            }
+                ->firstOrFail();
 
             $order = Order::lockForUpdate()->find($txn->order_id);
             if (!$order) {
-                Log::warning('Razorpay webhook: order not found', ['order_id' => $txn->order_id]);
-                return;
+                throw new \Exception('Order not found for transaction: ' . $txn->id);
             }
 
-            if (in_array($event, ['payment.captured'])) {
-                $txn->update([
-                    'gateway_payment_id' => $paymentId,
-                    'status' => 'paid',
-                    'amount' => $amount,
-                    'currency' => $currency,
-                    'payload' => array_merge($txn->payload ?? [], ['event' => $event, 'data' => $payload]),
-                ]);
-                $order->update(['status' => 'paid']);
+            // Attempt to fetch payment to check its status
+            try {
+                $payment = $this->client->payment->fetch($paymentId);
+            } catch (\Exception $e) {
+                Log::warning('Razorpay payment fetch failed: ' . $e->getMessage(), ['payment_id' => $paymentId]);
+                // Continue anyway - this might be a test mode payment
+                $payment = null;
+            }
 
-                // Mark payment as paid
-                Payment::where('order_id', $order->id)
-                    ->where(function ($q) {
-                        $q->where('gateway', 'razorpay')
-                          ->orWhereHas('method', function ($q2) { $q2->where('name', 'razorpay'); });
-                    })
-                    ->update(['status' => 'paid']);
-
-                // Clear cart for the user
-                if ($order->user_id) {
-                    if ($cart = \App\Models\Cart::where('user_id', $order->user_id)->first()) {
-                        $cart->items()->delete();
-                        $cart->update(['discount_code' => null, 'discount_amount' => 0]);
-                    }
+            // Only capture if payment exists and status is authorized (not already captured)
+            if ($payment && $payment->status === 'authorized') {
+                try {
+                    $this->client->payment->capture($paymentId, $txn->amount, ['currency' => $txn->currency]);
+                    Log::info('Razorpay payment captured successfully.', ['payment_id' => $paymentId]);
+                } catch (\Exception $e) {
+                    // Log and proceed if already captured (common in test mode)
+                    Log::warning('Razorpay payment capture failed or already captured: ' . $e->getMessage(), ['payment_id' => $paymentId]);
                 }
-            } elseif (in_array($event, ['payment.failed'])) {
-                $txn->update([
-                    'gateway_payment_id' => $paymentId,
-                    'status' => 'failed',
-                    'payload' => array_merge($txn->payload ?? [], ['event' => $event, 'data' => $payload]),
-                ]);
-                $order->update(['status' => 'failed']);
-
-                // Mark payment as failed
-                Payment::where('order_id', $order->id)
-                    ->where(function ($q) {
-                        $q->where('gateway', 'razorpay')
-                          ->orWhereHas('method', function ($q2) { $q2->where('name', 'razorpay'); });
-                    })
-                    ->update(['status' => 'failed']);
             }
-        });
+
+            $txn->update([
+                'gateway_payment_id' => $paymentId,
+                'status' => 'paid',
+                'payload' => array_merge($txn->payload ?? [], ['payment' => $payment ? $payment->toArray() : []]),
+            ]);
+            
+            $order->update(['status' => 'paid']);
+
+            // Update the associated Payment record
+            $paymentMethod = PaymentMethod::where('name', 'razorpay')->first();
+            if ($paymentMethod) {
+                Payment::where('order_id', $order->id)
+                    ->where('payment_method_id', $paymentMethod->id)
+                    ->update(['status' => 'paid']);
+            }
+
+            // Clear cart
+            $user = $order->user;
+            if ($user) {
+                $cart = Cart::where('user_id', $user->id)->first();
+                if ($cart) {
+                    $cart->items()->delete();
+                    $cart->update(['discount_code' => null, 'discount_amount' => 0]);
+                }
+            }
+
+            // Send confirmation email
+            try {
+                Mail::to($order->user->email)->send(new OrderConfirmationMail($order));
+            } catch (\Exception $e) {
+                Log::error('Failed to send order confirmation email: ' . $e->getMessage());
+            }
+
+            DB::commit();
+            
+            return [
+                'success' => true,
+                'order_id' => $order->id,
+                'order_number' => $order->order_number
+            ];
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('Razorpay captureAndMarkPaid failed: ' . $e->getMessage(), [
+                'razorpay_order_id' => $razorpayOrderId,
+                'payment_id' => $paymentId,
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
+        }
     }
+
+    // Webhook handling removed by requirement; confirmation is handled via confirm endpoint only
 }
 
 

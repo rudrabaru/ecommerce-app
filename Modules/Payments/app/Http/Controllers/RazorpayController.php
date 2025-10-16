@@ -59,11 +59,7 @@ class RazorpayController extends Controller
         }
     }
 
-    public function webhook(Request $request, RazorpayPaymentService $service)
-    {
-        $service->handleWebhook($request->all());
-        return response()->json(['received' => true]);
-    }
+    // Note: Webhooks are disabled for Razorpay in this project as per requirements
 
     /**
      * Demo/test-mode confirmation without webhook.
@@ -77,20 +73,25 @@ class RazorpayController extends Controller
         ]);
 
         try {
-            [$order, $txn] = $service->captureAndMarkPaid(
+            $result = $service->captureAndMarkPaid(
                 $validated['razorpay_order_id'],
                 $validated['razorpay_payment_id']
             );
 
             return response()->json([
                 'success' => true,
-                'order_id' => $order->id,
-                'transaction_id' => $txn->id,
+                'message' => 'Payment confirmed and captured',
+                'order_id' => is_array($result) ? ($result['order_id'] ?? null) : $result,
             ]);
         } catch (\Throwable $e) {
+            Log::error('Razorpay payment confirmation failed: ' . $e->getMessage(), [
+                'razorpay_order_id' => $validated['razorpay_order_id'],
+                'razorpay_payment_id' => $validated['razorpay_payment_id'],
+                'exception' => $e,
+            ]);
             return response()->json([
                 'success' => false,
-                'message' => 'Unable to confirm Razorpay payment',
+                'message' => 'Unable to confirm Razorpay payment: ' . $e->getMessage(),
             ], 422);
         }
     }
