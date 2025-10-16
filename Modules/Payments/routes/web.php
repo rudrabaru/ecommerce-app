@@ -16,6 +16,12 @@ use Modules\Payments\Http\Controllers\RazorpayController;
 |
 */
 
+// Public Stripe webhook endpoint for Stripe CLI/local webhooks
+// CSRF should be disabled for this endpoint
+Route::post('/payment/stripe/webhook', [StripeController::class, 'webhook'])
+    ->name('payment.stripe.webhook')
+    ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
+
 Route::middleware(['web','auth'])->group(function () {
     // Admin routes - only admins can access
     Route::middleware(['ensure_role:admin'])->prefix('admin')->as('admin.')->group(function () {

@@ -16,6 +16,7 @@ class Transaction extends Model
         'amount',
         'currency',
         'status',
+        'processed_via',
         'error_code',
         'error_message',
         'payload',

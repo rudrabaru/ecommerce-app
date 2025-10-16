@@ -105,6 +105,7 @@ class StripePaymentService
                 if ($type === 'payment_intent.succeeded') {
                     $txn->update([
                         'status' => 'paid',
+                        'processed_via' => 'webhook',
                         'payload' => array_merge($txn->payload ?? [], ['event' => $type, 'data' => $data->toArray()]),
                     ]);
                     $order->update(['status' => 'paid']);
@@ -132,6 +133,7 @@ class StripePaymentService
                 } else {
                     $txn->update([
                         'status' => 'failed',
+                        'processed_via' => 'webhook',
                         'error_code' => $data->last_payment_error->code ?? null,
                         'error_message' => $data->last_payment_error->message ?? null,
                         'payload' => array_merge($txn->payload ?? [], ['event' => $type, 'data' => $data->toArray()]),
@@ -205,6 +207,7 @@ class StripePaymentService
 
             $txn->update([
                 'status' => 'paid',
+                'processed_via' => 'controller',
                 'payload' => array_merge($txn->payload ?? [], ['confirm_without_webhook' => true]),
             ]);
 
