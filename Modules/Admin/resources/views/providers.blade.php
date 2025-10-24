@@ -2,6 +2,11 @@
     <div class="container-fluid">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="mb-0">Providers</h1>
+            <div>
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#providerModal" data-action="create" data-modal="providerModal">
+                    <i class="fas fa-plus"></i> Create Provider
+                </button>
+            </div>
         </div>
 
         <div class="card">
@@ -26,6 +31,50 @@
         </div>
     </div>
 
+    <!-- Provider Modal -->
+    <div class="modal fade" id="providerModal" tabindex="-1" aria-labelledby="providerModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="providerModalLabel">Create Provider</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="providerForm">
+                        @csrf
+                        <input type="hidden" id="providerId" name="provider_id">
+                        <input type="hidden" name="_method" id="providerMethod" value="POST">
+                        
+                        <div class="mb-3">
+                            <label for="provider_name" class="form-label">Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="provider_name" name="name" required>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="provider_email" class="form-label">Email <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" id="provider_email" name="email" required>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="provider_password" class="form-label">Password <span class="text-danger">*</span></label>
+                            <input type="password" class="form-control" id="provider_password" name="password" required>
+                            <div class="invalid-feedback"></div>
+                            <div class="form-text">Leave blank when editing to keep current password</div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveProviderBtn" onclick="saveProvider()" disabled>
+                        <span class="spinner-border spinner-border-sm d-none" id="providerSaveSpinner" role="status" aria-hidden="true"></span>
+                        Save Provider
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     @push('styles')
         <style>
@@ -158,6 +207,5 @@
     @endpush
 
     @push('scripts')
-        @vite('Modules/Admin/resources/js/providers.js')
     @endpush
 </x-app-layout>

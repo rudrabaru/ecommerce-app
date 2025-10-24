@@ -30,6 +30,130 @@ class AdminController extends Controller
     }
 
     /**
+     * Show the form for creating a new resource.
+     */
+    public function create()
+    {
+        if (request()->wantsJson() || request()->ajax()) {
+            return response()->json(['success' => true, 'data' => []]);
+        }
+        return view('admin::users');
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     */
+    public function store(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'name' => ['required', 'string', 'max:255'],
+                'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
+                'password' => ['required', 'string', 'min:8'],
+                'role' => ['required', 'in:user,provider']
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $e->errors()
+                ], 422);
+            }
+            throw $e;
+        }
+
+        $user = User::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'password' => bcrypt($validated['password']),
+        ]);
+
+        // Set role
+        $user->assignRole($validated['role']);
+        $roleId = Role::where('name', $validated['role'])->value('id');
+        if ($roleId) {
+            $user->role_id = $roleId;
+            $user->save();
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => __('User created successfully')
+            ]);
+        }
+
+        return redirect()->route('admin.users.index')->with('status', __('User created'));
+    }
+
+    /**
+     * Show the form for editing the specified resource.
+     */
+    public function edit($id)
+    {
+        $user = User::with('roles')->findOrFail($id);
+        
+        if (request()->wantsJson() || request()->ajax()) {
+            return response()->json($user);
+        }
+        
+        return view('admin::users');
+    }
+
+    /**
+     * Update the specified resource in storage.
+     */
+    public function update(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+
+        try {
+            $validated = $request->validate([
+                'name' => ['required', 'string', 'max:255'],
+                'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,' . $id],
+                'password' => ['nullable', 'string', 'min:8'],
+                'role' => ['required', 'in:user,provider']
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $e->errors()
+                ], 422);
+            }
+            throw $e;
+        }
+
+        $user->name = $validated['name'];
+        $user->email = $validated['email'];
+        
+        if (!empty($validated['password'])) {
+            $user->password = bcrypt($validated['password']);
+        }
+        
+        $user->save();
+
+        // Update role
+        $user->syncRoles([$validated['role']]);
+        $roleId = Role::where('name', $validated['role'])->value('id');
+        if ($roleId) {
+            $user->role_id = $roleId;
+            $user->save();
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => __('User updated successfully')
+            ]);
+        }
+
+        return redirect()->route('admin.users.index')->with('status', __('User updated'));
+    }
+
+    /**
      * Remove the specified resource from storage.
      */
     public function destroy($id)
@@ -88,8 +212,10 @@ class AdminController extends Controller
             })
             ->addColumn('actions', function ($row) {
                 $btns = '<div class="btn-group" role="group">';
+                $btns .= '<button class="btn btn-sm btn-outline-primary edit-user" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#userModal" onclick="openUserModal('.$row->id.')">';
+                $btns .= '<i class="fas fa-edit"></i> Edit</button>';
                 if (!$row->hasRole('admin')) {
-                    $btns .= '<button class="btn btn-sm btn-outline-danger delete-user js-delete" data-id="'.$row->id.'" data-delete-url="'.route('admin.users.destroy', $row->id).'">';
+                    $btns .= '<button class="btn btn-sm btn-outline-danger delete-user" data-id="'.$row->id.'" onclick="deleteUser('.$row->id.')">';
                     $btns .= '<i class="fas fa-trash"></i> Delete</button>';
                 }
                 $btns .= '</div>';
@@ -102,6 +228,158 @@ class AdminController extends Controller
     public function providersIndex(): View
     {
         return view('admin::providers');
+    }
+
+    /**
+     * Show the form for creating a new provider.
+     */
+    public function createProvider()
+    {
+        if (request()->wantsJson() || request()->ajax()) {
+            return response()->json(['success' => true, 'data' => []]);
+        }
+        return view('admin::providers');
+    }
+
+    /**
+     * Store a newly created provider.
+     */
+    public function storeProvider(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'name' => ['required', 'string', 'max:255'],
+                'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
+                'password' => ['required', 'string', 'min:8']
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $e->errors()
+                ], 422);
+            }
+            throw $e;
+        }
+
+        $user = User::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'password' => bcrypt($validated['password']),
+        ]);
+
+        // Set provider role
+        $user->assignRole('provider');
+        $providerRoleId = Role::where('name', 'provider')->value('id');
+        if ($providerRoleId) {
+            $user->role_id = $providerRoleId;
+            $user->save();
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => __('Provider created successfully')
+            ]);
+        }
+
+        return redirect()->route('admin.providers.index')->with('status', __('Provider created'));
+    }
+
+    /**
+     * Show the form for editing the specified provider.
+     */
+    public function editProvider($id)
+    {
+        $user = User::with('roles')->findOrFail($id);
+        
+        if (request()->wantsJson() || request()->ajax()) {
+            return response()->json($user);
+        }
+        
+        return view('admin::providers');
+    }
+
+    /**
+     * Update the specified provider.
+     */
+    public function updateProvider(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+
+        try {
+            $validated = $request->validate([
+                'name' => ['required', 'string', 'max:255'],
+                'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,' . $id],
+                'password' => ['nullable', 'string', 'min:8']
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $e->errors()
+                ], 422);
+            }
+            throw $e;
+        }
+
+        $user->name = $validated['name'];
+        $user->email = $validated['email'];
+        
+        if (!empty($validated['password'])) {
+            $user->password = bcrypt($validated['password']);
+        }
+        
+        $user->save();
+
+        // Ensure provider role is maintained
+        $user->syncRoles(['provider']);
+        $providerRoleId = Role::where('name', 'provider')->value('id');
+        if ($providerRoleId) {
+            $user->role_id = $providerRoleId;
+            $user->save();
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => __('Provider updated successfully')
+            ]);
+        }
+
+        return redirect()->route('admin.providers.index')->with('status', __('Provider updated'));
+    }
+
+    /**
+     * Remove the specified provider.
+     */
+    public function destroyProvider($id)
+    {
+        $user = User::findOrFail($id);
+
+        // Prevent deleting admin users
+        if ($user->hasRole('admin')) {
+            if (request()->wantsJson() || request()->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('Cannot delete admin users')
+                ], 403);
+            }
+            return redirect()->back()->withErrors(['user' => __('Cannot delete admin users')]);
+        }
+
+        $user->delete();
+
+        if (request()->wantsJson() || request()->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => __('Provider deleted successfully')
+            ]);
+        }
+
+        return redirect()->route('admin.providers.index')->with('status', __('Provider deleted'));
     }
 
     public function providersData(DataTables $dataTables)
@@ -121,8 +399,10 @@ class AdminController extends Controller
             })
             ->addColumn('actions', function ($row) {
                 $btns = '<div class="btn-group" role="group">';
+                $btns .= '<button class="btn btn-sm btn-outline-primary edit-provider" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#providerModal" onclick="openProviderModal('.$row->id.')">';
+                $btns .= '<i class="fas fa-edit"></i> Edit</button>';
                 if (!$row->hasRole('admin')) {
-                    $btns .= '<button class="btn btn-sm btn-outline-danger js-delete" data-id="'.$row->id.'" data-delete-url="'.route('admin.users.destroy', $row->id).'">';
+                    $btns .= '<button class="btn btn-sm btn-outline-danger delete-provider" data-id="'.$row->id.'" onclick="deleteProvider('.$row->id.')">';
                     $btns .= '<i class="fas fa-trash"></i> Delete</button>';
                 }
                 $btns .= '</div>';

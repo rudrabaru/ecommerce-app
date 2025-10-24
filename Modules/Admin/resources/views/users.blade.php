@@ -3,12 +3,10 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="mb-0">Users</h1>
             <div class="d-flex align-items-center gap-2">
-                <button id="refresh-users-btn" class="btn btn-outline-primary btn-sm" title="Refresh users list">
-                    <i class="fas fa-sync-alt"></i> Refresh
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#userModal" data-action="create" data-modal="userModal">
+                    <i class="fas fa-plus"></i> Create User
                 </button>
-                <div id="auto-refresh-indicator" class="badge bg-success" title="Auto-refresh enabled (every 30 seconds)">
-                    <i class="fas fa-clock"></i> Auto-refresh
-                </div>
+                
             </div>
         </div>
 
@@ -35,6 +33,60 @@
         </div>
     </div>
 
+    <!-- User Modal -->
+    <div class="modal fade" id="userModal" tabindex="-1" aria-labelledby="userModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="userModalLabel">Create User</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="userForm">
+                        @csrf
+                        <input type="hidden" id="userId" name="user_id">
+                        <input type="hidden" name="_method" id="userMethod" value="POST">
+                        
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="name" name="name" required>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Password <span class="text-danger">*</span></label>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                            <div class="invalid-feedback"></div>
+                            <div class="form-text">Leave blank when editing to keep current password</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="role" class="form-label">Role <span class="text-danger">*</span></label>
+                            <select class="form-select" id="role" name="role" required>
+                                <option value="">Select Role</option>
+                                <option value="user">User</option>
+                                <option value="provider">Provider</option>
+                            </select>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveUserBtn" onclick="saveUser()" disabled>
+                        <span class="spinner-border spinner-border-sm d-none" id="userSaveSpinner" role="status" aria-hidden="true"></span>
+                        Save User
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     @push('styles')
         <style>
@@ -167,6 +219,5 @@
     @endpush
 
     @push('scripts')
-        @vite('Modules/Admin/resources/js/users.js')
     @endpush
 </x-app-layout>

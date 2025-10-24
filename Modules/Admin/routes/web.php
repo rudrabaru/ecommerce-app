@@ -29,15 +29,24 @@ Route::middleware(['web','auth','ensure_role:admin'])->group(function () {
     Route::get('/admin/dashboard/recent-users', [\App\Http\Controllers\AdminDashboardController::class, 'recentUsers'])->name('admin.dashboard.recent-users');
     Route::get('/admin/dashboard/recent-products', [\App\Http\Controllers\AdminDashboardController::class, 'recentProducts'])->name('admin.dashboard.recent-products');
 
-    // Users management (role=user) - Read-only with AJAX datatables
+    // Users management (role=user) - Full CRUD with AJAX datatables
     Route::get('/admin/users', [AdminController::class, 'index'])->name('admin.users.index');
+    Route::get('/admin/users/create', [AdminController::class, 'create'])->name('admin.users.create');
+    Route::post('/admin/users', [AdminController::class, 'store'])->name('admin.users.store');
+    Route::get('/admin/users/{user}/edit', [AdminController::class, 'edit'])->name('admin.users.edit');
+    Route::put('/admin/users/{user}', [AdminController::class, 'update'])->name('admin.users.update');
     Route::get('/admin/users/data', [AdminController::class, 'data'])->name('admin.users.data');
     Route::delete('/admin/users/{user}', [AdminController::class, 'destroy'])->name('admin.users.destroy');
     // Verify toggle endpoint
     Route::post('/admin/users/{user}/verify', [AdminController::class, 'verify'])->name('admin.users.verify');
     Route::post('/admin/users/{user}/promote', [AdminController::class, 'promoteToProvider'])->name('admin.users.promote');
 
-    // Providers management (role=provider) - Read-only with AJAX datatables
+    // Providers management (role=provider) - Full CRUD with AJAX datatables
     Route::get('/admin/providers', [AdminController::class, 'providersIndex'])->name('admin.providers.index');
+    Route::get('/admin/providers/create', [AdminController::class, 'createProvider'])->name('admin.providers.create');
+    Route::post('/admin/providers', [AdminController::class, 'storeProvider'])->name('admin.providers.store');
+    Route::get('/admin/providers/{user}/edit', [AdminController::class, 'editProvider'])->name('admin.providers.edit');
+    Route::put('/admin/providers/{user}', [AdminController::class, 'updateProvider'])->name('admin.providers.update');
     Route::get('/admin/providers/data', [AdminController::class, 'providersData'])->name('admin.providers.data');
+    Route::delete('/admin/providers/{user}', [AdminController::class, 'destroyProvider'])->name('admin.providers.destroy');
 });

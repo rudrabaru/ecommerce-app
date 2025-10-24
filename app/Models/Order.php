@@ -11,8 +11,12 @@ class Order extends Model
     protected $fillable = [
         'order_number',
         'user_id',
+        'provider_id',
+        'product_id',
+        'quantity',
+        'unit_price',
         'total_amount',
-        'status',
+        'order_status',
         'shipping_address',
         'shipping_address_id',
         'payment_method_id',
@@ -31,6 +35,16 @@ class Order extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function provider(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'provider_id');
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(\Modules\Products\Models\Product::class);
+    }
+
     public function orderItems(): HasMany
     {
         return $this->hasMany(OrderItem::class);
@@ -46,9 +60,10 @@ class Order extends Model
         return $this->belongsTo(PaymentMethod::class);
     }
 
-    public function payment(): BelongsTo
+    public function payment(): HasMany
     {
-        return $this->belongsTo(Payment::class);
+        // Some stores may allow multiple payment attempts per order
+        return $this->hasMany(Payment::class);
     }
 
     public function transactions(): HasMany

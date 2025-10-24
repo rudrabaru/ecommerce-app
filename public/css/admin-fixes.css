@@ -1,0 +1,145 @@
+/* Admin UI Fixes - Centralized CSS for consistency */
+
+/* Modal fixes */
+.modal {
+    z-index: 1055 !important;
+}
+
+.modal-backdrop {
+    z-index: 1050 !important;
+}
+
+/* DataTable fixes */
+.dataTables_wrapper {
+    overflow-x: auto;
+}
+
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter,
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_paginate {
+    margin-bottom: 1rem;
+}
+
+/* Button states */
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Form validation */
+.form-control.is-invalid {
+    border-color: #dc3545;
+}
+
+.invalid-feedback {
+    display: block;
+    width: 100%;
+    margin-top: 0.25rem;
+    font-size: 0.875em;
+    color: #dc3545;
+}
+
+/* Badge spacing */
+.badge {
+    margin-right: 0.25rem;
+}
+
+/* Product list in orders */
+.products-list {
+    max-width: 300px;
+}
+
+.products-list .product-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.products-list .product-item img {
+    width: 30px;
+    height: 30px;
+    object-fit: cover;
+    border-radius: 4px;
+    margin-right: 0.5rem;
+}
+
+/* Loading states */
+.spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+}
+
+/* Table responsive fixes */
+.table-responsive {
+    border-radius: 0.375rem;
+}
+
+/* Action buttons */
+.btn-group .btn {
+    margin-right: 0.25rem;
+}
+
+.btn-group .btn:last-child {
+    margin-right: 0;
+}
+
+/* Status badges */
+.badge-warning {
+    background-color: #ffc107;
+    color: #000;
+}
+
+.badge-info {
+    background-color: #0dcaf0;
+    color: #000;
+}
+
+.badge-success {
+    background-color: #198754;
+}
+
+.badge-danger {
+    background-color: #dc3545;
+}
+
+.badge-secondary {
+    background-color: #6c757d;
+}
+
+/* Modal form spacing */
+.modal-body .mb-3:last-child {
+    margin-bottom: 0 !important;
+}
+
+/* DataTable column widths */
+#users-table th:nth-child(1),
+#providers-table th:nth-child(1),
+#orders-table th:nth-child(1),
+#payments-table th:nth-child(1) {
+    width: 60px;
+}
+
+#users-table th:nth-child(6),
+#providers-table th:nth-child(5),
+#orders-table th:nth-child(8),
+#payments-table th:nth-child(7) {
+    width: 150px;
+}
+
+/* Ensure proper spacing for action buttons */
+.table td:last-child {
+    white-space: nowrap;
+}
+
+/* Fix for small screens */
+@media (max-width: 768px) {
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+    
+    .btn-group .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+}

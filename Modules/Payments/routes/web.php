@@ -29,6 +29,12 @@ Route::middleware(['web','auth'])->group(function () {
         Route::resource('payments', PaymentsController::class)->names('payments');
     });
 
+    // Provider routes - only providers can access
+    Route::middleware(['ensure_role:provider'])->prefix('provider')->as('provider.')->group(function () {
+        Route::get('payments/data', [PaymentsController::class, 'data'])->name('payments.data');
+        Route::resource('payments', PaymentsController::class)->names('payments');
+    });
+
     // Initiation endpoints for logged-in users (session auth)
     Route::post('/payment/stripe/initiate', [StripeController::class, 'initiate'])->name('payment.stripe.initiate');
     Route::post('/payment/stripe/confirm', [StripeController::class, 'confirm'])->name('payment.stripe.confirm');

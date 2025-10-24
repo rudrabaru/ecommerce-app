@@ -25,6 +25,12 @@ class Payment extends Model
         'paid_at' => 'datetime',
     ];
 
+    // Validation rules for status field
+    public static function getStatusValidationRules()
+    {
+        return 'in:pending,paid';
+    }
+
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);

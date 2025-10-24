@@ -8,7 +8,7 @@
             <div class="card-body">
                 <div class="table-responsive">
                     <table id="payments-table" class="table table-hover" width="100%"
-                        data-dt-url="{{ route('admin.payments.data') }}"
+                        data-dt-url="{{ auth()->user()->hasRole('admin') ? route('admin.payments.data') : route('provider.payments.data') }}"
                         data-dt-page-length="25"
                         data-dt-order='[[0, "desc"]]'>
                     <thead class="table-light">
@@ -255,6 +255,138 @@
         });
 
         window.initPaymentsTable = initPaymentsTable;
+
+        // CRUD helpers for payments
+        function openPaymentModal(paymentId = null) {
+            $('#paymentForm')[0].reset();
+            $('#paymentId').val('');
+            $('#paymentMethod').val('POST');
+            if (paymentId) {
+                $('#paymentModalLabel').text('Edit Payment');
+                $('#paymentMethod').val('PUT');
+                $('#paymentId').val(paymentId);
+                fetch(`/{{ auth()->user()->hasRole('admin') ? 'admin' : 'provider' }}/payments/${paymentId}/edit`, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(r=>r.json())
+                .then(p=>{
+                    $('#order_id').val(p.order_id);
+                    $('#payment_method_id').val(p.payment_method_id);
+                    $('#amount').val(p.amount);
+                    $('#currency').val(p.currency || 'USD');
+                    $('#status').val(p.status);
+                });
+            } else {
+                $('#paymentModalLabel').text('Create Payment');
+            }
+        }
+
+        function savePayment() {
+            const form = document.getElementById('paymentForm');
+            const formData = new FormData(form);
+            const paymentId = $('#paymentId').val();
+            let url = '/{{ auth()->user()->hasRole('admin') ? 'admin' : 'provider' }}/payments';
+            if (paymentId) { url += `/${paymentId}`; }
+            fetch(url, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') }
+            })
+            .then(r=>r.json()).then(data=>{
+                if (data.success) {
+                    $('#paymentModal').modal('hide');
+                    $('#payments-table').DataTable().ajax.reload();
+                    Swal.fire('Success', data.message, 'success');
+                } else {
+                    Swal.fire('Error', data.message || 'Validation error', 'error');
+                }
+            }).catch(()=> Swal.fire('Error','An error occurred','error'));
+        }
+
+        function deletePayment(id) {
+            Swal.fire({ title:'Are you sure?', icon:'warning', showCancelButton:true }).then(res=>{
+                if (!res.isConfirmed) return;
+                fetch(`/{{ auth()->user()->hasRole('admin') ? 'admin' : 'provider' }}/payments/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') }
+                }).then(r=>r.json()).then(data=>{
+                    if (data.success) {
+                        $('#payments-table').DataTable().ajax.reload();
+                        Swal.fire('Deleted', data.message, 'success');
+                    } else {
+                        Swal.fire('Error', data.message || 'Failed to delete', 'error');
+                    }
+                });
+            });
+        }
         </script>
     @endpush
+
+    <!-- Payment Modal -->
+    <div class="modal fade" id="paymentModal" tabindex="-1" aria-labelledby="paymentModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="paymentModalLabel">Create Payment</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="paymentForm">
+                        @csrf
+                        <input type="hidden" id="paymentId">
+                        <input type="hidden" name="_method" id="paymentMethod" value="POST">
+                        <div class="mb-3">
+                            <label for="order_id" class="form-label">Order</label>
+                            <select id="order_id" name="order_id" class="form-select">
+                                @php
+                                    $ordersQuery = \App\Models\Order::query();
+                                    if(auth()->user()->hasRole('provider')) {$ordersQuery->where('provider_id', auth()->id());}
+                                    $orders = $ordersQuery->latest()->limit(100)->get();
+                                @endphp
+                                @foreach($orders as $o)
+                                    <option value="{{ $o->id }}">#{{ $o->order_number }} ({{ $o->status }})</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="payment_method_id" class="form-label">Payment Method</label>
+                            <select id="payment_method_id" name="payment_method_id" class="form-select">
+                                @foreach(\App\Models\PaymentMethod::get() as $pm)
+                                    <option value="{{ $pm->id }}">{{ $pm->display_name ?? $pm->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="amount" class="form-label">Amount</label>
+                                    <input type="number" step="0.01" class="form-control" id="amount" name="amount" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="currency" class="form-label">Currency</label>
+                                    <input type="text" class="form-control" id="currency" name="currency" value="USD" required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="status" class="form-label">Status</label>
+                            <select id="status" name="status" class="form-select">
+                                <option value="pending">Pending</option>
+                                <option value="paid">Paid</option>
+                                <option value="failed">Failed</option>
+                                <option value="refunded">Refunded</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="savePayment()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </x-app-layout>

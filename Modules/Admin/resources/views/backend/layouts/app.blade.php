@@ -16,6 +16,7 @@
     @livewireStyles
     @viteReactRefresh
     @vite(['resources/js/app.js', 'resources/css/app.css'], 'build')
+    <link href="{{ asset('css/admin-fixes.css') }}" rel="stylesheet">
     @stack('styles')
     @yield('before_head')
 
@@ -307,78 +308,134 @@ x-init="
         }
 
         function bindEditButtons(ctx){
-            qsa('[data-edit-url], .btn-edit, .edit-user, .edit-provider', ctx).forEach(function(btn){
+            qsa('[data-action="edit"], [data-action="create"], .btn-edit, .edit-user, .edit-provider, .edit-order, .edit-payment, .edit-product, .edit-category', ctx).forEach(function(btn){
                 if (btn.getAttribute('data-bound')) return;
                 btn.setAttribute('data-bound','1');
                 
                 btn.addEventListener('click', function(e){
                     e.preventDefault();
-                    var url = btn.getAttribute('data-edit-url') || btn.getAttribute('href');
-                    var userId = btn.getAttribute('data-id') || btn.getAttribute('data-user-id');
                     
-                    if (userId) {
-                        url = '/admin/users/' + userId + '/edit';
+                    var action = btn.getAttribute('data-action') || 'create';
+                    var modalId = btn.getAttribute('data-modal') || btn.getAttribute('data-bs-target');
+                    var itemId = btn.getAttribute('data-id') || btn.getAttribute('data-user-id') || btn.getAttribute('data-provider-id') || btn.getAttribute('data-order-id') || btn.getAttribute('data-payment-id') || btn.getAttribute('data-product-id') || btn.getAttribute('data-category-id');
+                    
+                    console.log('Modal button clicked:', {action, modalId, itemId});
+                    
+                    if (!modalId) {
+                        console.error('No modal ID found for button');
+                        return;
                     }
                     
-                    if (!url) return;
+                    var modal = qs(modalId);
+                    if (!modal) {
+                        console.error('Modal not found:', modalId);
+                        return;
+                    }
                     
-                    console.log('Edit button clicked, fetching:', url);
-                    
-                    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
-                        .then(r=>r.json()).then(function(data){
-                            console.log('Edit data received:', data);
-                            // Determine which modal to open based on context
-                            var isProvider = window.location.pathname.includes('providers') || (data.user && data.user.roles && data.user.roles[0] && data.user.roles[0].name === 'provider');
-                            var modalId = isProvider ? '#editProviderModal' : '#editUserModal';
-                            var modal = qs(modalId);
-                            
-                            console.log('Opening modal:', modalId, 'Found:', !!modal);
-                            
-                            if (!modal) {
-                                console.error('Modal not found:', modalId);
-                                return;
-                            }
-                            
-                            // Prefill form fields
-                            var user = data.user || data;
-                            if (user) {
-                                qsa('input, select', modal).forEach(function(input){
-                                    var name = input.name;
-                                    if (name && user[name] !== undefined) {
-                                        if (input.type === 'checkbox') {
-                                            input.checked = user[name];
-                                        } else if (input.type === 'hidden' && name === 'user_id') {
-                                            input.value = user.id;
-                                        } else {
-                                            input.value = user[name];
-                                        }
-                                    }
-                                });
-                                
-                                // Handle role selection
-                                var roleSelect = modal.querySelector('[name="role"]');
-                                if (roleSelect && user.roles && user.roles[0]) {
-                                    roleSelect.value = user.roles[0].name;
-                                }
-                            }
-                            
-                            // Show modal
-                            try {
-                                var bsModal = new bootstrap.Modal(modal);
-                                bsModal.show();
-                            } catch (e) {
-                                console.error('Bootstrap modal error:', e);
-                                // Fallback to jQuery if Bootstrap is not available
-                                if (window.jQuery) {
-                                    jQuery(modal).modal('show');
-                                }
-                            }
-                        }).catch(function(err){
-                            console.error('Edit button error:', err);
-                            if (window.Swal) Swal.fire('Error', 'Failed to load data for editing.', 'error');
+                    // Reset form
+                    var form = modal.querySelector('form');
+                    if (form) {
+                        form.reset();
+                        qsa('.form-control', modal).forEach(function(input){
+                            input.classList.remove('is-invalid');
                         });
+                        qsa('.invalid-feedback', modal).forEach(function(feedback){
+                            feedback.textContent = '';
+                        });
+                    }
+                    
+                    // Set modal title and method
+                    var titleElement = modal.querySelector('.modal-title');
+                    var methodInput = modal.querySelector('input[name="_method"]');
+                    var idInput = modal.querySelector('input[name*="_id"]');
+                    
+                    if (action === 'edit' && itemId) {
+                        if (titleElement) titleElement.textContent = titleElement.textContent.replace('Create', 'Edit');
+                        if (methodInput) methodInput.value = 'PUT';
+                        if (idInput) idInput.value = itemId;
+                        
+                        // Load data for editing
+                        var editUrl = determineEditUrl(modalId, itemId);
+                        if (editUrl) {
+                            loadEditData(editUrl, modal);
+                        }
+                    } else {
+                        if (titleElement) titleElement.textContent = titleElement.textContent.replace('Edit', 'Create');
+                        if (methodInput) methodInput.value = 'POST';
+                        if (idInput) idInput.value = '';
+                    }
+                    
+                    // Show modal
+                    try {
+                        var bsModal = new bootstrap.Modal(modal);
+                        bsModal.show();
+                    } catch (e) {
+                        console.error('Bootstrap modal error:', e);
+                        if (window.jQuery) {
+                            jQuery(modal).modal('show');
+                        }
+                    }
                 });
             });
+        }
+        
+        function determineEditUrl(modalId, itemId) {
+            var baseUrl = '';
+            if (modalId.includes('user')) {
+                baseUrl = '/admin/users/' + itemId + '/edit';
+            } else if (modalId.includes('provider')) {
+                baseUrl = '/admin/providers/' + itemId + '/edit';
+            } else if (modalId.includes('order')) {
+                baseUrl = '/admin/orders/' + itemId + '/edit';
+            } else if (modalId.includes('payment')) {
+                baseUrl = '/admin/payments/' + itemId + '/edit';
+            } else if (modalId.includes('product')) {
+                baseUrl = '/admin/products/' + itemId + '/edit';
+            } else if (modalId.includes('category')) {
+                baseUrl = '/admin/categories/' + itemId + '/edit';
+            }
+            return baseUrl;
+        }
+        
+        function loadEditData(url, modal) {
+            fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
+                .then(r => r.json())
+                .then(function(data){
+                    console.log('Edit data received:', data);
+                    
+                    var item = data.user || data.product || data.category || data.order || data.payment || data;
+                    
+                    if (item) {
+                        qsa('input, select, textarea', modal).forEach(function(input){
+                            var name = input.name;
+                            if (name && item[name] !== undefined) {
+                                if (input.type === 'checkbox') {
+                                    input.checked = item[name];
+                                } else if (input.type === 'hidden' && name.includes('_id')) {
+                                    input.value = item.id;
+                                } else {
+                                    input.value = item[name];
+                                }
+                            }
+                        });
+                        
+                        // Handle special cases
+                        var roleSelect = modal.querySelector('[name="role"]');
+                        if (roleSelect && item.roles && item.roles[0]) {
+                            roleSelect.value = item.roles[0].name;
+                        }
+                        
+                        // Handle order_status vs status
+                        var orderStatusSelect = modal.querySelector('[name="order_status"]');
+                        if (orderStatusSelect && item.order_status) {
+                            orderStatusSelect.value = item.order_status;
+                        }
+                    }
+                })
+                .catch(function(err){
+                    console.error('Error loading edit data:', err);
+                    if (window.Swal) Swal.fire('Error', 'Failed to load data for editing.', 'error');
+                });
         }
 
         function bindToggleActions(ctx){

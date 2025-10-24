@@ -474,96 +474,28 @@
                                 zeroRecords: "No matching records found"
                             }
                         });
-                    }
-                    
-                    // Initialize Discount Codes DataTable
-                    if ($('#discounts-table').length && !$.fn.DataTable.isDataTable('#discounts-table')) {
-                        window.DataTableInstances['discounts-table'] = $('#discounts-table').DataTable({
+                        
+                        console.log('Initializing DataTable:', tableId, 'with columns:', columns);
+                        
+                        window.DataTableInstances[tableId] = $table.DataTable({
                             processing: true,
                             serverSide: true,
-                            ajax: $('#discounts-table').data('dt-url'),
-                            pageLength: $('#discounts-table').data('dt-page-length') || 25,
-                            order: JSON.parse($('#discounts-table').attr('data-dt-order') || '[[0, "desc"]]'),
-                            columns: [
-                                { data: 'id', name: 'id', width: '60px' },
-                                { data: 'code', name: 'code' },
-                                { data: 'discount_type', name: 'discount_type' },
-                                { data: 'discount_value', name: 'discount_value' },
-                                { data: 'is_active', name: 'is_active' },
-                                { data: 'categories', name: 'categories', orderable: false, searchable: false },
-                                { data: 'valid_from', name: 'valid_from' },
-                                { data: 'valid_until', name: 'valid_until' },
-                                { data: 'actions', name: 'actions', orderable: false, searchable: false }
-                            ],
-                            pageSave: true,
-                            responsive: true
-                        });
-                    }
-
-                    // Initialize Providers DataTable
-                    if ($('#providers-table').length && !$.fn.DataTable.isDataTable('#providers-table')) {
-                        window.DataTableInstances['providers-table'] = $('#providers-table').DataTable({
-                            processing: true,
-                            serverSide: true,
-                            ajax: '/admin/providers/data',
-                            columns: [
-                                { data: 'id', name: 'id', width: '60px' },
-                                { data: 'name', name: 'name' },
-                                { data: 'email', name: 'email' },
-                                { data: 'created_at', name: 'created_at', width: '120px' },
-                                { data: 'actions', name: 'actions', orderable: false, searchable: false, width: '150px' }
-                            ],
-                            order: [[0, 'desc']],
-                            pageLength: 25,
+                            ajax: $table.data('dt-url'),
+                            pageLength: $table.data('dt-page-length') || 25,
+                            order: JSON.parse($table.attr('data-dt-order') || '[[0, "desc"]]'),
+                            columns: columns,
                             responsive: true,
                             language: {
-                                processing: "Loading...",
-                                emptyTable: "No data available",
-                                info: "Showing _START_ to _END_ of _TOTAL_ entries",
-                                infoEmpty: "Showing 0 to 0 of 0 entries",
-                                infoFiltered: "(filtered from _MAX_ total entries)",
-                                lengthMenu: "Show _MENU_ entries",
-                                search: "Search:",
+                                processing: "Loading data...",
+                                emptyTable: "No data found",
                                 zeroRecords: "No matching records found"
+                            },
+                            drawCallback: function() {
+                                // Rebind events after each draw if needed
+                                bindEditButtons(document);
                             }
                         });
-                    }
-                    
-                    // Initialize Orders DataTable
-                    if ($('#orders-table').length && !$.fn.DataTable.isDataTable('#orders-table')) {
-                        const ajaxUrl = window.location.pathname.includes('/admin/') 
-                            ? '/admin/orders/data' 
-                            : '/provider/orders/data';
-                            
-                        window.DataTableInstances['orders-table'] = $('#orders-table').DataTable({
-                            processing: true,
-                            serverSide: true,
-                            ajax: ajaxUrl,
-                            columns: [
-                                { data: 'id', name: 'id', width: '60px' },
-                                { data: 'order_number', name: 'order_number' },
-                                { data: 'customer_name', name: 'customer_name' },
-                                { data: 'product_name', name: 'product_name' },
-                                { data: 'total', name: 'total', width: '100px' },
-                                { data: 'status', name: 'status', width: '100px' },
-                                { data: 'created_at', name: 'created_at', width: '120px' },
-                                { data: 'actions', name: 'actions', orderable: false, searchable: false, width: '150px' }
-                            ],
-                            order: [[0, 'desc']],
-                            pageLength: 25,
-                            responsive: true,
-                            language: {
-                                processing: "Loading...",
-                                emptyTable: "No data available",
-                                info: "Showing _START_ to _END_ of _TOTAL_ entries",
-                                infoEmpty: "Showing 0 to 0 of 0 entries",
-                                infoFiltered: "(filtered from _MAX_ total entries)",
-                                lengthMenu: "Show _MENU_ entries",
-                                search: "Search:",
-                                zeroRecords: "No matching records found"
-                            }
-                        });
-                    }
+                    });
                 }
                 
                 // Listen for AJAX page loaded event
@@ -690,7 +622,6 @@
         
         <!-- Address Management Scripts -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.7.32/sweetalert2.all.min.js"></script>
-        <script src="{{ asset('js/address-modal.js') }}"></script>
         <script src="{{ asset('js/address-edit.js') }}"></script>
     </body>
 </html>
