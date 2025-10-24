@@ -33,27 +33,26 @@ class AdminDashboardController extends Controller
     {
         $this->authorizeAdmin();
 
+        // Get only users with role=user
+        $userRoleId = Role::where('name', 'user')->value('id');
+        
         $users = User::with('roles')
+            ->when($userRoleId, function ($q) use ($userRoleId) {
+                $q->where('role_id', $userRoleId);
+            })
             ->latest()
             ->limit(5)
             ->get()
             ->map(function ($user) {
-                $role = $user->roles->first();
-                $roleName = $role ? $role->name : 'user';
-                $roleClass = match(strtolower($roleName)) {
-                    'admin' => 'primary',
-                    'provider' => 'warning',
-                    'user' => 'secondary',
-                    'customer' => 'info',
-                    default => 'secondary'
-                };
+                // Status based on email verification
+                $statusClass = $user->email_verified_at ? 'success' : 'danger';
+                $statusText = $user->email_verified_at ? 'Active' : 'Inactive';
 
                 return [
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'role' => '<span class="badge bg-' . $roleClass . '">' . ucfirst($roleName) . '</span>',
-                    'status' => '<span class="badge bg-success">Active</span>',
+                    'status' => '<span class="badge bg-' . $statusClass . '">' . $statusText . '</span>',
                     'created_at' => $user->created_at,
                 ];
             });

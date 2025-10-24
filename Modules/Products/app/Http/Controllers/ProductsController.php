@@ -241,19 +241,19 @@ class ProductsController extends Controller
             ->addColumn('actions', function ($row) {
                 $isAdmin = Auth::user()->hasRole('admin');
                 $btns = '<div class="btn-group" role="group">';
-                $btns .= '<button class="btn btn-sm btn-outline-primary edit-product" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#productModal" onclick="openProductModal('.$row->id.')">';
-                $btns .= '<i class="fas fa-edit"></i> Edit</button>';
-                $btns .= '<button class="btn btn-sm btn-outline-danger delete-product js-delete" data-id="'.$row->id.'" data-delete-url="'.(Auth::user()->hasRole('admin') ? route('admin.products.destroy', $row->id) : route('provider.products.destroy', $row->id)).'">';
-                $btns .= '<i class="fas fa-trash"></i> Delete</button>';
+                $btns .= '<button class="btn btn-sm btn-outline-primary edit-product" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#productModal" onclick="openProductModal('.$row->id.')" title="Edit Product">';
+                $btns .= '<i class="fas fa-pencil-alt"></i></button>';
+                $btns .= '<button class="btn btn-sm btn-outline-danger delete-product js-delete" data-id="'.$row->id.'" data-delete-url="'.(Auth::user()->hasRole('admin') ? route('admin.products.destroy', $row->id) : route('provider.products.destroy', $row->id)).'" title="Delete Product">';
+                $btns .= '<i class="fas fa-trash"></i></button>';
                 if ($isAdmin) {
                     $approve = route('admin.products.approve', $row->id);
                     $block = route('admin.products.block', $row->id);
                     if ($row->is_approved) {
                         $btns .= '<a href="'.$block.'" class="btn btn-sm btn-warning js-ajax-link" title="Block Product">';
-                        $btns .= '<i class="fas fa-ban"></i> Block</a>';
+                        $btns .= '<i class="fas fa-ban"></i></a>';
                     } else {
                         $btns .= '<a href="'.$approve.'" class="btn btn-sm btn-success js-ajax-link" title="Approve Product">';
-                        $btns .= '<i class="fas fa-check"></i> Approve</a>';
+                        $btns .= '<i class="fas fa-check"></i></a>';
                     }
                 }
                 $btns .= '</div>';

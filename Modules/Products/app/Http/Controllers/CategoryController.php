@@ -204,10 +204,10 @@ class CategoryController extends Controller
             ->addColumn('products_count', fn ($row) => $row->products->count())
             ->addColumn('actions', function ($row) {
                 $btns = '<div class="btn-group" role="group">';
-                $btns .= '<button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#categoryModal" onclick="openCategoryModal('.$row->id.')">';
-                $btns .= '<i class="fas fa-edit"></i> Edit</button>';
-                $btns .= '<button class="btn btn-sm btn-outline-danger js-delete" data-delete-url="'.route('admin.categories.destroy', $row->id).'">';
-                $btns .= '<i class="fas fa-trash"></i> Delete</button>';
+                $btns .= '<button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#categoryModal" onclick="openCategoryModal('.$row->id.')" title="Edit Category">';
+                $btns .= '<i class="fas fa-pencil-alt"></i></button>';
+                $btns .= '<button class="btn btn-sm btn-outline-danger js-delete" data-delete-url="'.route('admin.categories.destroy', $row->id).'" title="Delete Category">';
+                $btns .= '<i class="fas fa-trash"></i></button>';
                 $btns .= '</div>';
                 return $btns;
             })

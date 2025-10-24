@@ -69,6 +69,7 @@
                             <label for="image" class="form-label">Image <span class="text-danger">*</span></label>
                             <input type="file" class="form-control" id="image" name="image" accept="image/*" required>
                             <div class="invalid-feedback"></div>
+                            <div id="fileName" class="form-text text-muted mt-1" style="display: none;"></div>
                             <img src="" id="imagePreview" class="img-thumbnail mt-2 d-none" style="max-height: 120px;" />
                         </div>
 
@@ -93,10 +94,66 @@
     <script>
         // DataTable is now initialized globally - no need for individual initialization
         
+        // Initialize file name display
+        document.addEventListener('DOMContentLoaded', function() {
+            // Handle file input change to show file name and preview
+            document.getElementById('image').addEventListener('change', function(e) {
+                const fileName = document.getElementById('fileName');
+                const imagePreview = document.getElementById('imagePreview');
+                
+                if (e.target.files.length > 0) {
+                    const file = e.target.files[0];
+                    fileName.textContent = 'Selected file: ' + file.name;
+                    fileName.style.display = 'block';
+                    
+                    // Show image preview
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        imagePreview.src = e.target.result;
+                        imagePreview.classList.remove('d-none');
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    fileName.style.display = 'none';
+                    imagePreview.classList.add('d-none');
+                }
+            });
+        });
+        
         function openCategoryModal(categoryId = null) {
             // Reset form
             $('#categoryForm')[0].reset();
             $('.form-control').removeClass('is-invalid');
+            $('#fileName').hide();
+            $('#imagePreview').addClass('d-none');
+            
+            // Re-bind file input change handler for this modal instance
+            const imageInput = document.getElementById('image');
+            const fileName = document.getElementById('fileName');
+            const imagePreview = document.getElementById('imagePreview');
+            
+            // Remove existing event listeners and add new one
+            const newImageInput = imageInput.cloneNode(true);
+            imageInput.parentNode.replaceChild(newImageInput, imageInput);
+            
+            newImageInput.addEventListener('change', function(e) {
+                if (e.target.files.length > 0) {
+                    const file = e.target.files[0];
+                    fileName.textContent = 'Selected file: ' + file.name;
+                    fileName.style.display = 'block';
+                    
+                    // Show image preview
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        imagePreview.src = e.target.result;
+                        imagePreview.classList.remove('d-none');
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    fileName.style.display = 'none';
+                    imagePreview.classList.add('d-none');
+                }
+            });
             
             if (categoryId) {
                 // Edit mode
@@ -116,7 +173,35 @@
                     $('#name').val(data.name);
                     $('#parent_id').val(data.parent_id || '');
                     if (data.image) {
-                        $('#imagePreview').attr('src', data.image.startsWith('http') ? data.image : ('/storage/' + data.image)).removeClass('d-none');
+                        // Handle both absolute URLs and relative paths
+                        let imageSrc;
+                        if (data.image.startsWith('http')) {
+                            // For placeholder URLs, create a fallback
+                            if (data.image.includes('via.placeholder.com')) {
+                                // Extract dimensions and text from placeholder URL
+                                const urlParts = data.image.split('/');
+                                const dimensions = urlParts[3] || '640x480';
+                                const color = urlParts[4] || '0033cc';
+                                const text = urlParts[5] ? decodeURIComponent(urlParts[5].replace('?text=', '')) : 'Category Image';
+                                
+                                // Create a working placeholder URL
+                                imageSrc = `https://placehold.co/${dimensions}/${color}/ffffff?text=${encodeURIComponent(text)}`;
+                            } else {
+                                imageSrc = data.image;
+                            }
+                        } else {
+                            imageSrc = '/storage/' + data.image;
+                        }
+                        $('#imagePreview').attr('src', imageSrc).removeClass('d-none').on('error', function() {
+                            // Fallback to a generic placeholder if the converted URL fails
+                            $(this).attr('src', 'https://placehold.co/640x480/cccccc/666666?text=Category+Image');
+                        });
+                        
+                        // Show current image file name
+                        const fileName = document.getElementById('fileName');
+                        const imageName = data.image.split('/').pop().split('?')[0] || 'image';
+                        fileName.textContent = 'Current image: ' + imageName;
+                        fileName.style.display = 'block';
                     } else {
                         $('#imagePreview').addClass('d-none');
                     }

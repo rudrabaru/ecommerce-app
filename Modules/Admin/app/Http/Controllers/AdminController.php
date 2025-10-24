@@ -95,6 +95,8 @@ class AdminController extends Controller
         $user = User::with('roles')->findOrFail($id);
         
         if (request()->wantsJson() || request()->ajax()) {
+            // Add a note that password is not retrievable
+            $user->password_note = 'Password cannot be retrieved. Leave blank to keep current password.';
             return response()->json($user);
         }
         
@@ -212,11 +214,11 @@ class AdminController extends Controller
             })
             ->addColumn('actions', function ($row) {
                 $btns = '<div class="btn-group" role="group">';
-                $btns .= '<button class="btn btn-sm btn-outline-primary edit-user" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#userModal" onclick="openUserModal('.$row->id.')">';
-                $btns .= '<i class="fas fa-edit"></i> Edit</button>';
+                $btns .= '<button class="btn btn-sm btn-outline-primary edit-user" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#userModal" onclick="openUserModal('.$row->id.')" title="Edit User">';
+                $btns .= '<i class="fas fa-pencil-alt"></i></button>';
                 if (!$row->hasRole('admin')) {
-                    $btns .= '<button class="btn btn-sm btn-outline-danger delete-user" data-id="'.$row->id.'" onclick="deleteUser('.$row->id.')">';
-                    $btns .= '<i class="fas fa-trash"></i> Delete</button>';
+                    $btns .= '<button class="btn btn-sm btn-outline-danger delete-user" data-id="'.$row->id.'" onclick="deleteUser('.$row->id.')" title="Delete User">';
+                    $btns .= '<i class="fas fa-trash"></i></button>';
                 }
                 $btns .= '</div>';
                 return $btns;
@@ -295,6 +297,8 @@ class AdminController extends Controller
         $user = User::with('roles')->findOrFail($id);
         
         if (request()->wantsJson() || request()->ajax()) {
+            // Add a note that password is not retrievable
+            $user->password_note = 'Password cannot be retrieved. Leave blank to keep current password.';
             return response()->json($user);
         }
         
@@ -399,11 +403,11 @@ class AdminController extends Controller
             })
             ->addColumn('actions', function ($row) {
                 $btns = '<div class="btn-group" role="group">';
-                $btns .= '<button class="btn btn-sm btn-outline-primary edit-provider" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#providerModal" onclick="openProviderModal('.$row->id.')">';
-                $btns .= '<i class="fas fa-edit"></i> Edit</button>';
+                $btns .= '<button class="btn btn-sm btn-outline-primary edit-provider" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#providerModal" onclick="openProviderModal('.$row->id.')" title="Edit Provider">';
+                $btns .= '<i class="fas fa-pencil-alt"></i></button>';
                 if (!$row->hasRole('admin')) {
-                    $btns .= '<button class="btn btn-sm btn-outline-danger delete-provider" data-id="'.$row->id.'" onclick="deleteProvider('.$row->id.')">';
-                    $btns .= '<i class="fas fa-trash"></i> Delete</button>';
+                    $btns .= '<button class="btn btn-sm btn-outline-danger delete-provider" data-id="'.$row->id.'" onclick="deleteProvider('.$row->id.')" title="Delete Provider">';
+                    $btns .= '<i class="fas fa-trash"></i></button>';
                 }
                 $btns .= '</div>';
                 return $btns;

@@ -46,6 +46,7 @@
                         @csrf
                         <input type="hidden" id="userId" name="user_id">
                         <input type="hidden" name="_method" id="userMethod" value="POST">
+                        <input type="hidden" id="isEditMode" value="false">
                         
                         <div class="mb-3">
                             <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
@@ -61,14 +62,19 @@
                         
                         <div class="mb-3">
                             <label for="password" class="form-label">Password <span class="text-danger">*</span></label>
-                            <input type="password" class="form-control" id="password" name="password" required>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="password" name="password" required>
+                                <button class="btn btn-outline-secondary" type="button" id="togglePassword" onclick="togglePasswordVisibility('password')">
+                                    <i class="fas fa-eye" id="passwordEyeIcon"></i>
+                                </button>
+                            </div>
                             <div class="invalid-feedback"></div>
-                            <div class="form-text">Leave blank when editing to keep current password</div>
+                            <div class="form-text" id="passwordHelpText">Leave blank when editing to keep current password</div>
                         </div>
                         
-                        <div class="mb-3">
+                        <div class="mb-3" id="roleField" style="display: none;">
                             <label for="role" class="form-label">Role <span class="text-danger">*</span></label>
-                            <select class="form-select" id="role" name="role" required>
+                            <select class="form-select" id="role" name="role">
                                 <option value="">Select Role</option>
                                 <option value="user">User</option>
                                 <option value="provider">Provider</option>
@@ -218,7 +224,6 @@
         </style>
     @endpush
 
-    @push('scripts')
     <script>
     // User CRUD Functions
     window.openUserModal = function(userId = null) {
@@ -226,6 +231,9 @@
         const modal = document.getElementById('userModal');
         const modalTitle = document.getElementById('userModalLabel');
         const saveBtn = document.getElementById('saveUserBtn');
+        const roleField = document.getElementById('roleField');
+        const passwordHelpText = document.getElementById('passwordHelpText');
+        const isEditMode = document.getElementById('isEditMode');
         
         // Reset form
         form.reset();
@@ -236,10 +244,13 @@
         
         if (userId) {
             // Edit mode
+            isEditMode.value = 'true';
             modalTitle.textContent = 'Edit User';
             document.getElementById('userMethod').value = 'PUT';
             document.getElementById('userId').value = userId;
             document.getElementById('password').removeAttribute('required');
+            roleField.style.display = 'block';
+            passwordHelpText.textContent = 'Leave blank to keep current password';
             
             // Load user data
             fetch(`/admin/users/${userId}/edit`, {
@@ -256,6 +267,11 @@
                 // Set role
                 const roleName = data.roles && data.roles.length > 0 ? data.roles[0].name : 'user';
                 document.getElementById('role').value = roleName;
+                
+                // Update password help text with note from server
+                if (data.password_note) {
+                    document.getElementById('passwordHelpText').textContent = data.password_note;
+                }
                 
                 // Trigger form validation
                 setTimeout(() => {
@@ -274,12 +290,46 @@
             });
         } else {
             // Create mode
+            isEditMode.value = 'false';
             modalTitle.textContent = 'Create User';
             document.getElementById('userMethod').value = 'POST';
             document.getElementById('userId').value = '';
             document.getElementById('password').setAttribute('required', 'required');
+            roleField.style.display = 'none';
+            passwordHelpText.textContent = 'Password is required for new users';
         }
     };
+    
+    // Password visibility toggle function
+    window.togglePasswordVisibility = function(inputId) {
+        const input = document.getElementById(inputId);
+        const eyeIcon = document.getElementById(inputId + 'EyeIcon');
+        
+        if (input.type === 'password') {
+            input.type = 'text';
+            eyeIcon.classList.remove('fa-eye');
+            eyeIcon.classList.add('fa-eye-slash');
+        } else {
+            input.type = 'password';
+            eyeIcon.classList.remove('fa-eye-slash');
+            eyeIcon.classList.add('fa-eye');
+        }
+    };
+    
+    // Helper functions for field validation
+    function showFieldError(fieldId, message) {
+        const field = document.getElementById(fieldId);
+        const feedback = field.parentNode.querySelector('.invalid-feedback');
+        field.classList.add('is-invalid');
+        if (feedback) {
+            feedback.textContent = message;
+        }
+    }
+    
+    function clearFieldError(fieldId) {
+        const field = document.getElementById(fieldId);
+        field.classList.remove('is-invalid');
+    }
     
     window.saveUser = function() {
         const form = document.getElementById('userForm');
@@ -287,10 +337,57 @@
         const method = document.getElementById('userMethod').value;
         const saveBtn = document.getElementById('saveUserBtn');
         const spinner = document.getElementById('userSaveSpinner');
+        const isEditMode = document.getElementById('isEditMode').value === 'true';
         
-        // Validate form
-        if (!form.checkValidity()) {
-            form.reportValidity();
+        // Real-time validation
+        let isValid = true;
+        
+        // Validate name
+        const name = document.getElementById('name').value.trim();
+        if (!name) {
+            showFieldError('name', 'Name is required');
+            isValid = false;
+        } else {
+            clearFieldError('name');
+        }
+        
+        // Validate email
+        const email = document.getElementById('email').value.trim();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email) {
+            showFieldError('email', 'Email is required');
+            isValid = false;
+        } else if (!emailRegex.test(email)) {
+            showFieldError('email', 'Please enter a valid email address');
+            isValid = false;
+        } else {
+            clearFieldError('email');
+        }
+        
+        // Validate password
+        const password = document.getElementById('password').value;
+        if (!isEditMode && !password) {
+            showFieldError('password', 'Password is required');
+            isValid = false;
+        } else if (password && password.length < 6) {
+            showFieldError('password', 'Password must be at least 6 characters');
+            isValid = false;
+        } else {
+            clearFieldError('password');
+        }
+        
+        // Validate role (only in edit mode)
+        if (isEditMode) {
+            const role = document.getElementById('role').value;
+            if (!role) {
+                showFieldError('role', 'Role is required');
+                isValid = false;
+            } else {
+                clearFieldError('role');
+            }
+        }
+        
+        if (!isValid) {
             return;
         }
         
@@ -447,5 +544,4 @@
         }
     });
     </script>
-    @endpush
 </x-app-layout>

@@ -96,14 +96,13 @@
                                     <tr>
                                         <th>Name</th>
                                         <th>Email</th>
-                                        <th>Role</th>
                                         <th>Status</th>
                                         <th>Joined</th>
                                     </tr>
                                 </thead>
                                 <tbody id="recent-users">
                                     <tr>
-                                        <td colspan="5" class="text-center">
+                                        <td colspan="4" class="text-center">
                                             <div class="spinner-border spinner-border-sm" role="status">
                                                 <span class="sr-only">Loading...</span>
                                             </div>
@@ -200,14 +199,13 @@
             .then(data => {
                 let html = '';
                 if (data.length === 0) {
-                    html = '<tr><td colspan="5" class="text-center text-muted">No recent users</td></tr>';
+                    html = '<tr><td colspan="4" class="text-center text-muted">No recent users</td></tr>';
                 } else {
                     data.forEach(user => {
                         html += `
                             <tr>
                                 <td>${user.name}</td>
                                 <td>${user.email}</td>
-                                <td>${user.role}</td>
                                 <td>${user.status}</td>
                                 <td>${new Date(user.created_at).toLocaleDateString()}</td>
                             </tr>
@@ -218,7 +216,7 @@
             })
             .catch(error => {
                 console.error('Error loading recent users:', error);
-                $('#recent-users').html('<tr><td colspan="5" class="text-center text-danger">Error loading data</td></tr>');
+                $('#recent-users').html('<tr><td colspan="4" class="text-center text-danger">Error loading data</td></tr>');
             });
 
             // Load recent products

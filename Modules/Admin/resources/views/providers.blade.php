@@ -44,6 +44,7 @@
                         @csrf
                         <input type="hidden" id="providerId" name="provider_id">
                         <input type="hidden" name="_method" id="providerMethod" value="POST">
+                        <input type="hidden" id="isEditMode" value="false">
                         
                         <div class="mb-3">
                             <label for="provider_name" class="form-label">Name <span class="text-danger">*</span></label>
@@ -59,9 +60,24 @@
                         
                         <div class="mb-3">
                             <label for="provider_password" class="form-label">Password <span class="text-danger">*</span></label>
-                            <input type="password" class="form-control" id="provider_password" name="password" required>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="provider_password" name="password" required>
+                                <button class="btn btn-outline-secondary" type="button" id="toggleProviderPassword" onclick="togglePasswordVisibility('provider_password')">
+                                    <i class="fas fa-eye" id="providerPasswordEyeIcon"></i>
+                                </button>
+                            </div>
                             <div class="invalid-feedback"></div>
-                            <div class="form-text">Leave blank when editing to keep current password</div>
+                            <div class="form-text" id="providerPasswordHelpText">Leave blank when editing to keep current password</div>
+                        </div>
+                        
+                        <div class="mb-3" id="providerRoleField" style="display: none;">
+                            <label for="provider_role" class="form-label">Role <span class="text-danger">*</span></label>
+                            <select class="form-select" id="provider_role" name="role">
+                                <option value="">Select Role</option>
+                                <option value="user">User</option>
+                                <option value="provider">Provider</option>
+                            </select>
+                            <div class="invalid-feedback"></div>
                         </div>
                     </form>
                 </div>
@@ -206,7 +222,6 @@
         </style>
     @endpush
 
-    @push('scripts')
     <script>
     // Provider CRUD Functions
     window.openProviderModal = function(providerId = null) {
@@ -214,6 +229,9 @@
         const modal = document.getElementById('providerModal');
         const modalTitle = document.getElementById('providerModalLabel');
         const saveBtn = document.getElementById('saveProviderBtn');
+        const roleField = document.getElementById('providerRoleField');
+        const passwordHelpText = document.getElementById('providerPasswordHelpText');
+        const isEditMode = document.getElementById('isEditMode');
         
         // Reset form
         form.reset();
@@ -224,10 +242,13 @@
         
         if (providerId) {
             // Edit mode
+            isEditMode.value = 'true';
             modalTitle.textContent = 'Edit Provider';
             document.getElementById('providerMethod').value = 'PUT';
             document.getElementById('providerId').value = providerId;
             document.getElementById('provider_password').removeAttribute('required');
+            roleField.style.display = 'block';
+            passwordHelpText.textContent = 'Leave blank to keep current password';
             
             // Load provider data
             fetch(`/admin/providers/${providerId}/edit`, {
@@ -241,10 +262,20 @@
                 document.getElementById('provider_name').value = data.name;
                 document.getElementById('provider_email').value = data.email;
                 
+                // Set role
+                const roleName = data.roles && data.roles.length > 0 ? data.roles[0].name : 'provider';
+                document.getElementById('provider_role').value = roleName;
+                
+                // Update password help text with note from server
+                if (data.password_note) {
+                    document.getElementById('providerPasswordHelpText').textContent = data.password_note;
+                }
+                
                 // Trigger form validation
                 setTimeout(() => {
                     document.getElementById('provider_name').dispatchEvent(new Event('input'));
                     document.getElementById('provider_email').dispatchEvent(new Event('input'));
+                    document.getElementById('provider_role').dispatchEvent(new Event('change'));
                 }, 100);
             })
             .catch(error => {
@@ -257,12 +288,55 @@
             });
         } else {
             // Create mode
+            isEditMode.value = 'false';
             modalTitle.textContent = 'Create Provider';
             document.getElementById('providerMethod').value = 'POST';
             document.getElementById('providerId').value = '';
             document.getElementById('provider_password').setAttribute('required', 'required');
+            roleField.style.display = 'none';
+            passwordHelpText.textContent = 'Password is required for new providers';
         }
     };
+    
+    // Password visibility toggle function
+    window.togglePasswordVisibility = function(inputId) {
+        const input = document.getElementById(inputId);
+        let eyeIconId;
+        
+        // Handle different ID patterns
+        if (inputId === 'provider_password') {
+            eyeIconId = 'providerPasswordEyeIcon';
+        } else {
+            eyeIconId = inputId + 'EyeIcon';
+        }
+        
+        const eyeIcon = document.getElementById(eyeIconId);
+        
+        if (input.type === 'password') {
+            input.type = 'text';
+            eyeIcon.classList.remove('fa-eye');
+            eyeIcon.classList.add('fa-eye-slash');
+        } else {
+            input.type = 'password';
+            eyeIcon.classList.remove('fa-eye-slash');
+            eyeIcon.classList.add('fa-eye');
+        }
+    };
+    
+    // Helper functions for field validation
+    function showFieldError(fieldId, message) {
+        const field = document.getElementById(fieldId);
+        const feedback = field.parentNode.querySelector('.invalid-feedback');
+        field.classList.add('is-invalid');
+        if (feedback) {
+            feedback.textContent = message;
+        }
+    }
+    
+    function clearFieldError(fieldId) {
+        const field = document.getElementById(fieldId);
+        field.classList.remove('is-invalid');
+    }
     
     window.saveProvider = function() {
         const form = document.getElementById('providerForm');
@@ -270,10 +344,57 @@
         const method = document.getElementById('providerMethod').value;
         const saveBtn = document.getElementById('saveProviderBtn');
         const spinner = document.getElementById('providerSaveSpinner');
+        const isEditMode = document.getElementById('isEditMode').value === 'true';
         
-        // Validate form
-        if (!form.checkValidity()) {
-            form.reportValidity();
+        // Real-time validation
+        let isValid = true;
+        
+        // Validate name
+        const name = document.getElementById('provider_name').value.trim();
+        if (!name) {
+            showFieldError('provider_name', 'Name is required');
+            isValid = false;
+        } else {
+            clearFieldError('provider_name');
+        }
+        
+        // Validate email
+        const email = document.getElementById('provider_email').value.trim();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email) {
+            showFieldError('provider_email', 'Email is required');
+            isValid = false;
+        } else if (!emailRegex.test(email)) {
+            showFieldError('provider_email', 'Please enter a valid email address');
+            isValid = false;
+        } else {
+            clearFieldError('provider_email');
+        }
+        
+        // Validate password
+        const password = document.getElementById('provider_password').value;
+        if (!isEditMode && !password) {
+            showFieldError('provider_password', 'Password is required');
+            isValid = false;
+        } else if (password && password.length < 6) {
+            showFieldError('provider_password', 'Password must be at least 6 characters');
+            isValid = false;
+        } else {
+            clearFieldError('provider_password');
+        }
+        
+        // Validate role (only in edit mode)
+        if (isEditMode) {
+            const role = document.getElementById('provider_role').value;
+            if (!role) {
+                showFieldError('provider_role', 'Role is required');
+                isValid = false;
+            } else {
+                clearFieldError('provider_role');
+            }
+        }
+        
+        if (!isValid) {
             return;
         }
         
@@ -433,5 +554,4 @@
         }
     });
     </script>
-    @endpush
 </x-app-layout>
