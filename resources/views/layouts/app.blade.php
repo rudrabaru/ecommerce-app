@@ -364,135 +364,124 @@
                     });
                 }
                 
-                // Function to initialize DataTables in current content
+                // Generic function to initialize DataTables based on data attributes
                 function initializeDataTables() {
-                    // Initialize Products DataTable
-                    if ($('#products-table').length && !$.fn.DataTable.isDataTable('#products-table')) {
-                        const ajaxUrl = window.location.pathname.includes('/admin/') 
-                            ? '/admin/products/data' 
-                            : '/provider/products/data';
+                    // Find all tables with data-dt-url attribute
+                    $('table[data-dt-url]').each(function() {
+                        const $table = $(this);
+                        const tableId = $table.attr('id');
+                        
+                        // Skip if already initialized
+                        if (!tableId || $.fn.DataTable.isDataTable('#' + tableId)) {
+                            return;
+                        }
+                        
+                        // Build columns array from thead th elements
+                        const columns = [];
+                        $table.find('thead th').each(function() {
+                            const $th = $(this);
+                            const columnDef = {
+                                data: $th.data('column') || null,
+                                name: $th.data('column') || '',
+                                orderable: $th.data('orderable') !== false,
+                                searchable: $th.data('searchable') !== false
+                            };
                             
-                        window.DataTableInstances['products-table'] = $('#products-table').DataTable({
-                            processing: true,
-                            serverSide: true,
-                            ajax: ajaxUrl,
-                            columns: [
-                                { data: 'id', name: 'id', width: '60px' },
-                                { data: 'image', name: 'image', orderable: false, searchable: false, width: '70px' },
-                                { data: 'title', name: 'title' },
-                                { data: 'category', name: 'category.name' },
-                                { 
-                                    data: 'price', 
-                                    name: 'price',
-                                    render: function(data) {
-                                        return '$' + parseFloat(data).toFixed(2);
-                                    },
-                                    width: '100px'
-                                },
-                                { data: 'stock', name: 'stock', width: '80px' },
-                                { data: 'status', name: 'is_approved', width: '100px' },
-                                { data: 'actions', name: 'actions', orderable: false, searchable: false, width: '200px' }
-                            ],
-                            order: [[0, 'desc']],
-                            pageLength: 25,
-                            responsive: true,
-                            language: {
-                                processing: "Loading...",
-                                emptyTable: "No data available",
-                                info: "Showing _START_ to _END_ of _TOTAL_ entries",
-                                infoEmpty: "Showing 0 to 0 of 0 entries",
-                                infoFiltered: "(filtered from _MAX_ total entries)",
-                                lengthMenu: "Show _MENU_ entries",
-                                search: "Search:",
-                                zeroRecords: "No matching records found"
+                            if ($th.data('width')) {
+                                columnDef.width = $th.data('width');
                             }
-                        });
-                    }
-                    
-                    // Initialize Categories DataTable
-                    if ($('#categories-table').length && !$.fn.DataTable.isDataTable('#categories-table')) {
-                        window.DataTableInstances['categories-table'] = $('#categories-table').DataTable({
-                            processing: true,
-                            serverSide: true,
-                            ajax: '/admin/categories/data',
-                            columns: [
-                                { data: 'id', name: 'id', width: '60px' },
-                                { data: 'name', name: 'name' },
-                                { data: 'parent', name: 'parent.name' },
-                                { data: 'image', name: 'image', orderable: false, searchable: false, width: '70px' },
-                                { data: 'description', name: 'description', width: '30%' },
-                                { 
-                                    data: 'products_count', 
-                                    name: 'products_count',
-                                    orderable: false,
-                                    searchable: false,
-                                    width: '100px'
-                                },
-                                { data: 'actions', name: 'actions', orderable: false, searchable: false, width: '150px' }
-                            ],
-                            order: [[0, 'desc']],
-                            pageLength: 25,
-                            responsive: true,
-                            language: {
-                                processing: "Loading...",
-                                emptyTable: "No data available",
-                                info: "Showing _START_ to _END_ of _TOTAL_ entries",
-                                infoEmpty: "Showing 0 to 0 of 0 entries",
-                                infoFiltered: "(filtered from _MAX_ total entries)",
-                                lengthMenu: "Show _MENU_ entries",
-                                search: "Search:",
-                                zeroRecords: "No matching records found"
+                            
+                            if ($th.data('render')) {
+                                columnDef.render = window[$th.data('render')];
                             }
-                        });
-                    }
-                    
-                    // Initialize Users DataTable
-                    if ($('#users-table').length && !$.fn.DataTable.isDataTable('#users-table')) {
-                        window.DataTableInstances['users-table'] = $('#users-table').DataTable({
-                            processing: true,
-                            serverSide: true,
-                            ajax: '/admin/users/data',
-                            columns: [
-                                { data: 'id', name: 'id', width: '60px' },
-                                { data: 'name', name: 'name' },
-                                { data: 'email', name: 'email' },
-                                { data: 'status', name: 'status', width: '100px' },
-                                { data: 'created_at', name: 'created_at', width: '120px' },
-                                { data: 'actions', name: 'actions', orderable: false, searchable: false, width: '150px' }
-                            ],
-                            order: [[0, 'desc']],
-                            pageLength: 25,
-                            responsive: true,
-                            language: {
-                                processing: "Loading...",
-                                emptyTable: "No data available",
-                                info: "Showing _START_ to _END_ of _TOTAL_ entries",
-                                infoEmpty: "Showing 0 to 0 of 0 entries",
-                                infoFiltered: "(filtered from _MAX_ total entries)",
-                                lengthMenu: "Show _MENU_ entries",
-                                search: "Search:",
-                                zeroRecords: "No matching records found"
-                            }
+                            
+                            columns.push(columnDef);
                         });
                         
-                        console.log('Initializing DataTable:', tableId, 'with columns:', columns);
-                        
-                        window.DataTableInstances[tableId] = $table.DataTable({
+                        // Get configuration from data attributes
+                        const config = {
                             processing: true,
                             serverSide: true,
-                            ajax: $table.data('dt-url'),
-                            pageLength: $table.data('dt-page-length') || 25,
-                            order: JSON.parse($table.attr('data-dt-order') || '[[0, "desc"]]'),
-                            columns: columns,
-                            responsive: true,
-                            language: {
-                                processing: "Loading data...",
-                                emptyTable: "No data found",
-                                zeroRecords: "No matching records found"
+                            ajax: {
+                                url: $table.data('dt-url'),
+                                type: 'GET',
+                                error: function(xhr, error, thrown) {
+                                    console.error('DataTable AJAX error:', error, thrown);
+                                }
                             },
-                            drawCallback: function() {
-                                // Rebind events after each draw if needed
-                                bindEditButtons(document);
+                            columns: columns,
+                            pageLength: parseInt($table.data('dt-page-length')) || 25,
+                            order: $table.data('dt-order') || [[0, 'desc']],
+                            responsive: true,
+                            language: {
+                                processing: '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>',
+                                emptyTable: "No data available",
+                                info: "Showing _START_ to _END_ of _TOTAL_ entries",
+                                infoEmpty: "Showing 0 to 0 of 0 entries",
+                                infoFiltered: "(filtered from _MAX_ total entries)",
+                                lengthMenu: "Show _MENU_ entries",
+                                search: "Search:",
+                                zeroRecords: "No matching records found",
+                                paginate: {
+                                    first: "First",
+                                    last: "Last",
+                                    next: "Next",
+                                    previous: "Previous"
+                                }
+                            },
+                            drawCallback: function(settings) {
+                                // Re-bind toggle switches after each draw
+                                bindToggleSwitches();
+                            }
+                        };
+                        
+                        try {
+                            window.DataTableInstances[tableId] = $table.DataTable(config);
+                            console.log('DataTable initialized:', tableId);
+                        } catch (e) {
+                            console.error('Error initializing DataTable:', tableId, e);
+                        }
+                    });
+                }
+                
+                // Function to bind toggle switches
+                function bindToggleSwitches() {
+                    $('.js-verify-toggle').off('change').on('change', function() {
+                        const $switch = $(this);
+                        const userId = $switch.data('id');
+                        const isChecked = $switch.is(':checked');
+                        
+                        $.ajax({
+                            url: `/admin/users/${userId}/verify`,
+                            method: 'POST',
+                            data: {
+                                verify: isChecked ? 1 : 0,
+                                _token: $('meta[name="csrf-token"]').attr('content')
+                            },
+                            success: function(response) {
+                                if (response.success) {
+                                    if (window.Swal) {
+                                        Swal.fire({
+                                            icon: 'success',
+                                            title: 'Success',
+                                            text: response.message,
+                                            toast: true,
+                                            position: 'top-end',
+                                            showConfirmButton: false,
+                                            timer: 3000
+                                        });
+                                    }
+                                }
+                            },
+                            error: function(xhr) {
+                                // Revert the switch
+                                $switch.prop('checked', !isChecked);
+                                const errorMsg = xhr.responseJSON?.message || 'Failed to update status';
+                                if (window.Swal) {
+                                    Swal.fire('Error', errorMsg, 'error');
+                                } else {
+                                    alert(errorMsg);
+                                }
                             }
                         });
                     });
@@ -500,15 +489,9 @@
                 
                 // Listen for AJAX page loaded event
                 window.addEventListener('ajaxPageLoaded', function() {
-                    // Small delay to ensure DOM is ready
                     setTimeout(function() {
                         destroyAllDataTables();
                         initializeDataTables();
-                        
-                        // Re-initialize any page-specific functionality
-                        if (typeof window.initializePageSpecific === 'function') {
-                            window.initializePageSpecific();
-                        }
                     }, 100);
                 });
                 
@@ -516,6 +499,21 @@
                 $(document).ready(function() {
                     initializeDataTables();
                 });
+                
+                // Expose functions globally
+                window.reloadDataTable = function(tableId) {
+                    if (window.DataTableInstances[tableId]) {
+                        window.DataTableInstances[tableId].ajax.reload(null, false);
+                    }
+                };
+                
+                window.reloadAllDataTables = function() {
+                    Object.keys(window.DataTableInstances).forEach(tableId => {
+                        if (window.DataTableInstances[tableId]) {
+                            window.DataTableInstances[tableId].ajax.reload(null, false);
+                        }
+                    });
+                };
             })();
         </script>
         

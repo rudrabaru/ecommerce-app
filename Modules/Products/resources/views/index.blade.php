@@ -14,17 +14,20 @@
         <div class="card">
             <div class="card-body">
                 <div class="table-responsive">
-                    <table id="products-table" class="table table-hover" width="100%">
+                    <table id="products-table" class="table table-hover" width="100%"
+                           data-dt-url="{{ auth()->user()->hasRole('admin') ? route('admin.products.data') : route('provider.products.data') }}"
+                           data-dt-page-length="25"
+                           data-dt-order='[[0, "desc"]]'>
                         <thead class="table-light">
                             <tr>
-                                <th>ID</th>
-                                <th>Image</th>
-                                <th>Title</th>
-                                <th>Category</th>
-                                <th>Price</th>
-                                <th>Stock</th>
-                                <th>Status</th>
-                                <th>Actions</th>
+                                <th data-column="id" data-width="60px">ID</th>
+                                <th data-column="image" data-orderable="false" data-searchable="false" data-width="70px">Image</th>
+                                <th data-column="title">Title</th>
+                                <th data-column="category">Category</th>
+                                <th data-column="price" data-width="100px">Price</th>
+                                <th data-column="stock" data-width="80px">Stock</th>
+                                <th data-column="status" data-width="100px">Status</th>
+                                <th data-column="actions" data-orderable="false" data-searchable="false" data-width="200px">Actions</th>
                             </tr>
                         </thead>
                     </table>

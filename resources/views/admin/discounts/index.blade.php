@@ -15,15 +15,15 @@
                            data-dt-order='[[0, "desc"]]'>
                         <thead class="table-light">
                         <tr>
-                            <th>ID</th>
-                            <th>Code</th>
-                            <th>Type</th>
-                            <th>Value</th>
-                            <th>Status</th>
-                            <th>Categories</th>
-                            <th>Valid From</th>
-                            <th>Valid Until</th>
-                            <th>Actions</th>
+                            <th data-column="id" data-width="60px">ID</th>
+                            <th data-column="code">Code</th>
+                            <th data-column="discount_type">Type</th>
+                            <th data-column="discount_value">Value</th>
+                            <th data-column="is_active">Status</th>
+                            <th data-column="categories" data-orderable="false" data-searchable="false">Categories</th>
+                            <th data-column="valid_from">Valid From</th>
+                            <th data-column="valid_until">Valid Until</th>
+                            <th data-column="actions" data-orderable="false" data-searchable="false">Actions</th>
                         </tr>
                         </thead>
                     </table>
@@ -37,31 +37,7 @@
     @push('scripts')
     <script>
         (function(){
-            function start(){
-                var $t = $('#discounts-table');
-                if (!$t.length || !$.fn || !$.fn.dataTable) { return setTimeout(start, 50); }
-                if ($.fn.dataTable.isDataTable($t)) return;
-                window.DataTableInstances = window.DataTableInstances || {};
-                window.DataTableInstances['discounts-table'] = $t.DataTable({
-                    processing: true,
-                    serverSide: true,
-                    ajax: $t.data('dt-url'),
-                    pageLength: $t.data('dt-page-length'),
-                    order: JSON.parse($t.attr('data-dt-order')),
-                    columns: [
-                        { data: 'id', name: 'id', width: '60px' },
-                        { data: 'code', name: 'code' },
-                        { data: 'discount_type', name: 'discount_type' },
-                        { data: 'discount_value', name: 'discount_value' },
-                        { data: 'is_active', name: 'is_active' },
-                        { data: 'categories', name: 'categories', orderable: false, searchable: false },
-                        { data: 'valid_from', name: 'valid_from' },
-                        { data: 'valid_until', name: 'valid_until' },
-                        { data: 'actions', name: 'actions', orderable: false, searchable: false }
-                    ]
-                });
-            }
-            if (window.jQuery) start(); else window.addEventListener('load', start);
+            // DataTable is now initialized globally - no need for individual initialization
 
             // Modal logic
             const discountModal = document.getElementById('discountModal');

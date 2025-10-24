@@ -207,5 +207,231 @@
     @endpush
 
     @push('scripts')
+    <script>
+    // Provider CRUD Functions
+    window.openProviderModal = function(providerId = null) {
+        const form = document.getElementById('providerForm');
+        const modal = document.getElementById('providerModal');
+        const modalTitle = document.getElementById('providerModalLabel');
+        const saveBtn = document.getElementById('saveProviderBtn');
+        
+        // Reset form
+        form.reset();
+        document.querySelectorAll('.form-control, .form-select').forEach(el => {
+            el.classList.remove('is-invalid');
+        });
+        saveBtn.disabled = false;
+        
+        if (providerId) {
+            // Edit mode
+            modalTitle.textContent = 'Edit Provider';
+            document.getElementById('providerMethod').value = 'PUT';
+            document.getElementById('providerId').value = providerId;
+            document.getElementById('provider_password').removeAttribute('required');
+            
+            // Load provider data
+            fetch(`/admin/providers/${providerId}/edit`, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('provider_name').value = data.name;
+                document.getElementById('provider_email').value = data.email;
+                
+                // Trigger form validation
+                setTimeout(() => {
+                    document.getElementById('provider_name').dispatchEvent(new Event('input'));
+                    document.getElementById('provider_email').dispatchEvent(new Event('input'));
+                }, 100);
+            })
+            .catch(error => {
+                console.error('Error loading provider:', error);
+                if (window.Swal) {
+                    Swal.fire('Error', 'Failed to load provider data', 'error');
+                } else {
+                    alert('Failed to load provider data');
+                }
+            });
+        } else {
+            // Create mode
+            modalTitle.textContent = 'Create Provider';
+            document.getElementById('providerMethod').value = 'POST';
+            document.getElementById('providerId').value = '';
+            document.getElementById('provider_password').setAttribute('required', 'required');
+        }
+    };
+    
+    window.saveProvider = function() {
+        const form = document.getElementById('providerForm');
+        const providerId = document.getElementById('providerId').value;
+        const method = document.getElementById('providerMethod').value;
+        const saveBtn = document.getElementById('saveProviderBtn');
+        const spinner = document.getElementById('providerSaveSpinner');
+        
+        // Validate form
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+        
+        // Disable button and show spinner
+        saveBtn.disabled = true;
+        spinner.classList.remove('d-none');
+        
+        const formData = new FormData(form);
+        const url = providerId ? `/admin/providers/${providerId}` : '/admin/providers';
+        
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Close modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('providerModal'));
+                modal.hide();
+                
+                // Reload DataTable
+                window.reloadDataTable('providers-table');
+                
+                // Show success message
+                if (window.Swal) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success',
+                        text: data.message,
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 3000
+                    });
+                } else {
+                    alert(data.message);
+                }
+            } else {
+                // Show error
+                if (data.errors) {
+                    Object.keys(data.errors).forEach(key => {
+                        const inputId = key === 'name' ? 'provider_name' : 
+                                       key === 'email' ? 'provider_email' : 
+                                       key === 'password' ? 'provider_password' : key;
+                        const input = document.getElementById(inputId);
+                        if (input) {
+                            input.classList.add('is-invalid');
+                            const feedback = input.nextElementSibling;
+                            if (feedback && feedback.classList.contains('invalid-feedback')) {
+                                feedback.textContent = data.errors[key][0];
+                            }
+                        }
+                    });
+                } else if (data.message) {
+                    if (window.Swal) {
+                        Swal.fire('Error', data.message, 'error');
+                    } else {
+                        alert(data.message);
+                    }
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error saving provider:', error);
+            if (window.Swal) {
+                Swal.fire('Error', 'Failed to save provider', 'error');
+            } else {
+                alert('Failed to save provider');
+            }
+        })
+        .finally(() => {
+            saveBtn.disabled = false;
+            spinner.classList.add('d-none');
+        });
+    };
+    
+    window.deleteProvider = function(providerId) {
+        const confirmFn = window.Swal ?
+            () => Swal.fire({
+                title: 'Are you sure?',
+                text: 'This action cannot be undone.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'Yes, delete it!'
+            }) :
+            () => Promise.resolve({ isConfirmed: window.confirm('Are you sure you want to delete this provider?') });
+        
+        confirmFn().then(result => {
+            if (!result.isConfirmed) return;
+            
+            fetch(`/admin/providers/${providerId}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Reload DataTable
+                    window.reloadDataTable('providers-table');
+                    
+                    if (window.Swal) {
+                        Swal.fire('Deleted!', data.message, 'success');
+                    } else {
+                        alert(data.message);
+                    }
+                } else {
+                    if (window.Swal) {
+                        Swal.fire('Error', data.message, 'error');
+                    } else {
+                        alert(data.message);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting provider:', error);
+                if (window.Swal) {
+                    Swal.fire('Error', 'Failed to delete provider', 'error');
+                } else {
+                    alert('Failed to delete provider');
+                }
+            });
+        });
+    };
+    
+    // Initialize modal behavior
+    document.addEventListener('DOMContentLoaded', function() {
+        const providerModal = document.getElementById('providerModal');
+        if (providerModal) {
+            providerModal.addEventListener('show.bs.modal', function(event) {
+                const button = event.relatedTarget;
+                if (button && button.dataset.action === 'create') {
+                    openProviderModal(null);
+                }
+            });
+        }
+    });
+    
+    // Re-initialize on AJAX page load
+    window.addEventListener('ajaxPageLoaded', function() {
+        const providerModal = document.getElementById('providerModal');
+        if (providerModal) {
+            providerModal.addEventListener('show.bs.modal', function(event) {
+                const button = event.relatedTarget;
+                if (button && button.dataset.action === 'create') {
+                    openProviderModal(null);
+                }
+            });
+        }
+    });
+    </script>
     @endpush
 </x-app-layout>

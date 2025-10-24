@@ -285,7 +285,7 @@
             const form = document.getElementById('paymentForm');
             const formData = new FormData(form);
             const paymentId = $('#paymentId').val();
-            let url = '/{{ auth()->user()->hasRole('admin') ? 'admin' : 'provider' }}/payments';
+            let url = "/{{ auth()->user()->hasRole('admin') ? 'admin' : 'provider' }}/payments";
             if (paymentId) { url += `/${paymentId}`; }
             fetch(url, {
                 method: 'POST',

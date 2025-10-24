@@ -219,5 +219,233 @@
     @endpush
 
     @push('scripts')
+    <script>
+    // User CRUD Functions
+    window.openUserModal = function(userId = null) {
+        const form = document.getElementById('userForm');
+        const modal = document.getElementById('userModal');
+        const modalTitle = document.getElementById('userModalLabel');
+        const saveBtn = document.getElementById('saveUserBtn');
+        
+        // Reset form
+        form.reset();
+        document.querySelectorAll('.form-control, .form-select').forEach(el => {
+            el.classList.remove('is-invalid');
+        });
+        saveBtn.disabled = false;
+        
+        if (userId) {
+            // Edit mode
+            modalTitle.textContent = 'Edit User';
+            document.getElementById('userMethod').value = 'PUT';
+            document.getElementById('userId').value = userId;
+            document.getElementById('password').removeAttribute('required');
+            
+            // Load user data
+            fetch(`/admin/users/${userId}/edit`, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('name').value = data.name;
+                document.getElementById('email').value = data.email;
+                
+                // Set role
+                const roleName = data.roles && data.roles.length > 0 ? data.roles[0].name : 'user';
+                document.getElementById('role').value = roleName;
+                
+                // Trigger form validation
+                setTimeout(() => {
+                    document.getElementById('name').dispatchEvent(new Event('input'));
+                    document.getElementById('email').dispatchEvent(new Event('input'));
+                    document.getElementById('role').dispatchEvent(new Event('change'));
+                }, 100);
+            })
+            .catch(error => {
+                console.error('Error loading user:', error);
+                if (window.Swal) {
+                    Swal.fire('Error', 'Failed to load user data', 'error');
+                } else {
+                    alert('Failed to load user data');
+                }
+            });
+        } else {
+            // Create mode
+            modalTitle.textContent = 'Create User';
+            document.getElementById('userMethod').value = 'POST';
+            document.getElementById('userId').value = '';
+            document.getElementById('password').setAttribute('required', 'required');
+        }
+    };
+    
+    window.saveUser = function() {
+        const form = document.getElementById('userForm');
+        const userId = document.getElementById('userId').value;
+        const method = document.getElementById('userMethod').value;
+        const saveBtn = document.getElementById('saveUserBtn');
+        const spinner = document.getElementById('userSaveSpinner');
+        
+        // Validate form
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+        
+        // Disable button and show spinner
+        saveBtn.disabled = true;
+        spinner.classList.remove('d-none');
+        
+        const formData = new FormData(form);
+        const url = userId ? `/admin/users/${userId}` : '/admin/users';
+        
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Close modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('userModal'));
+                modal.hide();
+                
+                // Reload DataTable
+                window.reloadDataTable('users-table');
+                
+                // Show success message
+                if (window.Swal) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success',
+                        text: data.message,
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 3000
+                    });
+                } else {
+                    alert(data.message);
+                }
+            } else {
+                // Show error
+                if (data.errors) {
+                    Object.keys(data.errors).forEach(key => {
+                        const input = document.getElementById(key);
+                        if (input) {
+                            input.classList.add('is-invalid');
+                            const feedback = input.nextElementSibling;
+                            if (feedback && feedback.classList.contains('invalid-feedback')) {
+                                feedback.textContent = data.errors[key][0];
+                            }
+                        }
+                    });
+                } else if (data.message) {
+                    if (window.Swal) {
+                        Swal.fire('Error', data.message, 'error');
+                    } else {
+                        alert(data.message);
+                    }
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error saving user:', error);
+            if (window.Swal) {
+                Swal.fire('Error', 'Failed to save user', 'error');
+            } else {
+                alert('Failed to save user');
+            }
+        })
+        .finally(() => {
+            saveBtn.disabled = false;
+            spinner.classList.add('d-none');
+        });
+    };
+    
+    window.deleteUser = function(userId) {
+        const confirmFn = window.Swal ?
+            () => Swal.fire({
+                title: 'Are you sure?',
+                text: 'This action cannot be undone.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'Yes, delete it!'
+            }) :
+            () => Promise.resolve({ isConfirmed: window.confirm('Are you sure you want to delete this user?') });
+        
+        confirmFn().then(result => {
+            if (!result.isConfirmed) return;
+            
+            fetch(`/admin/users/${userId}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Reload DataTable
+                    window.reloadDataTable('users-table');
+                    
+                    if (window.Swal) {
+                        Swal.fire('Deleted!', data.message, 'success');
+                    } else {
+                        alert(data.message);
+                    }
+                } else {
+                    if (window.Swal) {
+                        Swal.fire('Error', data.message, 'error');
+                    } else {
+                        alert(data.message);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting user:', error);
+                if (window.Swal) {
+                    Swal.fire('Error', 'Failed to delete user', 'error');
+                } else {
+                    alert('Failed to delete user');
+                }
+            });
+        });
+    };
+    
+    // Initialize modal behavior
+    document.addEventListener('DOMContentLoaded', function() {
+        const userModal = document.getElementById('userModal');
+        if (userModal) {
+            userModal.addEventListener('show.bs.modal', function(event) {
+                const button = event.relatedTarget;
+                if (button && button.dataset.action === 'create') {
+                    openUserModal(null);
+                }
+            });
+        }
+    });
+    
+    // Re-initialize on AJAX page load
+    window.addEventListener('ajaxPageLoaded', function() {
+        const userModal = document.getElementById('userModal');
+        if (userModal) {
+            userModal.addEventListener('show.bs.modal', function(event) {
+                const button = event.relatedTarget;
+                if (button && button.dataset.action === 'create') {
+                    openUserModal(null);
+                }
+            });
+        }
+    });
+    </script>
     @endpush
 </x-app-layout>

@@ -12,16 +12,19 @@
         <div class="card">
             <div class="card-body">
                 <div class="table-responsive">
-                    <table id="categories-table" class="table table-hover" width="100%">
+                    <table id="categories-table" class="table table-hover" width="100%"
+                           data-dt-url="{{ route('admin.categories.data') }}"
+                           data-dt-page-length="25"
+                           data-dt-order='[[0, "desc"]]'>
                         <thead class="table-light">
                             <tr>
-                                <th>ID</th>
-                                <th>Name</th>
-                                <th>Parent</th>
-                                <th>Image</th>
-                                <th>Description</th>
-                                <th>Products</th>
-                                <th>Actions</th>
+                                <th data-column="id" data-width="60px">ID</th>
+                                <th data-column="name">Name</th>
+                                <th data-column="parent">Parent</th>
+                                <th data-column="image" data-orderable="false" data-searchable="false" data-width="70px">Image</th>
+                                <th data-column="description" data-width="30%">Description</th>
+                                <th data-column="products_count" data-orderable="false" data-searchable="false" data-width="100px">Products</th>
+                                <th data-column="actions" data-orderable="false" data-searchable="false" data-width="150px">Actions</th>
                             </tr>
                         </thead>
                     </table>
