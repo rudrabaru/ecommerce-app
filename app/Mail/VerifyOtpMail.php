@@ -12,6 +12,7 @@ class VerifyOtpMail extends Mailable
     use SerializesModels;
 
     public string $code;
+
     public ?string $verifyUrl;
 
     public function __construct(string $code, ?string $verifyUrl = null)

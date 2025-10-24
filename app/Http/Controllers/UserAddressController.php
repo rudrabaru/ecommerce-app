@@ -11,7 +11,7 @@ class UserAddressController extends Controller
     public function index()
     {
         $addresses = Auth::user()->addresses()->where('type', 'shipping')->get();
-        return view('addresses.index', compact('addresses'));
+        return view('addresses.index', ['addresses' => $addresses]);
     }
 
     public function create()

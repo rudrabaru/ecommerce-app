@@ -60,6 +60,7 @@ class UserAddress extends Model
         if ($this->address_line_2) {
             $address .= ', ' . $this->address_line_2;
         }
+
         $address .= ', ' . $this->city->name . ', ' . $this->state->name . ' ' . $this->postal_code . ', ' . $this->country->name;
         return $address;
     }

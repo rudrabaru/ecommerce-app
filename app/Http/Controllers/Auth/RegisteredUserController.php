@@ -50,6 +50,7 @@ class RegisteredUserController extends Controller
         if (! $user->hasRole('user')) {
             $user->assignRole('user');
         }
+
         if ($role && $role->id) {
             $user->role_id = $role->id;
             $user->save();
@@ -65,10 +66,11 @@ class RegisteredUserController extends Controller
             $userRole = \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'user', 'guard_name' => 'web']);
             $isStorefrontUser = $user->hasRole('user') || ((int)($user->role_id) === (int)($userRole->id ?? 0));
             $shouldFireDefaultRegistered = ! $isStorefrontUser;
-        } catch (\Throwable $e) {
+        } catch (\Throwable $throwable) {
             // If roles are not resolvable for some reason, default to firing the event to be safe
             $shouldFireDefaultRegistered = true;
         }
+
         if ($shouldFireDefaultRegistered) {
             event(new Registered($user));
         }
@@ -98,6 +100,7 @@ class RegisteredUserController extends Controller
                 if ($redirect) {
                     return redirect()->route('verification.otp.notice', ['redirect' => $redirect])->with('status', 'Verification code sent.');
                 }
+
                 return redirect()->route('verification.otp.notice')->with('status', 'Verification code sent.');
             }
         }

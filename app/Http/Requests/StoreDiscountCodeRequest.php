@@ -11,9 +11,11 @@ class StoreDiscountCodeRequest extends FormRequest
         if ($this->has('code')) {
             $this->merge(['code' => strtoupper((string)$this->input('code'))]);
         }
+
         if ($this->has('is_active')) {
             $this->merge(['is_active' => (bool)$this->input('is_active')]);
         }
+
         // Normalize datetime-local values to Y-m-d H:i:s in app timezone
         foreach (['valid_from','valid_until'] as $key) {
             if ($this->filled($key)) {

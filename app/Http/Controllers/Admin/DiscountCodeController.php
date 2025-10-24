@@ -55,6 +55,7 @@ class DiscountCodeController extends Controller
         if (request()->wantsJson() || request()->ajax()) {
             return response()->json(['success' => true, 'message' => 'Discount code created']);
         }
+
         return redirect()->route('admin.discounts.index')->with('status', 'Discount code created');
     }
 
@@ -79,6 +80,7 @@ class DiscountCodeController extends Controller
         if (request()->wantsJson() || request()->ajax()) {
             return response()->json(['success' => true, 'message' => 'Discount code updated']);
         }
+
         return redirect()->route('admin.discounts.index')->with('status', 'Discount code updated');
     }
 
@@ -87,13 +89,15 @@ class DiscountCodeController extends Controller
         // Detach pivots then hard delete so it is removed from DB as requested
         try {
             $discount_code->categories()->detach();
-        } catch (\Throwable $e) {
+        } catch (\Throwable $throwable) {
             // ignore if not set
         }
+
         $discount_code->forceDelete();
         if (request()->ajax()) {
             return response()->json(['success' => true, 'message' => 'Deleted']);
         }
+
         return redirect()->route('admin.discounts.index')->with('status', 'Discount code deleted');
     }
 }

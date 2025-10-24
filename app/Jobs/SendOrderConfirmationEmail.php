@@ -12,11 +12,16 @@ use Illuminate\Support\Facades\Mail;
 
 class SendOrderConfirmationEmail implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
-
+    use Dispatchable;
+    use InteractsWithQueue;
+    use Queueable;
+    use SerializesModels;
     private $order;
-    public $tries = 5; // Increased retry attempts
-    public $backoff = [10, 30, 60, 120, 300]; // Backoff strategy: 10s, 30s, 60s, 2m, 5m
+    
+    public $tries = 5;
+     // Increased retry attempts
+    public $backoff = [10, 30, 60, 120, 300];
+     // Backoff strategy: 10s, 30s, 60s, 2m, 5m
     public $timeout = 60; // Timeout for each attempt
     
     public function __construct(Order $order)
@@ -64,16 +69,16 @@ class SendOrderConfirmationEmail implements ShouldQueue
                 'email' => $order->user->email,
                 'attempt' => $this->attempts()
             ]);
-        } catch (\Exception $e) {
+        } catch (\Exception $exception) {
             Log::error('Failed to send order confirmation email on attempt ' . $this->attempts(), [
                 'order_id' => $this->order->id,
                 'order_number' => $this->order->order_number,
-                'error' => $e->getMessage(),
-                'exception' => class_basename($e)
+                'error' => $exception->getMessage(),
+                'exception' => class_basename($exception)
             ]);
             
             // Retry the job by re-throwing
-            throw $e;
+            throw $exception;
         }
     }
 

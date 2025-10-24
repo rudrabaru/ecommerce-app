@@ -12,9 +12,11 @@ class UpdateDiscountCodeRequest extends FormRequest
         if ($this->has('code')) {
             $this->merge(['code' => strtoupper((string)$this->input('code'))]);
         }
+
         if ($this->has('is_active')) {
             $this->merge(['is_active' => (bool)$this->input('is_active')]);
         }
+
         foreach (['valid_from','valid_until'] as $key) {
             if ($this->filled($key)) {
                 $raw = (string)$this->input($key);

@@ -18,32 +18,38 @@ class CartController extends Controller
         if (!$image) {
             return asset('img/product/product-1.jpg');
         }
+
         if (is_string($image) && (str_starts_with($image, 'http://') || str_starts_with($image, 'https://'))) {
             // Rewrite legacy/seeded placeholder domain to a reliable one
             try {
                 $parts = parse_url($image);
-                if (!empty($parts['host']) && stripos($parts['host'], 'via.placeholder.com') !== false) {
+                if (isset($parts['host']) && ($parts['host'] !== '' && $parts['host'] !== '0') && stripos($parts['host'], 'via.placeholder.com') !== false) {
                     $path = $parts['path'] ?? '';
                     $query = $parts['query'] ?? '';
                     $text = '';
                     parse_str($query, $q);
-                    if (!empty($q['text'])) { $text = $q['text']; }
+                    if (isset($q['text']) && ($q['text'] !== [] && ($q['text'] !== '' && $q['text'] !== '0'))) { $text = $q['text']; }
+
                     if (preg_match('#/(\d+x\d+)\.png/([0-9a-fA-F]{3,6})#', $path, $m)) {
                         $size = $m[1];
                         $bg = $m[2];
                         return 'https://placehold.co/' . $size . '/' . $bg . '/ffffff?text=' . urlencode($text ?: '');
                     }
+
                     if (preg_match('#/(\d+x\d+)#', $path, $m)) {
                         $size = $m[1];
                         return 'https://placehold.co/' . $size . '?text=' . urlencode($text ?: '');
                     }
+
                     return 'https://placehold.co/600x600?text=' . urlencode($text ?: '');
                 }
             } catch (\Throwable $e) {
             }
+
             return $image;
         }
-        return asset('storage/' . ltrim($image, '/'));
+
+        return asset('storage/' . ltrim((string) $image, '/'));
     }
     
     /**
@@ -62,6 +68,7 @@ class CartController extends Controller
             $cart = session('cart', []);
             return count($cart); // Count of unique products
         }
+
         return 0;
     }
 
@@ -105,6 +112,7 @@ class CartController extends Controller
                     $product = \Modules\Products\Models\Product::find($i['product_id']);
                     $i['category_id'] = $product ? $product->category_id : null;
                 }
+
                 return $i;
             });
             $subtotal = $items->reduce(fn($c,$i)=> $c + ($i['price'] * $i['quantity']), 0);
@@ -181,6 +189,7 @@ class CartController extends Controller
                     $product = \Modules\Products\Models\Product::find($i['product_id']);
                     $i['category_id'] = $product ? $product->category_id : null;
                 }
+
                 return $i;
             });
             $subtotal = $items->reduce(fn($c,$i)=> $c + ($i['price'] * $i['quantity']), 0);
@@ -226,7 +235,7 @@ class CartController extends Controller
         }
 
         // Get discount details
-        $discount = \App\Models\DiscountCode::whereRaw('upper(code) = ?', [strtoupper($discountCode)])->first();
+        $discount = \App\Models\DiscountCode::whereRaw('upper(code) = ?', [strtoupper((string) $discountCode)])->first();
         if (!$discount) {
             return response()->json(['eligible_items' => []]);
         }
@@ -240,11 +249,7 @@ class CartController extends Controller
         if (Auth::check()) {
             // For logged-in users, get cart from database
             $cart = Cart::where('user_id', Auth::id())->first();
-            if ($cart) {
-                $items = $cart->items()->with('product')->get();
-            } else {
-                $items = collect();
-            }
+            $items = $cart ? $cart->items()->with('product')->get() : collect();
         } else {
             // For guests, get cart from session
             $cart = session('cart', []);
@@ -263,7 +268,9 @@ class CartController extends Controller
         $eligibleItems = [];
         foreach ($items as $item) {
             $product = $item->product ?? null;
-            if (!$product) continue;
+            if (!$product) {
+                continue;
+            }
 
             $isEligible = empty($allowedCategoryIds) || in_array($product->category_id, $allowedCategoryIds);
             if ($isEligible) {
@@ -355,6 +362,7 @@ class CartController extends Controller
                     $product = \Modules\Products\Models\Product::find($i['product_id']);
                     $i['category_id'] = $product ? $product->category_id : null;
                 }
+
                 return $i;
             });
             $subtotal = $items->reduce(fn($c,$i)=> $c + ($i['price'] * $i['quantity']), 0);
@@ -437,11 +445,12 @@ class CartController extends Controller
                     'quantity' => $quantity,
                 ];
             }
+
             session()->put('cart', $cart);
-            
+
             // Revalidate discount if previously applied
             $this->revalidateAndPersistDiscountForSessionCart();
-            
+
             // Get count of unique items (not total quantity)
             $cartCount = count($cart);
         }
@@ -566,6 +575,7 @@ class CartController extends Controller
                     'discount_amount' => 0
                 ]);
             }
+
             $cartCount = 0;
         } else {
             // For guests, clear session cart and discount
@@ -589,7 +599,7 @@ class CartController extends Controller
             'discount_code' => ['required', 'string', 'max:255']
         ]);
 
-        $discountCode = strtoupper(trim($validated['discount_code']));
+        $discountCode = strtoupper(trim((string) $validated['discount_code']));
         $service = new DiscountService();
 
         // Build cart items and category IDs
@@ -605,17 +615,18 @@ class CartController extends Controller
             $sessionCart = array_values(session('cart', []));
             try {
                 $ids = array_column($sessionCart, 'product_id');
-                $categories = empty($ids) ? collect() : ProductModel::whereIn('id', $ids)->pluck('category_id', 'id');
+                $categories = $ids === [] ? collect() : ProductModel::whereIn('id', $ids)->pluck('category_id', 'id');
                 $items = collect($sessionCart)->map(function ($i) use ($categories) {
                     $pid = isset($i['product_id']) ? (int)$i['product_id'] : null;
                     $catId = null;
                     if (!is_null($pid)) {
                         if ($categories instanceof \Illuminate\Support\Collection) {
                             $catId = $categories->get($pid);
-                        } else if (is_array($categories)) {
+                        } elseif (is_array($categories)) {
                             $catId = isset($categories[$pid]) ? $categories[$pid] : null;
                         }
                     }
+
                     return [
                         'product_id' => $pid,
                         'quantity' => (int)($i['quantity'] ?? 0),
@@ -627,6 +638,7 @@ class CartController extends Controller
                 if ($request->ajax()) {
                     return response()->json(['success' => false, 'message' => 'Invalid cart data for discount application'], 400);
                 }
+
                 return redirect()->back()->with('error', 'Invalid cart data for discount application');
             }
         }
@@ -639,6 +651,7 @@ class CartController extends Controller
             if ($request->ajax()) {
                 return response()->json(['success' => false, 'message' => $message], 400);
             }
+
             return redirect()->back()->with('error', $message);
         }
 
@@ -670,8 +683,14 @@ class CartController extends Controller
 
     private function revalidateAndPersistDiscountForUserCart(?Cart $cart): void
     {
-        if (!$cart) return;
-        if (!$cart->discount_code) return;
+        if (!$cart instanceof \App\Models\Cart) {
+            return;
+        }
+
+        if (!$cart->discount_code) {
+            return;
+        }
+
         $cart->load('items.product');
         $items = $cart->items->map(fn($i) => [
             'product_id' => $i->product_id,
@@ -693,24 +712,29 @@ class CartController extends Controller
     private function revalidateAndPersistDiscountForSessionCart(): void
     {
         $code = session('cart_discount_code');
-        if (!$code) return;
+        if (!$code) {
+            return;
+        }
+
         $sessionCart = array_values(session('cart', []));
-        if (empty($sessionCart)) {
+        if ($sessionCart === []) {
             session()->forget(['cart_discount_code','cart_discount']);
             return;
         }
+
         $ids = array_column($sessionCart, 'product_id');
-        $categories = empty($ids) ? collect() : ProductModel::whereIn('id', $ids)->pluck('category_id', 'id');
+        $categories = $ids === [] ? collect() : ProductModel::whereIn('id', $ids)->pluck('category_id', 'id');
         $items = collect($sessionCart)->map(function ($i) use ($categories) {
             $pid = isset($i['product_id']) ? (int)$i['product_id'] : null;
             $catId = null;
             if (!is_null($pid)) {
                 if ($categories instanceof \Illuminate\Support\Collection) {
                     $catId = $categories->get($pid);
-                } else if (is_array($categories)) {
+                } elseif (is_array($categories)) {
                     $catId = isset($categories[$pid]) ? $categories[$pid] : null;
                 }
             }
+
             return [
                 'product_id' => $pid,
                 'quantity' => (int)($i['quantity'] ?? 0),
@@ -756,7 +780,7 @@ class CartController extends Controller
             }
 
             return redirect()->back()->with('success', 'Discount code removed successfully');
-        } catch (\Exception $e) {
+        } catch (\Exception $exception) {
             if ($request->ajax()) {
                 return response()->json([
                     'success' => false,

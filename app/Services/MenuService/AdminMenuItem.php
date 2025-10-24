@@ -5,12 +5,19 @@ namespace App\Services\MenuService;
 class AdminMenuItem
 {
     public $id;
+
     public $label;
+
     public $route;
+
     public $icon;
+
     public $active;
+
     public $children;
+
     public $htmlData;
+
     public $itemStyles;
 
     public function __construct(array $data = [])

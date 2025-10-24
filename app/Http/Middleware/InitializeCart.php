@@ -31,6 +31,7 @@ class InitializeCart
                     if (!$product) {
                         continue;
                     }
+
                     $existing = $cart->items()->where('product_id', $product->id)->first();
                     $quantity = max(1, (int) $item['quantity']);
                     if ($existing) {
@@ -43,6 +44,7 @@ class InitializeCart
                         ]);
                     }
                 }
+
                 session()->forget('cart');
             }
         }

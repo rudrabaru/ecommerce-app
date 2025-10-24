@@ -113,7 +113,7 @@ class PortalLoginController extends Controller
             if (class_exists(\App\Http\Controllers\CartController::class)) {
                 $cartCount = \App\Http\Controllers\CartController::getCartCount();
             }
-        } catch (\Throwable $e) {
+        } catch (\Throwable $throwable) {
             $cartCount = null;
         }
 
@@ -158,7 +158,7 @@ class PortalLoginController extends Controller
 
     private function throttleKey(Request $request): string
     {
-        return strtolower($request->input('email')).'|'.$request->ip();
+        return strtolower((string) $request->input('email')).'|'.$request->ip();
     }
 
     private function ensureIsNotRateLimited(Request $request): void
@@ -166,6 +166,7 @@ class PortalLoginController extends Controller
         if (! RateLimiter::tooManyAttempts($this->throttleKey($request), 5)) {
             return;
         }
+
         throw ValidationException::withMessages([
             'email' => __('auth.throttle', ['seconds' => RateLimiter::availableIn($this->throttleKey($request))]),
         ]);
@@ -264,11 +265,11 @@ class PortalLoginController extends Controller
                 'email' => $user->email
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Exception $exception) {
             \Log::error('Failed to send verification email to unverified user', [
                 'user_id' => $user->id,
                 'email' => $user->email,
-                'error' => $e->getMessage()
+                'error' => $exception->getMessage()
             ]);
         }
     }

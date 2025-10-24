@@ -91,6 +91,7 @@ class AdminMenuService
         foreach ($items as $item) {
             $html .= $this->renderMenuItem($item);
         }
+
         return $html;
     }
 

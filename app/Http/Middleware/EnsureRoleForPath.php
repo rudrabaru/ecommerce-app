@@ -20,9 +20,11 @@ class EnsureRoleForPath
             if ($user->hasRole('admin')) {
                 return redirect()->route('admin.dashboard');
             }
+
             if ($user->hasRole('provider')) {
                 return redirect()->route('provider.dashboard');
             }
+
             return redirect()->route('home');
         }
 

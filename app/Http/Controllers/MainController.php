@@ -18,7 +18,7 @@ class MainController extends Controller
             ->take(10)
             ->get(['id', 'title as name', 'price', 'image']);
 
-        return view('index', compact('products'));
+        return view('index', ['products' => $products]);
     }
 
     public function cart()

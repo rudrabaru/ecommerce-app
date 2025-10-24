@@ -40,6 +40,7 @@ class RoleSeeder extends Seeder
             if (is_null($u->email_verified_at)) {
                 $u->email_verified_at = now();
             }
+
             if (\Schema::hasColumn('users', 'status')) {
                 $u->status = 'verified';
             }

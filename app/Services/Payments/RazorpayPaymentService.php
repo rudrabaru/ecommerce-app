@@ -15,7 +15,7 @@ use Razorpay\Api\Api as RazorpayClient;
 
 class RazorpayPaymentService
 {
-    private RazorpayClient $client;
+    private readonly RazorpayClient $client;
 
     public function __construct()
     {
@@ -31,8 +31,9 @@ class RazorpayPaymentService
         $currency = 'INR';
         $amountBase = (float) $order->total_amount;
         if (strtoupper((string)($order->currency ?? 'USD')) !== 'INR') {
-            $amountBase = $amountBase * 83.0; // demo conversion
+            $amountBase *= 83.0; // demo conversion
         }
+
         $amountMinor = (int) round($amountBase * 100);
 
         $rOrder = $this->client->order->create([
@@ -131,7 +132,7 @@ class RazorpayPaymentService
                 'status' => 'paid',
                 'payload' => array_merge($txn->payload ?? [], ['payment' => $payment ? $payment->toArray() : []]),
             ]);
-            
+
             $order->update(['status' => 'paid']);
 
             // Update the associated Payment record
@@ -163,20 +164,20 @@ class RazorpayPaymentService
             dispatch(new \App\Jobs\SendOrderConfirmationEmail($order));
 
             DB::commit();
-            
+
             return [
                 'success' => true,
                 'order_id' => $order->id,
                 'order_number' => $order->order_number
             ];
-        } catch (\Throwable $e) {
+        } catch (\Throwable $throwable) {
             DB::rollBack();
-            Log::error('Razorpay captureAndMarkPaid failed: ' . $e->getMessage(), [
+            Log::error('Razorpay captureAndMarkPaid failed: ' . $throwable->getMessage(), [
                 'razorpay_order_id' => $razorpayOrderId,
                 'payment_id' => $paymentId,
-                'trace' => $e->getTraceAsString()
+                'trace' => $throwable->getTraceAsString()
             ]);
-            throw $e;
+            throw $throwable;
         }
     }
 

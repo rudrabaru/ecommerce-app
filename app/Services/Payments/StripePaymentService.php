@@ -16,7 +16,7 @@ use Stripe\Webhook;
 
 class StripePaymentService
 {
-    private StripeClient $client;
+    private readonly StripeClient $client;
 
     public function __construct()
     {
@@ -80,6 +80,7 @@ class StripePaymentService
                     Log::info('Stripe webhook: Order already marked as paid, skipping duplicate processing', ['order_id' => $orderId]);
                     return;
                 }
+
                 if ($type === 'payment_intent.payment_failed' && $order->status === 'failed') {
                     Log::info('Stripe webhook: Order already marked as failed, skipping duplicate processing', ['order_id' => $orderId]);
                     return;
@@ -97,7 +98,7 @@ class StripePaymentService
                         'gateway' => 'stripe',
                         'gateway_payment_id' => $intentId,
                         'amount' => (int) $data->amount_received,
-                        'currency' => strtoupper($data->currency),
+                        'currency' => strtoupper((string) $data->currency),
                         'status' => 'pending',
                     ]);
                 }
@@ -116,11 +117,9 @@ class StripePaymentService
                         ->update(['status' => 'paid']);
 
                     // Clear cart for the user (if any)
-                    if ($order->user_id) {
-                        if ($cart = Cart::where('user_id', $order->user_id)->first()) {
-                            $cart->items()->delete();
-                            $cart->update(['discount_code' => null, 'discount_amount' => 0]);
-                        }
+                    if ($order->user_id && $cart = Cart::where('user_id', $order->user_id)->first()) {
+                        $cart->items()->delete();
+                        $cart->update(['discount_code' => null, 'discount_amount' => 0]);
                     }
 
                     // Queue order confirmation email with logging
@@ -144,7 +143,7 @@ class StripePaymentService
                     Payment::where('order_id', $order->id)
                         ->whereHas('paymentMethod', function ($q) { $q->where('name', 'stripe'); })
                         ->update(['status' => 'failed']);
-                    
+
                     Log::error('Stripe webhook: Payment failed for order', [
                         'order_id' => $orderId,
                         'error_code' => $data->last_payment_error->code ?? null,
@@ -165,7 +164,7 @@ class StripePaymentService
         $intent = $this->client->paymentIntents->retrieve($paymentIntentId);
 
         $orderId = (int) ($intent->metadata['order_id'] ?? 0);
-        if (! $orderId) {
+        if ($orderId === 0) {
             throw new \RuntimeException('Order id missing in intent metadata');
         }
 
@@ -239,14 +238,14 @@ class StripePaymentService
 
             DB::commit();
             return ['success' => true, 'order_id' => $order->id, 'order_number' => $order->order_number];
-        } catch (\Throwable $e) {
+        } catch (\Throwable $throwable) {
             DB::rollBack();
-            Log::error('Stripe payment confirmation failed: ' . $e->getMessage(), [
+            Log::error('Stripe payment confirmation failed: ' . $throwable->getMessage(), [
                 'payment_intent_id' => $paymentIntentId,
                 'order_id' => $orderId ?? null,
-                'error' => $e->getMessage()
+                'error' => $throwable->getMessage()
             ]);
-            throw $e;
+            throw $throwable;
         }
     }
 }

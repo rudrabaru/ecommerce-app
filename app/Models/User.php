@@ -60,7 +60,7 @@ class User extends Authenticatable implements MustVerifyEmail
                 if ($userRoleId && (int)$user->role_id !== (int)$userRoleId) {
                     $user->status = null;
                 }
-            } catch (\Throwable $e) {
+            } catch (\Throwable $throwable) {
                 // Ignore during early migrations / seeding
             }
         });

@@ -74,10 +74,7 @@ class DiscountCode extends Model
         if ($this->valid_from && $now->lt($this->valid_from)) {
             return false;
         }
-        if ($this->valid_until && $now->gt($this->valid_until)) {
-            return false;
-        }
-        return true;
+        return !($this->valid_until && $now->gt($this->valid_until));
     }
 
     public function hasRemainingUses(): bool
@@ -85,6 +82,7 @@ class DiscountCode extends Model
         if (is_null($this->usage_limit)) {
             return true;
         }
+
         return $this->usage_count < $this->usage_limit;
     }
 
@@ -94,9 +92,11 @@ class DiscountCode extends Model
         if (empty($allowed) && $this->category_id) {
             $allowed = [$this->category_id];
         }
+
         if (empty($allowed)) {
             return true;
-        } // if none selected, applies to all
-        return count(array_intersect($allowed, $categoryIds)) > 0;
+        }
+         // if none selected, applies to all
+        return array_intersect($allowed, $categoryIds) !== [];
     }
 }

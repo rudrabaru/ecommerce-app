@@ -27,6 +27,7 @@ class CheckoutController extends Controller
             if (!$cart || $cart->items()->count() == 0) {
                 return redirect()->route('cart.index')->with('error', 'Your cart is empty.');
             }
+
             $cartItems = $cart->items()->with('product')->get()->map(function ($item) {
                 return [
                     'product_id' => $item->product_id,
@@ -41,8 +42,9 @@ class CheckoutController extends Controller
             if (empty($sessionCart)) {
                 return redirect()->route('cart.index')->with('error', 'Your cart is empty.');
             }
+
             $ids = array_values(array_column($sessionCart, 'product_id'));
-            $categories = empty($ids) ? collect() : Product::whereIn('id', $ids)->pluck('category_id', 'id');
+            $categories = $ids === [] ? collect() : Product::whereIn('id', $ids)->pluck('category_id', 'id');
             $cartItems = collect($sessionCart)->map(function ($item) use ($categories) {
                 return [
                     'product_id' => $item['product_id'] ?? null,
@@ -112,7 +114,7 @@ class CheckoutController extends Controller
             }
         }
 
-        return view('checkout', compact('addresses', 'paymentMethods', 'cartTotal', 'discountAmount', 'affectedItemsCount', 'discountCode'));
+        return view('checkout', ['addresses' => $addresses, 'paymentMethods' => $paymentMethods, 'cartTotal' => $cartTotal, 'discountAmount' => $discountAmount, 'affectedItemsCount' => $affectedItemsCount, 'discountCode' => $discountCode]);
     }
 
     public function store(Request $request)
@@ -126,6 +128,7 @@ class CheckoutController extends Controller
             if (!$cart || $cart->items()->count() == 0) {
                 return redirect()->route('cart.index')->with('error', 'Your cart is empty.');
             }
+
             $cartItems = $cart->items()->with('product')->get();
         } else {
             // For guests, get cart from session
@@ -133,6 +136,7 @@ class CheckoutController extends Controller
             if (empty($sessionCart)) {
                 return redirect()->route('cart.index')->with('error', 'Your cart is empty.');
             }
+
             $cartItems = collect($sessionCart);
         }
 
@@ -194,13 +198,14 @@ class CheckoutController extends Controller
                     }
                 }
 
-                $perItemAllocation = $service->allocatePerItem(\App\Models\DiscountCode::whereRaw('upper(code) = ?', [strtoupper($discountCode)])->first(), $normItems);
+                $perItemAllocation = $service->allocatePerItem(\App\Models\DiscountCode::whereRaw('upper(code) = ?', [strtoupper((string) $discountCode)])->first(), $normItems);
                 $discountAmountTotal = array_sum($perItemAllocation);
             }
+
             // Calculate total order amount
             $totalOrderAmount = 0;
             $orderItems = [];
-            
+
             foreach ($cartItems as $item) {
                 // Handle both database cart items and session cart items
                 if ($user) {
@@ -214,15 +219,16 @@ class CheckoutController extends Controller
                     $quantity = (int) $item['quantity'];
                     $unitPrice = (float) $item['price'];
                 }
-                
+
                 $lineTotal = $unitPrice * $quantity;
                 $lineDiscount = 0.0;
                 if ($discountCode && isset($perItemAllocation[$product->id])) {
                     $lineDiscount = min($perItemAllocation[$product->id], $lineTotal);
                 }
+
                 $total = $lineTotal - $lineDiscount;
                 $totalOrderAmount += $total;
-                
+
                 $orderItems[] = [
                     'product_id' => $product->id,
                     'quantity' => $quantity,
@@ -273,10 +279,8 @@ class CheckoutController extends Controller
             $created[] = $order->order_number;
 
             // Increment discount usage once per checkout if discount used
-            if ($discountCode && $discountAmountTotal > 0) {
-                if ($d = \App\Models\DiscountCode::whereRaw('upper(code) = ?', [strtoupper($discountCode)])->first()) {
-                    (new \App\Services\DiscountService())->incrementUsage($d);
-                }
+            if ($discountCode && $discountAmountTotal > 0 && $d = \App\Models\DiscountCode::whereRaw('upper(code) = ?', [strtoupper((string) $discountCode)])->first()) {
+                (new \App\Services\DiscountService())->incrementUsage($d);
             }
 
             // Clear cart only for COD at this moment; for online gateways clear after payment success
@@ -290,7 +294,7 @@ class CheckoutController extends Controller
                     session()->forget(['cart', 'cart_discount_code', 'cart_discount']);
                 }
             }
-            
+
             DB::commit();
 
             if ($paymentMethod->name === 'cod') {
@@ -336,7 +340,7 @@ class CheckoutController extends Controller
             return redirect()->route('checkout')
                 ->with('info', 'Payment required to complete your order.');
 
-        } catch (\Exception $e) {
+        } catch (\Exception $exception) {
             DB::rollback();
             return redirect()->back()
                 ->with('error', 'Failed to place order. Please try again.')

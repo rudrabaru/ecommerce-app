@@ -51,9 +51,11 @@ class AuthenticatedSessionController extends Controller
         if ($user->hasRole('admin')) {
             return redirect()->intended(route('admin.dashboard'));
         }
+
         if ($user->hasRole('provider')) {
             return redirect()->intended(route('provider.dashboard'));
         }
+
         if ($user->hasRole('user')) {
             return redirect()->intended(route('home'));
         }
@@ -154,11 +156,11 @@ class AuthenticatedSessionController extends Controller
                 'email' => $user->email
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Exception $exception) {
             \Log::error('Failed to send verification email to unverified user', [
                 'user_id' => $user->id,
                 'email' => $user->email,
-                'error' => $e->getMessage()
+                'error' => $exception->getMessage()
             ]);
         }
     }

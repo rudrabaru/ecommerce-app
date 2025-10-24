@@ -14,23 +14,29 @@ class DiscountService
         if (!$discount) {
             return [false, 'Invalid discount code', 0.0, null, 0];
         }
+
         if (!$discount->is_active) {
             return [false, 'Inactive discount code', 0.0, $discount, 0];
         }
+
         if (!$discount->isWithinDateRange()) {
             // Not yet active or expired
             $now = now();
             if ($discount->valid_from && $now->lt($discount->valid_from)) {
                 return [false, 'Discount code not yet active', 0.0, $discount, 0];
             }
+
             return [false, 'Discount code expired', 0.0, $discount, 0];
         }
+
         if (!$discount->hasRemainingUses()) {
             return [false, 'Discount usage limit reached', 0.0, $discount, 0];
         }
+
         if (!$discount->appliesToCategoryIds($cartCategoryIds)) {
             return [false, 'This code is not applicable to your cart items', 0.0, $discount, 0];
         }
+
         if (!empty($discount->minimum_order_amount) && $subtotal < (float)$discount->minimum_order_amount) {
             return [false, 'Minimum order amount not met for this code', 0.0, $discount, 0];
         }
@@ -40,6 +46,7 @@ class DiscountService
         if (empty($allowedCategoryIds) && $discount->category_id) {
             $allowedCategoryIds = [$discount->category_id];
         }
+
         $eligibleSubtotal = $subtotal;
         $affectedItemCount = 0;
         if (!empty($allowedCategoryIds)) {
@@ -93,7 +100,7 @@ class DiscountService
             }
         }
 
-        if ($eligibleSubtotal <= 0.0 || empty($eligibleLines)) {
+        if ($eligibleSubtotal <= 0.0 || $eligibleLines === []) {
             return [];
         }
 
@@ -121,6 +128,7 @@ class DiscountService
                 $share = round($totalDiscount * $ratio, 2);
                 $allocatedSoFar += $share;
             }
+
             $pid = $line['product_id'];
             $allocation[$pid] = ($allocation[$pid] ?? 0.0) + $share;
         }

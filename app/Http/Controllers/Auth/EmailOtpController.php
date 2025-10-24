@@ -20,6 +20,7 @@ class EmailOtpController extends Controller
         if (!$pendingUserId) {
             return redirect()->route('register');
         }
+
         return view('auth.verify-otp');
     }
 
@@ -29,6 +30,7 @@ class EmailOtpController extends Controller
         if (!$pendingUserId) {
             return back()->withErrors(['code' => 'Session expired. Please register again.']);
         }
+
         $user = \App\Models\User::find($pendingUserId);
         $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $linkToken = bin2hex(random_bytes(20));
@@ -48,6 +50,7 @@ class EmailOtpController extends Controller
         if (!$pendingUserId) {
             return back()->withErrors(['code' => 'Session expired. Please register again.']);
         }
+
         $user = \App\Models\User::find($pendingUserId);
         $otp = EmailOtp::where('user_id', $user->id)
             ->where('email', $user->email)
@@ -57,6 +60,7 @@ class EmailOtpController extends Controller
         if (!$otp || $otp->code !== $request->code || $otp->expires_at->isPast()) {
             return back()->withErrors(['code' => 'Invalid or expired code.']);
         }
+
         // Mark verified for our custom status and, if desired, email
         $user->status = 'verified';
         $user->save();
@@ -64,6 +68,7 @@ class EmailOtpController extends Controller
         if (method_exists($user, 'markEmailAsVerified')) {
             $user->markEmailAsVerified();
         }
+
         $otp->used = true;
         $otp->save();
         // Clear pending session and redirect to login (preserve optional redirect param for AJAX flows)
@@ -72,6 +77,7 @@ class EmailOtpController extends Controller
         if ($redirect) {
             return redirect()->route('login', ['redirect' => $redirect])->with('status', 'Email verified. Please login.');
         }
+
         return redirect()->route('login')->with('status', 'Email verified. Please login.');
     }
 }

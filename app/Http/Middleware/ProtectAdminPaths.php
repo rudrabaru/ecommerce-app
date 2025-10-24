@@ -25,7 +25,7 @@ class ProtectAdminPaths
             }
 
             $user = Auth::user();
-            if (! ($user->hasRole('admin') || $user->hasRole('provider'))) {
+            if (!$user->hasRole('admin') && !$user->hasRole('provider')) {
                 abort(403, 'Unauthorized');
             }
         }
