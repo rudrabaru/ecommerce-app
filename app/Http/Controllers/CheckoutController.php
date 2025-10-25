@@ -243,6 +243,7 @@ class CheckoutController extends Controller
             // Create single order (always pending initially; gateway confirm will mark paid)
             $order = Order::create([
                 'user_id' => $userId,
+                'provider_id' => $orderItems[0]['provider_id'] ?? null, // Set primary provider from first item
                 'total_amount' => $totalOrderAmount,
                 'status' => 'pending',
                 'shipping_address' => $address->full_address,

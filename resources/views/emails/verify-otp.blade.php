@@ -13,12 +13,21 @@
                     <tr>
                         <td style="font-size:16px;line-height:24px;">
                             <p style="margin:0 0 16px 0;">Hello,</p>
-                            <p style="margin:0 0 16px 0;">Your verification code is: <strong style="font-size:18px;">{{ $code }}</strong></p>
+                            <p style="margin:0 0 20px 0;">Please verify your email address to complete your registration.</p>
+                            
                             @if(!empty($verifyUrl))
-                            <p style="margin:0 0 12px 0;">Or click the link to verify instantly:</p>
-                            <p style="margin:0 0 20px 0;"><a href="{{ $verifyUrl }}" style="color:#0d6efd;">Verify your email</a></p>
+                            <div style="text-align:center;margin:24px 0;">
+                                <a href="{{ $verifyUrl }}" style="display:inline-block;background:#0d6efd;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;font-size:16px;">Verify Your Email</a>
+                            </div>
+                            <p style="margin:0 0 16px 0;text-align:center;color:#666;">Or use the verification code below:</p>
                             @endif
-                            <p style="margin:0; color:#555;">This code expires in 10 minutes.</p>
+                            
+                            <div style="background:#f8f9fa;padding:16px;border-radius:6px;text-align:center;margin:16px 0;">
+                                <p style="margin:0 0 8px 0;color:#666;font-size:14px;">Your verification code:</p>
+                                <p style="margin:0;font-size:24px;font-weight:bold;letter-spacing:2px;color:#111;">{{ $code }}</p>
+                            </div>
+                            
+                            <p style="margin:0; color:#555;font-size:14px;">This code expires in 15 minutes.</p>
                         </td>
                     </tr>
                 </table>
@@ -27,11 +36,4 @@
     </table>
 </body>
 </html>
-<p>Hello,</p>
-<p>Your verification code is: <strong>{{ $code }}</strong></p>
-@isset($verifyUrl)
-<p>Or click the link to verify instantly:</p>
-<p><a href="{{ $verifyUrl }}" target="_blank" rel="noopener">Verify your email</a></p>
-@endisset
-<p>This code expires in 10 minutes.</p>
 

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use Spatie\Permission\Models\Role;
 
 test('login screen can be rendered', function () {
     $response = $this->get('/login');
@@ -10,6 +11,11 @@ test('login screen can be rendered', function () {
 
 test('users can authenticate using the login screen', function () {
     $user = User::factory()->create();
+    $user->assignRole('user');
+    $user->update([
+        'email_verified_at' => now(),
+        'account_verified_at' => now()
+    ]);
 
     $response = $this->post('/login', [
         'email' => $user->email,
@@ -38,4 +44,91 @@ test('users can logout', function () {
 
     $this->assertGuest();
     $response->assertRedirect('/');
+});
+
+test('users with unverified email cannot login', function () {
+    $user = User::factory()->create();
+    $user->assignRole('user');
+    $user->update(['email_verified_at' => null, 'account_verified_at' => now()]);
+
+    $response = $this->post('/login', [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $this->assertGuest();
+    $response->assertSessionHasErrors(['email' => 'Please verify your email address to continue.']);
+});
+
+test('users with unverified account cannot login', function () {
+    $user = User::factory()->create();
+    $user->assignRole('user');
+    $user->update(['email_verified_at' => now(), 'account_verified_at' => null]);
+
+    $response = $this->post('/login', [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $this->assertGuest();
+    $response->assertSessionHasErrors(['email' => 'Your account is currently under review or has been disabled by an administrator.']);
+});
+
+test('providers with unverified email cannot login', function () {
+    $user = User::factory()->create();
+    $user->assignRole('provider');
+    $user->update(['email_verified_at' => null, 'account_verified_at' => now()]);
+
+    $response = $this->post('/login', [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $this->assertGuest();
+    $response->assertSessionHasErrors(['email' => 'Please verify your email address to continue.']);
+});
+
+test('providers with unverified account cannot login', function () {
+    $user = User::factory()->create();
+    $user->assignRole('provider');
+    $user->update(['email_verified_at' => now(), 'account_verified_at' => null]);
+
+    $response = $this->post('/login', [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $this->assertGuest();
+    $response->assertSessionHasErrors(['email' => 'Your account is currently under review or has been disabled by an administrator.']);
+});
+
+test('admins can login without verification checks', function () {
+    $user = User::factory()->create();
+    $user->assignRole('admin');
+    $user->update(['email_verified_at' => null, 'account_verified_at' => null]);
+
+    $response = $this->post('/login', [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $this->assertAuthenticated();
+});
+
+test('role changes do not affect verification status', function () {
+    $user = User::factory()->create();
+    $user->assignRole('user');
+    $user->update(['email_verified_at' => now(), 'account_verified_at' => now()]);
+
+    // Change role to provider
+    $user->syncRoles(['provider']);
+    $user->refresh();
+
+    // Should still be able to login
+    $response = $this->post('/login', [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $this->assertAuthenticated();
 });

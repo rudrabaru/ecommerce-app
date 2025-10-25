@@ -22,7 +22,8 @@
                             <th data-column="id" data-width="60px">ID</th>
                             <th data-column="name">Name</th>
                             <th data-column="email">Email</th>
-                            <th data-column="status" data-orderable="false" data-searchable="false">Status</th>
+                            <th data-column="email_status" data-orderable="false" data-searchable="false">Email Status</th>
+                            <th data-column="status" data-orderable="false" data-searchable="false">Account Status</th>
                             <th data-column="created_at">Created At</th>
                             <th data-column="actions" data-orderable="false" data-searchable="false">Actions</th>
                         </tr>

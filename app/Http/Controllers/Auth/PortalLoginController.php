@@ -34,8 +34,9 @@ class PortalLoginController extends Controller
         }
 
         $user = Auth::user();
-        // Enforce admin-side verification: normal users must have verified emails
-        if (is_null($user->email_verified_at)) {
+        
+        // Check email verification for users and providers
+        if (($user->hasRole('user') || $user->hasRole('provider')) && is_null($user->email_verified_at)) {
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
@@ -43,7 +44,16 @@ class PortalLoginController extends Controller
             // Send verification email for unverified users (same as registration flow)
             $this->sendVerificationEmail($user);
 
-            return back()->withErrors(['email' => 'Please verify your email before logging in.'])->withInput();
+            return back()->withErrors(['email' => 'Please verify your email address to continue.'])->withInput();
+        }
+
+        // Check account verification for users and providers
+        if (($user->hasRole('user') || $user->hasRole('provider')) && is_null($user->account_verified_at)) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return back()->withErrors(['email' => 'Your account is currently under review or has been disabled by an administrator.'])->withInput();
         }
 
         // Merge guest cart into user's database cart BEFORE session regeneration
@@ -75,8 +85,9 @@ class PortalLoginController extends Controller
         }
 
         $user = Auth::user();
-        // Enforce verified email for AJAX login as well
-        if (is_null($user->email_verified_at)) {
+        
+        // Check email verification for users and providers
+        if (($user->hasRole('user') || $user->hasRole('provider')) && is_null($user->email_verified_at)) {
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
@@ -86,7 +97,19 @@ class PortalLoginController extends Controller
 
             return response()->json([
                 'success' => false,
-                'errors' => ['email' => 'Please verify your email before logging in.']
+                'errors' => ['email' => 'Please verify your email address to continue.']
+            ], 422);
+        }
+
+        // Check account verification for users and providers
+        if (($user->hasRole('user') || $user->hasRole('provider')) && is_null($user->account_verified_at)) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return response()->json([
+                'success' => false,
+                'errors' => ['email' => 'Your account is currently under review or has been disabled by an administrator.']
             ], 422);
         }
 

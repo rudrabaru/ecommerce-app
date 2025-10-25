@@ -202,12 +202,18 @@ class AdminController extends Controller
                     ? $row->created_at->copy()->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s')
                     : null;
             })
+            ->addColumn('email_status', function ($row) {
+                $status = $row->email_verified_at ? 'verified' : 'unverified';
+                $badgeClass = $status === 'verified' ? 'bg-success' : 'bg-warning';
+                $text = $status === 'verified' ? 'Email Verified' : 'Email Unverified';
+                return '<span class="badge '.$badgeClass.'">'.$text.'</span>';
+            })
             ->addColumn('status', function ($row) {
                 // Render a toggle to verify/unverify users directly from the table.
-                // A user is considered verified if email_verified_at is not null.
-                $checked = $row->email_verified_at ? 'checked' : '';
+                // A user is considered verified if account_verified_at is not null.
+                $checked = $row->account_verified_at ? 'checked' : '';
                 $disabled = $row->hasRole('admin') ? 'disabled' : '';
-                $title = $row->email_verified_at ? 'Verified' : 'Unverified';
+                $title = $row->account_verified_at ? 'Account Approved' : 'Account Pending';
                 return '<div class="form-check form-switch" title="'.$title.'">'
                     .'<input type="checkbox" class="form-check-input js-verify-toggle" data-id="'.$row->id.'" '.$checked.' '.$disabled.'>'
                     .'</div>';
@@ -316,7 +322,8 @@ class AdminController extends Controller
             $validated = $request->validate([
                 'name' => ['required', 'string', 'max:255'],
                 'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,' . $id],
-                'password' => ['nullable', 'string', 'min:8']
+                'password' => ['nullable', 'string', 'min:8'],
+                'role' => ['nullable', 'in:user,provider']
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             if ($request->wantsJson() || $request->ajax()) {
@@ -338,12 +345,22 @@ class AdminController extends Controller
         
         $user->save();
 
-        // Ensure provider role is maintained
-        $user->syncRoles(['provider']);
-        $providerRoleId = Role::where('name', 'provider')->value('id');
-        if ($providerRoleId) {
-            $user->role_id = $providerRoleId;
-            $user->save();
+        // Update role if provided, otherwise maintain current role
+        if (isset($validated['role'])) {
+            $user->syncRoles([$validated['role']]);
+            $roleId = Role::where('name', $validated['role'])->value('id');
+            if ($roleId) {
+                $user->role_id = $roleId;
+                $user->save();
+            }
+        } else {
+            // Ensure provider role is maintained if no role change requested
+            $user->syncRoles(['provider']);
+            $providerRoleId = Role::where('name', 'provider')->value('id');
+            if ($providerRoleId) {
+                $user->role_id = $providerRoleId;
+                $user->save();
+            }
         }
 
         if ($request->wantsJson() || $request->ajax()) {
@@ -431,8 +448,8 @@ class AdminController extends Controller
     }
 
     /**
-     * Toggle a user's email verification status from the Admin panel.
-     * If "verify" is true, set email_verified_at to now(); otherwise null.
+     * Toggle a user's account verification status from the Admin panel.
+     * If "verify" is true, set account_verified_at to now(); otherwise null.
      */
     public function verify(Request $request, User $user)
     {
@@ -448,15 +465,17 @@ class AdminController extends Controller
             'verify' => ['required','boolean']
         ]);
 
-        $user->email_verified_at = $request->boolean('verify') ? now() : null;
-        // Keep optional status column in sync if your UI uses it elsewhere
-        $user->status = $request->boolean('verify') ? 'verified' : 'unverified';
+        $verified = $request->boolean('verify');
+        $user->account_verified_at = $verified ? now() : null;
         $user->save();
+
+        // Fire event for account verification change
+        event(new \App\Events\AccountVerificationChanged($user, $verified, $request->input('reason')));
 
         return response()->json([
             'success' => true,
-            'message' => $request->boolean('verify') ? 'User verified.' : 'User unverified.',
-            'email_verified_at' => $user->email_verified_at,
+            'message' => $verified ? 'User account approved.' : 'User account suspended.',
+            'account_verified_at' => $user->account_verified_at,
         ]);
     }
 }

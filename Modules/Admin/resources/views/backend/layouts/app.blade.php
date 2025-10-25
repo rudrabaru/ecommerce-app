@@ -467,13 +467,14 @@ x-init="
                         if (window.Swal) { 
                             Swal.fire({ 
                                 icon:'success', 
-                                title: checked?'Verified':'Unverified', 
+                                title: checked?'Account Approved':'Account Suspended', 
+                                text: data.message,
                                 timer: 1200, 
                                 showConfirmButton:false 
                             }); 
                         }
                         // Update title tooltip immediately
-                        $switch.closest('.form-check').attr('title', checked?'Verified':'Unverified');
+                        $switch.closest('.form-check').attr('title', checked?'Account Approved':'Account Pending');
                         
                         // Reload the DataTable
                         var $table = $switch.closest('table');
@@ -483,7 +484,7 @@ x-init="
                     } else {
                         // Revert switch on error
                         $switch.prop('checked', !checked);
-                        if (window.Swal) Swal.fire('Error', data.message || 'Failed to update status.', 'error');
+                        if (window.Swal) Swal.fire('Error', data.message || 'Failed to update account status.', 'error');
                     }
                 }).catch(function(err){
                     console.error('Toggle error:', err);

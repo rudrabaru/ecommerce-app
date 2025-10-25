@@ -100,6 +100,13 @@ Route::get('/resend-verification', function () {
 })->name('verification.resend');
 
 Route::post('/resend-verification', function (\Illuminate\Http\Request $request) {
+    // Rate limiting: 1 request per minute per email
+    $key = 'resend-verification:' . $request->email;
+    if (\Illuminate\Support\Facades\RateLimiter::tooManyAttempts($key, 1)) {
+        $seconds = \Illuminate\Support\Facades\RateLimiter::availableIn($key);
+        return back()->withErrors(['email' => "Please wait {$seconds} seconds before requesting another verification email."]);
+    }
+
     $request->validate([
         'email' => 'required|email|exists:users,email'
     ]);
@@ -107,20 +114,36 @@ Route::post('/resend-verification', function (\Illuminate\Http\Request $request)
     $user = \App\Models\User::where('email', $request->email)->first();
 
     if ($user && is_null($user->email_verified_at)) {
-        // Send verification email using the existing OTP system
-        try {
-            $otp = \App\Models\EmailOtp::create([
-                'user_id' => $user->id,
-                'email' => $user->email,
-                'otp' => str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT),
-                'link_token' => \Illuminate\Support\Str::random(64),
-                'expires_at' => now()->addHours(24),
-                'used' => false
-            ]);
+        // Check for existing unexpired OTP first
+        $existingOtp = \App\Models\EmailOtp::where('user_id', $user->id)
+            ->where('email', $user->email)
+            ->where('used', false)
+            ->where('expires_at', '>', now())
+            ->first();
 
-            // Send email with verification link
-            $verifyUrl = route('verification.link', ['token' => $otp->link_token]);
-            \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\VerifyOtpMail($otp->otp, $verifyUrl));
+        try {
+            if ($existingOtp) {
+                // Reuse existing OTP
+                $verifyUrl = route('verification.link', ['token' => $existingOtp->link_token]);
+                \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\VerifyOtpMail($existingOtp->code, $verifyUrl));
+            } else {
+                // Create new OTP
+                $otp = \App\Models\EmailOtp::create([
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'code' => str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT),
+                    'link_token' => \Illuminate\Support\Str::random(64),
+                    'expires_at' => now()->addMinutes(15),
+                    'used' => false
+                ]);
+
+                // Send email with verification link
+                $verifyUrl = route('verification.link', ['token' => $otp->link_token]);
+                \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\VerifyOtpMail($otp->code, $verifyUrl));
+            }
+
+            // Hit rate limiter
+            \Illuminate\Support\Facades\RateLimiter::hit($key, 60);
 
             return redirect()->route('verification.resend')->with('status', 'A new verification link has been sent to your email address.');
         } catch (\Exception $e) {
@@ -141,14 +164,13 @@ Route::get('/verify-email/link/{token}', function (string $token) {
     if (!$user) {
         abort(404);
     }
-    $userRoleId = \Spatie\Permission\Models\Role::where('name', 'user')->value('id');
-    if ($userRoleId && (int)$user->role_id === (int)$userRoleId) {
-        $user->status = 'verified';
-        $user->save();
-    }
+    // Mark email as verified
     if (method_exists($user, 'markEmailAsVerified')) {
         $user->markEmailAsVerified();
     }
+
+    // Fire event for email verification
+    event(new \App\Events\UserEmailVerified($user));
     $otp->used = true;
     $otp->save();
     return redirect()->route('login')->with('status', 'Email verified. Please login.');

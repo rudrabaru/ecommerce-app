@@ -26,6 +26,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'name',
         'email',
         'password',
+        'account_verified_at',
     ];
 
     /**
@@ -47,24 +48,11 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return [
             'email_verified_at' => 'datetime',
+            'account_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
     }
 
-    // Ensure providers/admins keep status null
-    protected static function booted(): void
-    {
-        static::saving(function (User $user) {
-            try {
-                $userRoleId = \Spatie\Permission\Models\Role::where('name', 'user')->value('id');
-                if ($userRoleId && (int)$user->role_id !== (int)$userRoleId) {
-                    $user->status = null;
-                }
-            } catch (\Throwable $throwable) {
-                // Ignore during early migrations / seeding
-            }
-        });
-    }
 
     public function role(): BelongsTo
     {

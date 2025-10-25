@@ -71,6 +71,24 @@ class Order extends Model
         return $this->hasMany(Transaction::class);
     }
 
+    /**
+     * Get the primary provider for this order (first provider from order items)
+     */
+    public function getPrimaryProvider()
+    {
+        $firstItem = $this->orderItems()->first();
+        return $firstItem ? $firstItem->provider : null;
+    }
+
+    /**
+     * Get the primary provider ID for this order
+     */
+    public function getPrimaryProviderId()
+    {
+        $firstItem = $this->orderItems()->first();
+        return $firstItem ? $firstItem->provider_id : null;
+    }
+
     protected static function boot()
     {
         parent::boot();

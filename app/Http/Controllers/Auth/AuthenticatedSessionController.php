@@ -34,8 +34,8 @@ class AuthenticatedSessionController extends Controller
         // Merge guest cart into user's database cart BEFORE session regeneration
         $this->mergeGuestCart($user);
 
-        // Restrict login for regular users unless email is verified
-        if ($user->hasRole('user') && is_null($user->email_verified_at)) {
+        // Check email verification for users and providers
+        if (($user->hasRole('user') || $user->hasRole('provider')) && is_null($user->email_verified_at)) {
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
@@ -43,7 +43,16 @@ class AuthenticatedSessionController extends Controller
             // Send verification email for unverified users (same as registration flow)
             $this->sendVerificationEmail($user);
 
-            return redirect()->route('login')->withErrors(['email' => 'Please verify your email before logging in.']);
+            return redirect()->route('login')->withErrors(['email' => 'Please verify your email address to continue.']);
+        }
+
+        // Check account verification for users and providers
+        if (($user->hasRole('user') || $user->hasRole('provider')) && is_null($user->account_verified_at)) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('login')->withErrors(['email' => 'Your account is currently under review or has been disabled by an administrator.']);
         }
 
         $request->session()->regenerate();

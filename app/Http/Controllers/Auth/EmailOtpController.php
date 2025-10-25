@@ -32,6 +32,22 @@ class EmailOtpController extends Controller
         }
 
         $user = \App\Models\User::find($pendingUserId);
+        
+        // Check for existing unexpired OTP
+        $existingOtp = EmailOtp::where('user_id', $user->id)
+            ->where('email', $user->email)
+            ->where('used', false)
+            ->where('expires_at', '>', now())
+            ->first();
+
+        if ($existingOtp) {
+            // Reuse existing OTP
+            $verifyUrl = url('/verify-email/link/'.$existingOtp->link_token);
+            Mail::to($user->email)->send(new VerifyOtpMail($existingOtp->code, $verifyUrl));
+            return back()->with('status', 'Verification code resent.');
+        }
+
+        // Generate new OTP if none exists
         $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $linkToken = bin2hex(random_bytes(20));
         EmailOtp::updateOrCreate(
@@ -61,13 +77,13 @@ class EmailOtpController extends Controller
             return back()->withErrors(['code' => 'Invalid or expired code.']);
         }
 
-        // Mark verified for our custom status and, if desired, email
-        $user->status = 'verified';
-        $user->save();
-        // Optionally also mark email as verified to reuse Laravel features
+        // Mark email as verified
         if (method_exists($user, 'markEmailAsVerified')) {
             $user->markEmailAsVerified();
         }
+
+        // Fire event for email verification
+        event(new \App\Events\UserEmailVerified($user));
 
         $otp->used = true;
         $otp->save();

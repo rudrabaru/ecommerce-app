@@ -84,15 +84,56 @@ class RegisteredUserController extends Controller
                 $user->status = 'unverified';
                 $user->save();
 
-                // Generate and send OTP + link in one email
-                $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-                $linkToken = bin2hex(random_bytes(20));
-                EmailOtp::updateOrCreate(
-                    ['user_id' => $user->id, 'email' => $user->email, 'used' => false],
-                    ['code' => $code, 'link_token' => $linkToken, 'expires_at' => now()->addMinutes(15)]
-                );
-                $verifyUrl = url('/verify-email/link/'.$linkToken);
-                Mail::to($user->email)->send(new VerifyOtpMail($code, $verifyUrl));
+                // Check for existing unexpired OTP first
+                $existingOtp = EmailOtp::where('user_id', $user->id)
+                    ->where('email', $user->email)
+                    ->where('used', false)
+                    ->where('expires_at', '>', now())
+                    ->first();
+
+                if ($existingOtp) {
+                    // Reuse existing OTP
+                    $verifyUrl = url('/verify-email/link/'.$existingOtp->link_token);
+                    try {
+                        Mail::to($user->email)->send(new VerifyOtpMail($existingOtp->code, $verifyUrl));
+                        \Log::info('Verification email sent (reused OTP)', [
+                            'user_id' => $user->id,
+                            'email' => $user->email,
+                            'otp_code' => $existingOtp->code
+                        ]);
+                    } catch (\Exception $e) {
+                        \Log::error('Failed to send verification email (reused OTP)', [
+                            'user_id' => $user->id,
+                            'email' => $user->email,
+                            'error' => $e->getMessage()
+                        ]);
+                        throw $e;
+                    }
+                } else {
+                    // Generate new OTP
+                    $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+                    $linkToken = bin2hex(random_bytes(20));
+                    EmailOtp::updateOrCreate(
+                        ['user_id' => $user->id, 'email' => $user->email, 'used' => false],
+                        ['code' => $code, 'link_token' => $linkToken, 'expires_at' => now()->addMinutes(15)]
+                    );
+                    $verifyUrl = url('/verify-email/link/'.$linkToken);
+                    try {
+                        Mail::to($user->email)->send(new VerifyOtpMail($code, $verifyUrl));
+                        \Log::info('Verification email sent (new OTP)', [
+                            'user_id' => $user->id,
+                            'email' => $user->email,
+                            'otp_code' => $code
+                        ]);
+                    } catch (\Exception $e) {
+                        \Log::error('Failed to send verification email (new OTP)', [
+                            'user_id' => $user->id,
+                            'email' => $user->email,
+                            'error' => $e->getMessage()
+                        ]);
+                        throw $e;
+                    }
+                }
 
                 // Store pending user id for guest-based OTP flow
                 $request->session()->put('pending_user_id', $user->id);
