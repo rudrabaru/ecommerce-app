@@ -171,6 +171,14 @@ Route::get('/verify-email/link/{token}', function (string $token) {
 
     // Fire event for email verification
     event(new \App\Events\UserEmailVerified($user));
+
+    // Auto-approve regular users after email verification
+    if ($user->hasRole('user')) {
+        $user->account_verified_at = now();
+        $user->status = 'verified';
+        $user->save();
+    }
+
     $otp->used = true;
     $otp->save();
     return redirect()->route('login')->with('status', 'Email verified. Please login.');

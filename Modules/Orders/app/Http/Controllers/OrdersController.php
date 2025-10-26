@@ -55,10 +55,10 @@ class OrdersController extends Controller
         // Get product details
         $product = \Modules\Products\Models\Product::findOrFail($validated['product_id']);
 
-        // Create order with provider_id from product
+        // Create order with provider_ids array from product
         $order = Order::create([
             'user_id' => $validated['user_id'],
-            'provider_id' => $product->provider_id,
+            'provider_ids' => [$product->provider_id], // Single item array
             'total_amount' => $product->price * $validated['quantity'],
             'status' => $validated['status'] ?? 'pending',
             'order_status' => $validated['status'] ?? 'pending',
@@ -180,9 +180,9 @@ class OrdersController extends Controller
     {
         $query = Order::query()->with(['user', 'orderItems.product']);
 
-        // Role-based filtering via orders.provider_id (more efficient)
+        // Role-based filtering via orders.provider_ids (JSON array)
         if (Auth::user()->hasRole('provider')) {
-            $query->where('provider_id', Auth::id());
+            $query->whereJsonContains('provider_ids', Auth::id());
         }
 
         return $dataTables->eloquent($query)
@@ -242,7 +242,7 @@ class OrdersController extends Controller
         if ($user->hasRole('admin')) {
             return;
         }
-        abort_unless($order->provider_id === $user->id, 403);
+        abort_unless($order->containsProvider($user->id), 403);
     }
 
     private function authorizeUpdate(Order $order): void
@@ -251,6 +251,6 @@ class OrdersController extends Controller
         if ($user->hasRole('admin')) {
             return;
         }
-        abort_unless($order->provider_id === $user->id, 403);
+        abort_unless($order->containsProvider($user->id), 403);
     }
 }

@@ -340,7 +340,9 @@
                             <select id="order_id" name="order_id" class="form-select">
                                 @php
                                     $ordersQuery = \App\Models\Order::query();
-                                    if(auth()->user()->hasRole('provider')) {$ordersQuery->where('provider_id', auth()->id());}
+                                    if(auth()->user()->hasRole('provider')) {
+                                        $ordersQuery->whereJsonContains('provider_ids', auth()->id());
+                                    }
                                     $orders = $ordersQuery->latest()->limit(100)->get();
                                 @endphp
                                 @foreach($orders as $o)

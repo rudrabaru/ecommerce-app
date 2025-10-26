@@ -58,6 +58,12 @@ class CheckoutController extends Controller
         }
 
         $addresses = $user->addresses()->with(['country', 'state', 'city'])->where('type', 'shipping')->orderBy('created_at', 'asc')->get();
+        
+        // Check if user has at least one shipping address
+        if ($addresses->count() == 0) {
+            return redirect()->route('profile')->with('error', 'Please add a shipping address before checkout.');
+        }
+        
         $paymentMethods = PaymentMethod::getActiveMethods();
 
         // Calculate cart total
@@ -240,12 +246,15 @@ class CheckoutController extends Controller
                 ];
             }
 
+            // Collect all unique provider IDs from order items
+            $providerIds = collect($orderItems)->pluck('provider_id')->unique()->filter()->values()->toArray();
+
             // Create single order (always pending initially; gateway confirm will mark paid)
             $order = Order::create([
                 'user_id' => $userId,
-                'provider_id' => $orderItems[0]['provider_id'] ?? null, // Set primary provider from first item
+                'provider_ids' => $providerIds, // Store array of provider IDs
                 'total_amount' => $totalOrderAmount,
-                'status' => 'pending',
+                'order_status' => 'pending',
                 'shipping_address' => $address->full_address,
                 'shipping_address_id' => $address->id,
                 'payment_method_id' => $paymentMethod->id,
@@ -341,8 +350,31 @@ class CheckoutController extends Controller
             return redirect()->route('checkout')
                 ->with('info', 'Payment required to complete your order.');
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollback();
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $e->errors()
+                ], 422);
+            }
+            return redirect()->back()
+                ->withErrors($e->errors())
+                ->withInput();
         } catch (\Exception $exception) {
             DB::rollback();
+            \Log::error('Checkout error: ' . $exception->getMessage(), [
+                'user_id' => Auth::id(),
+                'exception' => $exception
+            ]);
+            
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to place order. Please try again.'
+                ], 500);
+            }
             return redirect()->back()
                 ->with('error', 'Failed to place order. Please try again.')
                 ->withInput();

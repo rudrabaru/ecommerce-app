@@ -85,6 +85,13 @@ class EmailOtpController extends Controller
         // Fire event for email verification
         event(new \App\Events\UserEmailVerified($user));
 
+        // Auto-approve regular users after email verification
+        if ($user->hasRole('user')) {
+            $user->account_verified_at = now();
+            $user->status = 'verified';
+            $user->save();
+        }
+
         $otp->used = true;
         $otp->save();
         // Clear pending session and redirect to login (preserve optional redirect param for AJAX flows)

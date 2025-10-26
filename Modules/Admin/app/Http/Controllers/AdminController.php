@@ -138,10 +138,31 @@ class AdminController extends Controller
         $user->save();
 
         // Update role
+        $oldRole = $user->roles->first()?->name;
         $user->syncRoles([$validated['role']]);
         $roleId = Role::where('name', $validated['role'])->value('id');
         if ($roleId) {
             $user->role_id = $roleId;
+            $user->save();
+        }
+
+        // Handle verification fields when role changes
+        if (isset($validated['role']) && $oldRole !== $validated['role']) {
+            if ($validated['role'] === 'user') {
+                // Switching TO user role
+                // If email is verified, auto-approve account
+                if ($user->email_verified_at) {
+                    $user->account_verified_at = now();
+                    $user->status = 'verified';
+                } else {
+                    $user->status = 'unverified';
+                }
+            } elseif ($validated['role'] === 'provider') {
+                // Switching TO provider role
+                // Keep email verification if exists, but require admin approval
+                $user->account_verified_at = null; // Admin must re-approve
+                $user->status = null;
+            }
             $user->save();
         }
 
@@ -346,6 +367,8 @@ class AdminController extends Controller
         $user->save();
 
         // Update role if provided, otherwise maintain current role
+        $oldRole = $user->roles->first()?->name;
+        
         if (isset($validated['role'])) {
             $user->syncRoles([$validated['role']]);
             $roleId = Role::where('name', $validated['role'])->value('id');
@@ -361,6 +384,24 @@ class AdminController extends Controller
                 $user->role_id = $providerRoleId;
                 $user->save();
             }
+        }
+
+        // Handle verification fields when role changes
+        if (isset($validated['role']) && $oldRole !== $validated['role']) {
+            if ($validated['role'] === 'user') {
+                // Switching TO user role
+                if ($user->email_verified_at) {
+                    $user->account_verified_at = now();
+                    $user->status = 'verified';
+                } else {
+                    $user->status = 'unverified';
+                }
+            } elseif ($validated['role'] === 'provider') {
+                // Switching TO provider role
+                $user->account_verified_at = null;
+                $user->status = null;
+            }
+            $user->save();
         }
 
         if ($request->wantsJson() || $request->ajax()) {

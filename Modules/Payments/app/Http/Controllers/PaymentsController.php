@@ -159,6 +159,6 @@ class PaymentsController extends Controller
         if ($user->hasRole('admin')) {
             return;
         }
-        abort_unless($order->provider_id === $user->id, 403);
+        abort_unless($order->containsProvider($user->id), 403);
     }
 }

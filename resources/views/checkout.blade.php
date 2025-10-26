@@ -41,7 +41,7 @@
                                                 <div class="address-card">
                                                 <input type="radio" name="shipping_address_id" value="{{ $address->id }}" 
                                                        id="address_{{ $address->id }}" 
-                                                       {{ $address->is_default ? 'checked' : '' }}>
+                                                       checked>
                                                 <label for="address_{{ $address->id }}" class="address-card-label">
                                                         <div class="address-card-content">
                                                             <div class="address-header">
@@ -1633,8 +1633,22 @@
                 e.preventDefault();
                 
                 try {
+                    // Check if address is selected
+                    const selectedAddress = document.querySelector('input[name="shipping_address_id"]:checked');
+                    if (!selectedAddress) {
+                        toast('Please select a shipping address.', 'error');
+                        return;
+                    }
+                    
                     showLoading(submitBtn, true);
                     const formData = new FormData(form);
+                    
+                    // Debug: Log form data
+                    console.log('Form data being sent:');
+                    for (let [key, value] of formData.entries()) {
+                        console.log(key + ': ' + value);
+                    }
+                    
                     const res = await fetch(form.action, {
                         method: 'POST',
                         headers: {
@@ -1970,7 +1984,7 @@
             $('#is_default').prop('checked', !!address.is_default);
             // Email: prefer address email; else fallback to user's email
             try {
-                var userEmail = {{ json_encode(Auth::user()->email ?? '') }};
+                var userEmail = {!! json_encode(Auth::user()->email ?? '') !!};
                 var emailToSet = (address.email && String(address.email).trim()) ? address.email : userEmail;
                 $('#email').val(emailToSet || '');
             } catch(e) { $('#email').val(address.email || ''); }
@@ -2001,8 +2015,8 @@
             validateAddressForm();
             // Autofill from current user: first name from user's full name, last name blank, email from user
             try {
-                var fullName = {{ json_encode(Auth::user()->name ?? '') }};
-                var email = {{ json_encode(Auth::user()->email ?? '') }};
+                var fullName = {!! json_encode(Auth::user()->name ?? '') !!};
+                var email = {!! json_encode(Auth::user()->email ?? '') !!};
                 var first = '';
                 if (fullName) {
                     var parts = String(fullName).trim().split(/\s+/);

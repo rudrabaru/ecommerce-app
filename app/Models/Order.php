@@ -11,10 +11,7 @@ class Order extends Model
     protected $fillable = [
         'order_number',
         'user_id',
-        'provider_id',
-        'product_id',
-        'quantity',
-        'unit_price',
+        'provider_ids',
         'total_amount',
         'order_status',
         'shipping_address',
@@ -28,6 +25,7 @@ class Order extends Model
     protected $casts = [
         'total_amount' => 'decimal:2',
         'discount_amount' => 'decimal:2',
+        'provider_ids' => 'array', // Cast JSON to array
     ];
 
     public function user(): BelongsTo
@@ -35,10 +33,6 @@ class Order extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function provider(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'provider_id');
-    }
 
     public function product(): BelongsTo
     {
@@ -72,21 +66,64 @@ class Order extends Model
     }
 
     /**
-     * Get the primary provider for this order (first provider from order items)
+     * Get all providers for this order (from provider_ids array)
      */
-    public function getPrimaryProvider()
+    public function providers()
     {
-        $firstItem = $this->orderItems()->first();
-        return $firstItem ? $firstItem->provider : null;
+        if (!$this->provider_ids || empty($this->provider_ids)) {
+            return collect([]);
+        }
+        return User::whereIn('id', $this->provider_ids)->get();
     }
 
     /**
-     * Get the primary provider ID for this order
+     * Get the primary provider (first in the array)
+     */
+    public function getPrimaryProvider()
+    {
+        if ($this->provider_ids && count($this->provider_ids) > 0) {
+            return User::find($this->provider_ids[0]);
+        }
+        return null;
+    }
+
+    /**
+     * Get the primary provider ID
      */
     public function getPrimaryProviderId()
     {
-        $firstItem = $this->orderItems()->first();
-        return $firstItem ? $firstItem->provider_id : null;
+        if ($this->provider_ids && count($this->provider_ids) > 0) {
+            return $this->provider_ids[0];
+        }
+        return null;
+    }
+
+    /**
+     * Get all unique provider IDs from this order
+     */
+    public function getAllProviderIds()
+    {
+        return $this->provider_ids ?? [];
+    }
+
+    /**
+     * Add a provider ID to the array
+     */
+    public function addProviderId($providerId)
+    {
+        $providerIds = $this->provider_ids ?? [];
+        if (!in_array($providerId, $providerIds)) {
+            $providerIds[] = $providerId;
+            $this->provider_ids = $providerIds;
+        }
+    }
+
+    /**
+     * Check if order contains items from a specific provider
+     */
+    public function containsProvider($providerId)
+    {
+        return in_array($providerId, $this->provider_ids ?? []);
     }
 
     protected static function boot()
