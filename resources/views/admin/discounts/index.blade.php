@@ -3,7 +3,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="mb-0">Discount Codes</h1>
             <div>
-                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#discountModal"><i class="fas fa-plus"></i> Create Discount Code</button>
+                <button type="button" id="createDiscountBtn" class="btn btn-primary"><i class="fas fa-plus"></i> Create Discount Code</button>
             </div>
         </div>
         <div class="card">
@@ -39,11 +39,15 @@
         (function(){
             // DataTable is now initialized globally - no need for individual initialization
 
-            // Modal logic
-            const discountModal = document.getElementById('discountModal');
-            discountModal.addEventListener('show.bs.modal', function(event) {
-                const button = event.relatedTarget;
-                const id = button.getAttribute('data-discount-id');
+            // Modal logic: open via explicit click handlers so we can fetch first, then show
+            $(document).on('click', '#createDiscountBtn', function(e){
+                e.preventDefault();
+                initializeDiscountModal(null);
+            });
+
+            $(document).on('click', '.js-discount-edit', function(e){
+                e.preventDefault();
+                const id = $(this).data('discount-id');
                 initializeDiscountModal(id);
             });
 

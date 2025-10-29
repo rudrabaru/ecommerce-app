@@ -60,32 +60,8 @@
                                     </select>
                                     <div class="invalid-feedback"></div>
                                 </div>
-                                
-                                <div class="mb-3">
-                                    <label for="product_id" class="form-label">Product <span class="text-danger">*</span></label>
-                                    <select class="form-select" id="product_id" name="product_id" required>
-                                        <option value="">Select Product</option>
-                                        @if(auth()->user()->hasRole('provider'))
-                                            @foreach(\Modules\Products\Models\Product::where('provider_id', auth()->id())->get() as $product)
-                                                <option value="{{ $product->id }}" data-price="{{ $product->price }}">{{ $product->title }} - ${{ $product->price }}</option>
-                                            @endforeach
-                                        @else
-                                            @foreach(\Modules\Products\Models\Product::all() as $product)
-                                                <option value="{{ $product->id }}" data-price="{{ $product->price }}">{{ $product->title }} - ${{ $product->price }}</option>
-                                            @endforeach
-                                        @endif
-                                    </select>
-                                    <div class="invalid-feedback"></div>
-                                </div>
                             </div>
-                            
                             <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="quantity" class="form-label">Quantity <span class="text-danger">*</span></label>
-                                    <input type="number" class="form-control" id="quantity" name="quantity" min="1" required>
-                                    <div class="invalid-feedback"></div>
-                                </div>
-                                
                                 <div class="mb-3">
                                     <label for="order_status" class="form-label">Order Status</label>
                                     <select class="form-select" id="order_status" name="order_status">
@@ -96,6 +72,25 @@
                                     </select>
                                     <div class="invalid-feedback"></div>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Dynamic Items -->
+                        <div class="mb-3">
+                            <label class="form-label">Items <span class="text-danger">*</span></label>
+                            <div id="orderItemsContainer" class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:60%">Product</th>
+                                            <th style="width:20%">Qty</th>
+                                            <th style="width:15%">Subtotal</th>
+                                            <th style="width:5%"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="orderItemsBody"></tbody>
+                                </table>
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="addItemBtn"><i class="fas fa-plus"></i> Add item</button>
                             </div>
                         </div>
                         
@@ -162,6 +157,139 @@
                     }
                 });
 
+            }
+
+            // Open edit modal and preload data via AJAX
+            $(document).on('click', '.edit-order', function(e){
+                e.preventDefault();
+                const id = $(this).data('id');
+                const prefix = window.location.pathname.includes('/admin/') ? 'admin' : 'provider';
+                $('#orderForm')[0].reset();
+                $('#orderMethod').val('PUT');
+                $('#orderId').val(id);
+                $('#orderModalLabel').text('Edit Order');
+
+                const url = `/${prefix}/orders/${id}/edit`;
+                fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(r=>r.json())
+                    .then(o => {
+                        if (o.user_id) $('#user_id').val(o.user_id);
+                        if (o.order_status || o.status) $('#order_status').val(o.order_status || o.status);
+                        if (o.shipping_address) $('#shipping_address').val(o.shipping_address);
+                        if (o.notes) $('#notes').val(o.notes);
+                        renderOrderItems(o.order_items || []);
+                        const modal = new bootstrap.Modal(document.getElementById('orderModal'));
+                        modal.show();
+                    })
+                    .catch(() => {
+                        const modal = new bootstrap.Modal(document.getElementById('orderModal'));
+                        modal.show();
+                    });
+            });
+
+            // Add item handler
+            $(document).on('click', '#addItemBtn', function(){ addOrderItemRow(); });
+
+            // Initial state for create
+            $('#orderModal').on('show.bs.modal', function(e){
+                if (!$('#orderId').val()) {
+                    renderOrderItems([]);
+                }
+            });
+
+            function getProductOptionsHtml(selectedId){
+                let html = '<option value="">Select Product</option>';
+                @if(auth()->user()->hasRole('provider'))
+                    @foreach(\Modules\Products\Models\Product::where('provider_id', auth()->id())->get() as $product)
+                        html += '<option value="{{ $product->id }}" data-price="{{ $product->price }}"'+(selectedId==={{ $product->id }}?' selected':'')+'>{{ str_replace("'","\'", $product->title) }} - ${{ $product->price }}</option>';
+                    @endforeach
+                @else
+                    @foreach(\Modules\Products\Models\Product::all() as $product)
+                        html += '<option value="{{ $product->id }}" data-price="{{ $product->price }}"'+(selectedId==={{ $product->id }}?' selected':'')+'>{{ str_replace("'","\'", $product->title) }} - ${{ $product->price }}</option>';
+                    @endforeach
+                @endif
+                return html;
+            }
+
+            function addOrderItemRow(item={}){
+                const tbody = document.getElementById('orderItemsBody');
+                const tr = document.createElement('tr');
+                const productId = item.product_id || '';
+                const qty = item.quantity || 1;
+                const subtotal = item.total || 0;
+                tr.innerHTML = `
+                    <td><select class="form-select item-product">${getProductOptionsHtml(productId)}</select></td>
+                    <td><input type="number" class="form-control item-qty" min="1" value="${qty}"></td>
+                    <td class="item-subtotal">$${Number(subtotal).toFixed(2)}</td>
+                    <td><button type="button" class="btn btn-link text-danger p-0 remove-item" title="Remove"><i class="fas fa-times"></i></button></td>
+                `;
+                tbody.appendChild(tr);
+                updateSaveEnabled();
+            }
+
+            function renderOrderItems(items){
+                const tbody = document.getElementById('orderItemsBody');
+                tbody.innerHTML = '';
+                if (!items || items.length === 0){ addOrderItemRow(); return; }
+                items.forEach(addOrderItemRow);
+            }
+
+            $(document).on('click', '.remove-item', function(){
+                $(this).closest('tr').remove();
+                updateSaveEnabled();
+            });
+
+            $(document).on('change', '.item-product, .item-qty', function(){
+                // update subtotal if price available in option
+                const tr = $(this).closest('tr');
+                const price = parseFloat(tr.find('.item-product option:selected').data('price') || 0);
+                const qty = parseInt(tr.find('.item-qty').val() || 1);
+                tr.find('.item-subtotal').text(`$${(price*qty).toFixed(2)}`);
+                updateSaveEnabled();
+            });
+
+            function updateSaveEnabled(){
+                const rows = $('#orderItemsBody tr');
+                let ok = rows.length > 0;
+                rows.each(function(){
+                    const pid = $(this).find('.item-product').val();
+                    const qty = $(this).find('.item-qty').val();
+                    if (!pid || !qty){ ok = false; return false; }
+                });
+                $('#saveOrderBtn').prop('disabled', !ok || !$('#user_id').val());
+            }
+
+            $('#user_id').on('change', updateSaveEnabled);
+
+            window.saveOrder = function(){
+                const form = document.getElementById('orderForm');
+                const formData = new FormData(form);
+                const items = [];
+                $('#orderItemsBody tr').each(function(){
+                    const pid = parseInt($(this).find('.item-product').val());
+                    const qty = parseInt($(this).find('.item-qty').val());
+                    if (pid && qty) items.push({ product_id: pid, quantity: qty });
+                });
+                formData.append('items_json', JSON.stringify(items));
+                const id = $('#orderId').val();
+                const prefix = window.location.pathname.includes('/admin/') ? 'admin' : 'provider';
+                let url = `/${prefix}/orders`;
+                if (id) url += `/${id}`;
+                fetch(url, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-Requested-With':'XMLHttpRequest', 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') }
+                }).then(r=>r.json()).then(data=>{
+                    if (data.success){
+                        $('#orderModal').modal('hide');
+                        if (window.DataTableInstances && window.DataTableInstances['orders-table']){
+                            window.DataTableInstances['orders-table'].ajax.reload(null, false);
+                        }
+                        Swal.fire('Success', data.message || 'Order saved', 'success');
+                    } else {
+                        Swal.fire('Error', data.message || 'Validation error', 'error');
+                    }
+                }).catch(()=> Swal.fire('Error','An error occurred','error'));
             }
         });
     </script>

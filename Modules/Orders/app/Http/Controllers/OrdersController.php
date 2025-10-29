@@ -35,8 +35,6 @@ class OrdersController extends Controller
         try {
             $validated = $request->validate([
                 'user_id' => ['required', 'exists:users,id'],
-                'product_id' => ['required', 'exists:products,id'],
-                'quantity' => ['required', 'integer', 'min:1'],
                 'shipping_address' => ['required', 'string'],
                 'order_status' => ['nullable', 'in:pending,shipped,delivered,cancelled'],
                 'notes' => ['nullable', 'string']
@@ -52,30 +50,58 @@ class OrdersController extends Controller
             throw $e;
         }
 
-        // Get product details
-        $product = \Modules\Products\Models\Product::findOrFail($validated['product_id']);
+        // Accept items JSON (multi-product). Fallback to single product fields if provided.
+        $items = [];
+        $itemsJson = $request->input('items_json');
+        if ($itemsJson) {
+            $decoded = json_decode($itemsJson, true);
+            if (is_array($decoded)) { $items = $decoded; }
+        } elseif ($request->filled('product_id')) {
+            $items = [[
+                'product_id' => (int) $request->input('product_id'),
+                'quantity' => (int) $request->input('quantity', 1),
+            ]];
+        }
 
-        // Create order with provider_ids array from product
+        if (empty($items)) {
+            return response()->json(['success' => false, 'message' => 'No items provided'], 422);
+        }
+
+        $products = \Modules\Products\Models\Product::whereIn('id', collect($items)->pluck('product_id')->all())->get()->keyBy('id');
+        $providerIds = [];
+        $totalAmount = 0.0;
+
         $order = Order::create([
             'user_id' => $validated['user_id'],
-            'provider_ids' => [$product->provider_id], // Single item array
-            'total_amount' => $product->price * $validated['quantity'],
-            'status' => $validated['status'] ?? 'pending',
-            'order_status' => $validated['status'] ?? 'pending',
+            'provider_ids' => [],
+            'total_amount' => 0,
+            'order_status' => $validated['order_status'] ?? 'pending',
             'shipping_address' => $validated['shipping_address'],
             'notes' => $validated['notes'] ?? null,
         ]);
 
-        // Create corresponding order item row with provider linkage
-        OrderItem::create([
-            'order_id' => $order->id,
-            'product_id' => $product->id,
-            'provider_id' => $product->provider_id,
-            'quantity' => (int) $validated['quantity'],
-            'unit_price' => $product->price,
-            'line_total' => $product->price * (int) $validated['quantity'],
-            'line_discount' => 0,
-            'total' => $product->price * (int) $validated['quantity'],
+        foreach ($items as $it) {
+            $product = $products[$it['product_id']] ?? null;
+            if (!$product) { continue; }
+            $qty = max(1, (int) ($it['quantity'] ?? 1));
+            $line = $product->price * $qty;
+            $totalAmount += $line;
+            $providerIds[] = $product->provider_id;
+            OrderItem::create([
+                'order_id' => $order->id,
+                'product_id' => $product->id,
+                'provider_id' => $product->provider_id,
+                'quantity' => $qty,
+                'unit_price' => $product->price,
+                'line_total' => $line,
+                'line_discount' => 0,
+                'total' => $line,
+            ]);
+        }
+
+        $order->update([
+            'total_amount' => $totalAmount,
+            'provider_ids' => array_values(array_unique($providerIds)),
         ]);
 
         if ($request->wantsJson() || $request->ajax()) {
@@ -109,11 +135,35 @@ class OrdersController extends Controller
      */
     public function edit($id)
     {
-        $order = Order::findOrFail($id);
+        $order = Order::with(['user:id,name,email', 'orderItems.product'])->findOrFail($id);
         $this->authorizeUpdate($order);
 
         if (request()->wantsJson() || request()->ajax()) {
-            return response()->json($order);
+            // reshape for compact JSON
+            return response()->json([
+                'id' => $order->id,
+                'order_number' => $order->order_number,
+                'user_id' => $order->user_id,
+                'user' => $order->user,
+                'order_status' => $order->order_status,
+                'status' => $order->order_status,
+                'shipping_address' => $order->shipping_address,
+                'notes' => $order->notes,
+                'total_amount' => $order->total_amount,
+                'order_items' => $order->orderItems->map(function($it){
+                    return [
+                        'id' => $it->id,
+                        'product_id' => $it->product_id,
+                        'quantity' => $it->quantity,
+                        'unit_price' => $it->unit_price,
+                        'total' => $it->total,
+                        'product' => $it->product ? [
+                            'title' => $it->product->title,
+                            'image_url' => $it->product->image_url,
+                        ] : null,
+                    ];
+                }),
+            ]);
         }
 
         return view('orders::edit', compact('order'));
@@ -130,7 +180,8 @@ class OrdersController extends Controller
         try {
             $validated = $request->validate([
                 'order_status' => ['required', 'in:pending,shipped,delivered,cancelled'],
-                'notes' => ['nullable', 'string']
+                'notes' => ['nullable', 'string'],
+                'shipping_address' => ['sometimes', 'string']
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             if ($request->wantsJson() || $request->ajax()) {
@@ -144,6 +195,43 @@ class OrdersController extends Controller
         }
 
         $order->update($validated);
+
+        // Handle items update if provided
+        $items = [];
+        $itemsJson = $request->input('items_json');
+        if ($itemsJson) {
+            $decoded = json_decode($itemsJson, true);
+            if (is_array($decoded)) { $items = $decoded; }
+        }
+        if (!empty($items)) {
+            // Rebuild items for simplicity
+            $order->orderItems()->delete();
+            $products = \Modules\Products\Models\Product::whereIn('id', collect($items)->pluck('product_id')->all())->get()->keyBy('id');
+            $providerIds = [];
+            $totalAmount = 0.0;
+            foreach ($items as $it) {
+                $product = $products[$it['product_id']] ?? null;
+                if (!$product) { continue; }
+                $qty = max(1, (int) ($it['quantity'] ?? 1));
+                $line = $product->price * $qty;
+                $totalAmount += $line;
+                $providerIds[] = $product->provider_id;
+                OrderItem::create([
+                    'order_id' => $order->id,
+                    'product_id' => $product->id,
+                    'provider_id' => $product->provider_id,
+                    'quantity' => $qty,
+                    'unit_price' => $product->price,
+                    'line_total' => $line,
+                    'line_discount' => 0,
+                    'total' => $line,
+                ]);
+            }
+            $order->update([
+                'total_amount' => $totalAmount,
+                'provider_ids' => array_values(array_unique($providerIds)),
+            ]);
+        }
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
@@ -188,7 +276,11 @@ class OrdersController extends Controller
         return $dataTables->eloquent($query)
             ->addColumn('customer_name', fn ($row) => $row->user->name)
             ->addColumn('products', function ($row) {
-                $products = $row->orderItems->map(function ($item) {
+                $items = $row->orderItems;
+                if (Auth::user()->hasRole('provider')) {
+                    $items = $items->where('provider_id', Auth::id());
+                }
+                $products = $items->map(function ($item) {
                     if ($item->product) {
                         $imageUrl = $item->product->image_url; // Use the accessor
                         $fallback = 'https://placehold.co/60x60?text=%20';
@@ -206,7 +298,16 @@ class OrdersController extends Controller
                 
                 return $products ?: '<span class="text-muted">No products</span>';
             })
-            ->addColumn('total', fn ($row) => '$' . number_format($row->total_amount, 2))
+            ->addColumn('total', function ($row) {
+                if (Auth::user()->hasRole('provider')) {
+                    $providerId = Auth::id();
+                    $subtotal = $row->orderItems->where('provider_id', $providerId)->sum(function ($item) {
+                        return (float) $item->total;
+                    });
+                    return '$' . number_format($subtotal, 2);
+                }
+                return '$' . number_format($row->total_amount, 2);
+            })
             ->editColumn('order_status', function ($row) {
                 $status = $row->order_status ?? $row->status;
                 $badgeClass = match($status) {
@@ -225,11 +326,11 @@ class OrdersController extends Controller
             })
             ->addColumn('actions', function ($row) {
                 $btns = '<div class="btn-group" role="group">';
-                $btns .= '<button class="btn btn-sm btn-outline-primary edit-order" data-id="'.$row->id.'" data-action="edit" data-modal="#orderModal">';
-                $btns .= '<i class="fas fa-edit"></i> Edit</button>';
-                $btns .= '<button class="btn btn-sm btn-outline-danger delete-order" data-id="'.$row->id.'" data-delete-url="/'.(auth()->user()->hasRole('admin') ? 'admin' : 'provider').'/orders/'.$row->id.'">';
-                $btns .= '<i class="fas fa-trash"></i> Delete</button>';
-                $btns .= '</div>';
+                $btns .= '<button class="btn btn-sm btn-outline-primary edit-order" title="Edit" data-id="'.$row->id.'" data-action="edit" data-modal="#orderModal">';
+                $btns .= '<i class="fas fa-pencil-alt"></i></button>';
+                $btns .= '<button class="btn btn-sm btn-outline-danger delete-order" title="Delete" data-id="'.$row->id.'" data-delete-url="/'.(auth()->user()->hasRole('admin') ? 'admin' : 'provider').'/orders/'.$row->id.'">';
+                $btns .= '<i class="fas fa-trash"></i></button>';
+                $btns .= '</div>'; 
                 return $btns;
             })
             ->rawColumns(['actions', 'order_status', 'products'])

@@ -18,12 +18,13 @@ class ProviderDashboardController extends Controller
 
         $stats = [
             'total_products' => Product::where('provider_id', $providerId)->count(),
-            'total_orders' => Order::where('provider_id', $providerId)->count(),
-            'pending_orders' => Order::where('provider_id', $providerId)
-                ->whereIn('status', ['pending', 'confirmed'])
+            // Orders table stores multiple providers in JSON column provider_ids
+            'total_orders' => Order::whereJsonContains('provider_ids', $providerId)->count(),
+            'pending_orders' => Order::whereJsonContains('provider_ids', $providerId)
+                ->whereIn('order_status', ['pending', 'confirmed'])
                 ->count(),
-            'completed_orders' => Order::where('provider_id', $providerId)
-                ->where('status', 'delivered')
+            'completed_orders' => Order::whereJsonContains('provider_ids', $providerId)
+                ->whereIn('order_status', ['delivered', 'completed'])
                 ->count(),
         ];
 
@@ -36,22 +37,30 @@ class ProviderDashboardController extends Controller
 
         $providerId = Auth::id();
 
-        $orders = Order::with(['user', 'product'])
-            ->where('provider_id', $providerId)
-            ->latest()
+        $orders = Order::with(['user', 'orderItems.product'])
+            ->whereJsonContains('provider_ids', $providerId)
+            ->latest('id')
             ->limit(5)
             ->get()
-            ->map(function ($order) {
+            ->map(function ($order) use ($providerId) {
+                // Only items belonging to this provider
+                $providerItems = $order->orderItems->where('provider_id', $providerId);
+                $productNames = $providerItems
+                    ->map(fn ($it) => optional($it->product)->title)
+                    ->filter()
+                    ->values()
+                    ->implode(', ');
+                $subtotal = $providerItems->sum(function ($it) { return (float) $it->total; });
                 return [
                     'id' => $order->id,
-                    'order_number' => $order->order_number,
-                    'customer_name' => $order->user->name,
-                    'product_name' => $order->product->title,
-                    'total_amount' => $order->total_amount,
-                    'status' => $order->status,
-                    'created_at' => $order->created_at,
+                    'order_number' => $order->order_number ?? ('ORD-' . $order->id),
+                    'customer_name' => optional($order->user)->name,
+                    'product_name' => $productNames,
+                    'total_amount' => $subtotal,
+                    'status' => $order->order_status ?? $order->status ?? 'pending',
+                    'created_at' => optional($order->created_at),
                 ];
-            });
+            })->values();
 
         return response()->json($orders);
     }

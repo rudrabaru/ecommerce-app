@@ -14,7 +14,8 @@
                     <thead class="table-light">
                         <tr>
                             <th data-column="id" data-width="60px">ID</th>
-                            <th data-column="order_id">Order ID</th>
+                            <th data-column="order_number">Order Number</th>
+                            <th data-column="payment_method">Payment Method</th>
                             <th data-column="amount">Amount</th>
                             <th data-column="status">Status</th>
                             <th data-column="created_at">Created At</th>
@@ -218,7 +219,8 @@
                 stateDuration: 60 * 60 * 24,
                 columns: [
                     { data: 'id', name: 'id' },
-                    { data: 'order_id', name: 'order_id' },
+                    { data: 'order_number', name: 'order_number' },
+                    { data: 'payment_method', name: 'payment_method' },
                     { data: 'amount', name: 'amount' },
                     { data: 'status', name: 'status' },
                     { data: 'created_at', name: 'created_at' },
@@ -252,6 +254,18 @@
                 console.log('Auto-initializing payments table');
                 initPaymentsTable();
             }
+
+            // Delegated handlers for actions
+            $(document).on('click', '.js-payment-edit', function(){
+                const id = $(this).data('id');
+                openPaymentModal(id);
+                const modal = new bootstrap.Modal(document.getElementById('paymentModal'));
+                modal.show();
+            });
+            $(document).on('click', '.js-payment-delete', function(){
+                const id = $(this).data('id');
+                deletePayment(id);
+            });
         });
 
         window.initPaymentsTable = initPaymentsTable;
@@ -265,6 +279,8 @@
                 $('#paymentModalLabel').text('Edit Payment');
                 $('#paymentMethod').val('PUT');
                 $('#paymentId').val(paymentId);
+                // Hide/disable currency for edit
+                $('#currency').prop('disabled', true).prop('required', false).closest('.mb-3').hide();
                 fetch(`/{{ auth()->user()->hasRole('admin') ? 'admin' : 'provider' }}/payments/${paymentId}/edit`, {
                     headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 })
@@ -273,7 +289,6 @@
                     $('#order_id').val(p.order_id);
                     $('#payment_method_id').val(p.payment_method_id);
                     $('#amount').val(p.amount);
-                    $('#currency').val(p.currency || 'USD');
                     $('#status').val(p.status);
                 });
             } else {
@@ -295,7 +310,7 @@
             .then(r=>r.json()).then(data=>{
                 if (data.success) {
                     $('#paymentModal').modal('hide');
-                    $('#payments-table').DataTable().ajax.reload();
+                    $('#payments-table').DataTable().ajax.reload(null, false);
                     Swal.fire('Success', data.message, 'success');
                 } else {
                     Swal.fire('Error', data.message || 'Validation error', 'error');
@@ -319,6 +334,11 @@
                 });
             });
         }
+
+        // Expose helpers for inline onclick handlers
+        window.openPaymentModal = openPaymentModal;
+        window.savePayment = savePayment;
+        window.deletePayment = deletePayment;
         </script>
     @endpush
 
@@ -363,12 +383,6 @@
                                 <div class="mb-3">
                                     <label for="amount" class="form-label">Amount</label>
                                     <input type="number" step="0.01" class="form-control" id="amount" name="amount" required>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="currency" class="form-label">Currency</label>
-                                    <input type="text" class="form-control" id="currency" name="currency" value="USD" required>
                                 </div>
                             </div>
                         </div>

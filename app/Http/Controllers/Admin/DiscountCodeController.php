@@ -25,11 +25,21 @@ class DiscountCodeController extends Controller
                 return $row->categories->pluck('name')->implode(', ');
             })
             ->editColumn('is_active', fn ($r) => $r->is_active ? 'Active' : 'Inactive')
+            ->editColumn('valid_from', function ($row) {
+                return $row->valid_from
+                    ? $row->valid_from->copy()->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s')
+                    : '';
+            })
+            ->editColumn('valid_until', function ($row) {
+                return $row->valid_until
+                    ? $row->valid_until->copy()->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s')
+                    : '';
+            })
             ->addColumn('actions', function ($row) {
                 $del = route('admin.discounts.destroy', $row->id);
                 return '<div class="btn-group" role="group">'
-                    .'<button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#discountModal" data-discount-id="'.$row->id.'">Edit</button>'
-                    .'<button class="btn btn-sm btn-outline-danger js-delete" data-delete-url="'.$del.'">Delete</button>'
+                    .'<button class="btn btn-sm btn-outline-primary js-discount-edit" title="Edit" data-discount-id="'.$row->id.'"><i class="fas fa-pencil-alt"></i></button>'
+                    .'<button class="btn btn-sm btn-outline-danger js-delete" title="Delete" data-delete-url="'.$del.'"><i class="fas fa-trash"></i></button>'
                     .'</div>';
             })
             ->rawColumns(['actions'])
