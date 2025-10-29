@@ -224,10 +224,7 @@ class AdminController extends Controller
                     : null;
             })
             ->addColumn('email_status', function ($row) {
-                $status = $row->email_verified_at ? 'verified' : 'unverified';
-                $badgeClass = $status === 'verified' ? 'bg-success' : 'bg-warning';
-                $text = $status === 'verified' ? 'Email Verified' : 'Email Unverified';
-                return '<span class="badge '.$badgeClass.'">'.$text.'</span>';
+                return $row->email_verified_at ? 'verified' : 'unverified';
             })
             ->addColumn('status', function ($row) {
                 // Render a toggle to verify/unverify users directly from the table.

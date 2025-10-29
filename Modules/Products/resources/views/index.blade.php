@@ -115,10 +115,7 @@
                                     <div class="invalid-feedback"></div>
                                     <div class="form-text">Upload an image for the product (optional)</div>
                                     <div id="fileName" class="form-text text-muted mt-1" style="display: none;"></div>
-                                </div>
-                                
-                                <div id="currentImage" class="mt-2" style="display: none;">
-                                    <img id="imagePreview" src="" alt="Current Image" class="img-fluid rounded" style="max-height: 150px;">
+                                    <img src="" id="imagePreview" class="img-thumbnail mt-2 d-none" style="max-height: 120px;" />
                                 </div>
                             </div>
                         </div>
@@ -135,6 +132,7 @@
         </div>
     </div>
 
+    <script src="{{ asset('js/image-preview-handler.js') }}"></script>
     <script>
         // Initialize modal behavior
         document.addEventListener('DOMContentLoaded', function() {
@@ -145,28 +143,11 @@
                 openProductModal(productId);
             });
             
-            // Handle file input change to show file name and preview
-            document.getElementById('image').addEventListener('change', function(e) {
-                const fileName = document.getElementById('fileName');
-                const imagePreview = document.getElementById('imagePreview');
-                const currentImage = document.getElementById('currentImage');
-                
-                if (e.target.files.length > 0) {
-                    const file = e.target.files[0];
-                    fileName.textContent = 'Selected file: ' + file.name;
-                    fileName.style.display = 'block';
-                    
-                    // Show image preview
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        imagePreview.src = e.target.result;
-                        currentImage.style.display = 'block';
-                    };
-                    reader.readAsDataURL(file);
-                } else {
-                    fileName.style.display = 'none';
-                    currentImage.style.display = 'none';
-                }
+            // Reusable image handler
+            window.ImagePreviewHandler?.setupFileInput({
+                fileInputId: 'image',
+                fileNameDisplayId: 'fileName',
+                imagePreviewId: 'imagePreview'
             });
         });
 
@@ -176,36 +157,16 @@
             // Reset form
             $('#productForm')[0].reset();
             $('.form-control').removeClass('is-invalid');
-            $('#currentImage').hide();
-            $('#fileName').hide();
+            window.ImagePreviewHandler?.resetPreview({
+                fileNameDisplayId: 'fileName',
+                imagePreviewId: 'imagePreview'
+            });
             
-            // Re-bind file input change handler for this modal instance
-            const imageInput = document.getElementById('image');
-            const fileName = document.getElementById('fileName');
-            const imagePreview = document.getElementById('imagePreview');
-            const currentImage = document.getElementById('currentImage');
-            
-            // Remove existing event listeners and add new one
-            const newImageInput = imageInput.cloneNode(true);
-            imageInput.parentNode.replaceChild(newImageInput, imageInput);
-            
-            newImageInput.addEventListener('change', function(e) {
-                if (e.target.files.length > 0) {
-                    const file = e.target.files[0];
-                    fileName.textContent = 'Selected file: ' + file.name;
-                    fileName.style.display = 'block';
-                    
-                    // Show image preview
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        imagePreview.src = e.target.result;
-                        currentImage.style.display = 'block';
-                    };
-                    reader.readAsDataURL(file);
-                } else {
-                    fileName.style.display = 'none';
-                    currentImage.style.display = 'none';
-                }
+            // Re-bind file input change handler for this modal instance using reusable handler
+            window.ImagePreviewHandler?.setupFileInput({
+                fileInputId: 'image',
+                fileNameDisplayId: 'fileName',
+                imagePreviewId: 'imagePreview'
             });
             
             if (productId) {
@@ -237,37 +198,13 @@
                     
                     // Show current image and file name
                     if (data.image) {
-                        // Handle both absolute URLs and relative paths
-                        let imageSrc;
-                        if (data.image.startsWith('http')) {
-                            // For placeholder URLs, create a fallback
-                            if (data.image.includes('via.placeholder.com')) {
-                                // Extract dimensions and text from placeholder URL
-                                const urlParts = data.image.split('/');
-                                const dimensions = urlParts[3] || '600x600';
-                                const color = urlParts[4] || '0066aa';
-                                const text = urlParts[5] ? decodeURIComponent(urlParts[5].replace('?text=', '')) : 'Product Image';
-                                
-                                // Create a working placeholder URL
-                                imageSrc = `https://placehold.co/${dimensions}/${color}/ffffff?text=${encodeURIComponent(text)}`;
-                            } else {
-                                imageSrc = data.image;
-                            }
-                        } else {
-                            imageSrc = `/storage/${data.image}`;
-                        }
-                        
-                        $('#imagePreview').attr('src', imageSrc).on('error', function() {
-                            // Fallback to a generic placeholder if the converted URL fails
-                            $(this).attr('src', 'https://placehold.co/600x600/cccccc/666666?text=Product+Image');
+                        window.ImagePreviewHandler?.showExistingImage({
+                            imagePath: data.image,
+                            fileNameDisplayId: 'fileName',
+                            imagePreviewId: 'imagePreview',
+                            defaultText: 'Product Image',
+                            fallbackUrl: 'https://placehold.co/600x600/cccccc/666666?text=Product+Image'
                         });
-                        $('#currentImage').show();
-                        
-                        // Show current image file name
-                        const fileName = document.getElementById('fileName');
-                        const imageName = data.image.split('/').pop().split('?')[0] || 'image';
-                        fileName.textContent = 'Current image: ' + imageName;
-                        fileName.style.display = 'block';
                     }
                     
                     // Trigger validation after prefilling
