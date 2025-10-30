@@ -5,6 +5,7 @@ namespace Modules\Orders\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\DiscountCode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Yajra\DataTables\DataTables;
@@ -17,14 +18,6 @@ class OrdersController extends Controller
     public function index()
     {
         return view('orders::index');
-    }
-
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        return view('orders::create');
     }
 
     /**
@@ -50,17 +43,12 @@ class OrdersController extends Controller
             throw $e;
         }
 
-        // Accept items JSON (multi-product). Fallback to single product fields if provided.
+        // Accept items JSON (multi-product)
         $items = [];
         $itemsJson = $request->input('items_json');
         if ($itemsJson) {
             $decoded = json_decode($itemsJson, true);
             if (is_array($decoded)) { $items = $decoded; }
-        } elseif ($request->filled('product_id')) {
-            $items = [[
-                'product_id' => (int) $request->input('product_id'),
-                'quantity' => (int) $request->input('quantity', 1),
-            ]];
         }
 
         if (empty($items)) {
@@ -80,6 +68,15 @@ class OrdersController extends Controller
             'notes' => $validated['notes'] ?? null,
         ]);
 
+        // Prepare discount if provided
+        $discount = null;
+        $discountCodeInput = $request->input('discount_code');
+        if ($discountCodeInput) {
+            $discount = DiscountCode::active()->validNow()->notExceededUsage()->where('code', $discountCodeInput)->first();
+        }
+
+        // Build items data and determine applicable items for discount
+        $itemsData = [];
         foreach ($items as $it) {
             $product = $products[$it['product_id']] ?? null;
             if (!$product) { continue; }
@@ -87,21 +84,71 @@ class OrdersController extends Controller
             $line = $product->price * $qty;
             $totalAmount += $line;
             $providerIds[] = $product->provider_id;
+            $itemsData[] = [
+                'product' => $product,
+                'qty' => $qty,
+                'line' => $line,
+                'line_discount' => 0,
+                'total_after_discount' => $line,
+            ];
+        }
+
+        $totalDiscount = 0.0;
+        if ($discount) {
+            // Find applicable items (by category)
+            $applicableIndexes = [];
+            foreach ($itemsData as $idx => $d) {
+                if ($discount->appliesToCategoryIds([(int)$d['product']->category_id])) {
+                    $applicableIndexes[] = $idx;
+                }
+            }
+            if (!empty($applicableIndexes)) {
+                if ($discount->discount_type === 'percent') {
+                    foreach ($applicableIndexes as $i) {
+                        $itemsData[$i]['line_discount'] = round($itemsData[$i]['line'] * ($discount->discount_value/100), 2);
+                        $itemsData[$i]['total_after_discount'] = $itemsData[$i]['line'] - $itemsData[$i]['line_discount'];
+                        $totalDiscount += $itemsData[$i]['line_discount'];
+                    }
+                } else {
+                    // fixed amount: distribute proportionally across applicable items
+                    $applicableTotal = array_sum(array_map(function($i){ return $i['line']; }, array_intersect_key($itemsData, array_flip($applicableIndexes))));
+                    $remaining = (float) $discount->discount_value;
+                    foreach ($applicableIndexes as $i) {
+                        $share = $itemsData[$i]['line'] / $applicableTotal;
+                        $itemsData[$i]['line_discount'] = round($discount->discount_value * $share, 2);
+                        $itemsData[$i]['total_after_discount'] = $itemsData[$i]['line'] - $itemsData[$i]['line_discount'];
+                        $remaining -= $itemsData[$i]['line_discount'];
+                        $totalDiscount += $itemsData[$i]['line_discount'];
+                    }
+                    // adjust leftover rounding
+                    if (abs($remaining) > 0.009) {
+                        for ($j = count($itemsData)-1; $j>=0; $j--) {
+                            if ($itemsData[$j]['line_discount'] > 0) { $itemsData[$j]['line_discount'] += round($remaining, 2); $itemsData[$j]['total_after_discount'] = $itemsData[$j]['line'] - $itemsData[$j]['line_discount']; break; }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Persist order items
+        foreach ($itemsData as $d) {
             OrderItem::create([
                 'order_id' => $order->id,
-                'product_id' => $product->id,
-                'provider_id' => $product->provider_id,
-                'quantity' => $qty,
-                'unit_price' => $product->price,
-                'line_total' => $line,
-                'line_discount' => 0,
-                'total' => $line,
+                'product_id' => $d['product']->id,
+                'provider_id' => $d['product']->provider_id,
+                'quantity' => $d['qty'],
+                'unit_price' => $d['product']->price,
+                'line_total' => $d['line'],
+                'line_discount' => $d['line_discount'] ?? 0,
+                'total' => $d['total_after_discount'] ?? $d['line'],
             ]);
         }
 
         $order->update([
-            'total_amount' => $totalAmount,
+            'total_amount' => $totalAmount - $totalDiscount,
             'provider_ids' => array_values(array_unique($providerIds)),
+            'discount_code' => $discount ? $discount->code : null,
+            'discount_amount' => $totalDiscount,
         ]);
 
         if ($request->wantsJson() || $request->ajax()) {
@@ -131,45 +178,6 @@ class OrdersController extends Controller
     }
 
     /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit($id)
-    {
-        $order = Order::with(['user:id,name,email', 'orderItems.product'])->findOrFail($id);
-        $this->authorizeUpdate($order);
-
-        if (request()->wantsJson() || request()->ajax()) {
-            // reshape for compact JSON
-            return response()->json([
-                'id' => $order->id,
-                'order_number' => $order->order_number,
-                'user_id' => $order->user_id,
-                'user' => $order->user,
-                'order_status' => $order->order_status,
-                'status' => $order->order_status,
-                'shipping_address' => $order->shipping_address,
-                'notes' => $order->notes,
-                'total_amount' => $order->total_amount,
-                'order_items' => $order->orderItems->map(function($it){
-                    return [
-                        'id' => $it->id,
-                        'product_id' => $it->product_id,
-                        'quantity' => $it->quantity,
-                        'unit_price' => $it->unit_price,
-                        'total' => $it->total,
-                        'product' => $it->product ? [
-                            'title' => $it->product->title,
-                            'image_url' => $it->product->image_url,
-                        ] : null,
-                    ];
-                }),
-            ]);
-        }
-
-        return view('orders::edit', compact('order'));
-    }
-
-    /**
      * Update the specified resource in storage.
      */
     public function update(Request $request, $id)
@@ -196,7 +204,7 @@ class OrdersController extends Controller
 
         $order->update($validated);
 
-        // Handle items update if provided
+        // Handle items and discount update if provided
         $items = [];
         $itemsJson = $request->input('items_json');
         if ($itemsJson) {
@@ -209,6 +217,15 @@ class OrdersController extends Controller
             $products = \Modules\Products\Models\Product::whereIn('id', collect($items)->pluck('product_id')->all())->get()->keyBy('id');
             $providerIds = [];
             $totalAmount = 0.0;
+
+            // Prepare discount if provided
+            $discount = null;
+            $discountCodeInput = $request->input('discount_code');
+            if ($discountCodeInput) {
+                $discount = DiscountCode::active()->validNow()->notExceededUsage()->where('code', $discountCodeInput)->first();
+            }
+
+            $itemsData = [];
             foreach ($items as $it) {
                 $product = $products[$it['product_id']] ?? null;
                 if (!$product) { continue; }
@@ -216,20 +233,67 @@ class OrdersController extends Controller
                 $line = $product->price * $qty;
                 $totalAmount += $line;
                 $providerIds[] = $product->provider_id;
+                $itemsData[] = [
+                    'product' => $product,
+                    'qty' => $qty,
+                    'line' => $line,
+                    'line_discount' => 0,
+                    'total_after_discount' => $line,
+                ];
+            }
+
+            $totalDiscount = 0.0;
+            if ($discount) {
+                $applicableIndexes = [];
+                foreach ($itemsData as $idx => $d) {
+                    if ($discount->appliesToCategoryIds([(int)$d['product']->category_id])) {
+                        $applicableIndexes[] = $idx;
+                    }
+                }
+                if (!empty($applicableIndexes)) {
+                    if ($discount->discount_type === 'percent') {
+                        foreach ($applicableIndexes as $i) {
+                            $itemsData[$i]['line_discount'] = round($itemsData[$i]['line'] * ($discount->discount_value/100), 2);
+                            $itemsData[$i]['total_after_discount'] = $itemsData[$i]['line'] - $itemsData[$i]['line_discount'];
+                            $totalDiscount += $itemsData[$i]['line_discount'];
+                        }
+                    } else {
+                        $applicableTotal = array_sum(array_map(function($i){ return $i['line']; }, array_intersect_key($itemsData, array_flip($applicableIndexes))));
+                        $remaining = (float) $discount->discount_value;
+                        foreach ($applicableIndexes as $i) {
+                            $share = $itemsData[$i]['line'] / $applicableTotal;
+                            $itemsData[$i]['line_discount'] = round($discount->discount_value * $share, 2);
+                            $itemsData[$i]['total_after_discount'] = $itemsData[$i]['line'] - $itemsData[$i]['line_discount'];
+                            $remaining -= $itemsData[$i]['line_discount'];
+                            $totalDiscount += $itemsData[$i]['line_discount'];
+                        }
+                        if (abs($remaining) > 0.009) {
+                            for ($j = count($itemsData)-1; $j>=0; $j--) {
+                                if ($itemsData[$j]['line_discount'] > 0) { $itemsData[$j]['line_discount'] += round($remaining, 2); $itemsData[$j]['total_after_discount'] = $itemsData[$j]['line'] - $itemsData[$j]['line_discount']; break; }
+                            }
+                        }
+                    }
+                }
+            }
+
+            foreach ($itemsData as $d) {
                 OrderItem::create([
                     'order_id' => $order->id,
-                    'product_id' => $product->id,
-                    'provider_id' => $product->provider_id,
-                    'quantity' => $qty,
-                    'unit_price' => $product->price,
-                    'line_total' => $line,
-                    'line_discount' => 0,
-                    'total' => $line,
+                    'product_id' => $d['product']->id,
+                    'provider_id' => $d['product']->provider_id,
+                    'quantity' => $d['qty'],
+                    'unit_price' => $d['product']->price,
+                    'line_total' => $d['line'],
+                    'line_discount' => $d['line_discount'] ?? 0,
+                    'total' => $d['total_after_discount'] ?? $d['line'],
                 ]);
             }
+
             $order->update([
-                'total_amount' => $totalAmount,
+                'total_amount' => $totalAmount - $totalDiscount,
                 'provider_ids' => array_values(array_unique($providerIds)),
+                'discount_code' => $discount ? $discount->code : null,
+                'discount_amount' => $totalDiscount,
             ]);
         }
 
@@ -282,7 +346,7 @@ class OrdersController extends Controller
                 }
                 $products = $items->map(function ($item) {
                     if ($item->product) {
-                        $imageUrl = $item->product->image_url; // Use the accessor
+                        $imageUrl = $item->product->image_url;
                         $fallback = 'https://placehold.co/60x60?text=%20';
                         
                         return '<div class="d-flex align-items-center mb-1">
@@ -319,16 +383,36 @@ class OrdersController extends Controller
                 };
                 return '<span class="badge ' . $badgeClass . '">' . ucfirst($status) . '</span>';
             })
+            ->addColumn('shipping_address', function($row){
+                return $row->shipping_address ? e($row->shipping_address) : '-';
+            })
+            ->addColumn('notes', function($row){
+                return $row->notes ? e($row->notes) : '-';
+            })
+            ->addColumn('discount_code', function($row){
+                return $row->discount_code ? e($row->discount_code) : '-';
+            })
+            ->addColumn('discount_amount', function($row){
+                // For provider view, only show discounts that apply to their items
+                if (Auth::user() && Auth::user()->hasRole('provider')) {
+                    $providerId = Auth::id();
+                    $providerDiscount = $row->orderItems->where('provider_id', $providerId)->sum(function($it){ return (float)($it->line_discount ?? 0); });
+                    return $providerDiscount > 0 ? '$'.number_format($providerDiscount,2) : '-';
+                }
+                return $row->discount_amount ? '$'.number_format($row->discount_amount,2) : '-';
+            })
             ->editColumn('created_at', function ($row) {
                 return optional($row->created_at)
                     ? $row->created_at->copy()->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s')
                     : null;
             })
             ->addColumn('actions', function ($row) {
+                $prefix = (Auth::user() && Auth::user()->hasRole('admin')) ? 'admin' : 'provider';
                 $btns = '<div class="btn-group" role="group">';
-                $btns .= '<button class="btn btn-sm btn-outline-primary edit-order" title="Edit" data-id="'.$row->id.'" data-action="edit" data-modal="#orderModal">';
+                // mark this button for local modal handling (page-local) and use the selector the page script expects
+                $btns .= '<button class="btn btn-sm btn-outline-primary edit-order" data-id="'.$row->id.'" data-local-modal="1">';
                 $btns .= '<i class="fas fa-pencil-alt"></i></button>';
-                $btns .= '<button class="btn btn-sm btn-outline-danger delete-order" title="Delete" data-id="'.$row->id.'" data-delete-url="/'.(auth()->user()->hasRole('admin') ? 'admin' : 'provider').'/orders/'.$row->id.'">';
+                $btns .= '<button class="btn btn-sm btn-outline-danger delete-order" data-id="'.$row->id.'" data-delete-url="/'.$prefix.'/orders/'.$row->id.'">';
                 $btns .= '<i class="fas fa-trash"></i></button>';
                 $btns .= '</div>'; 
                 return $btns;

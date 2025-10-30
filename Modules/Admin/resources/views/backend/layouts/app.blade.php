@@ -274,6 +274,17 @@ x-init="
 
         // Replace the bindEditButtons function in app.blade.php with this:
 
+        function isLocalOptOut(el){
+            try {
+                var cur = el;
+                while(cur && cur !== document) {
+                    if (cur.getAttribute && cur.getAttribute('data-local-modal') !== null) return true;
+                    cur = cur.parentNode;
+                }
+            } catch(e){ }
+            return false;
+        }
+
         function bindEditButtons(ctx){
             qsa('[data-action="edit"], [data-action="create"], .btn-edit, .edit-user, .edit-provider, .edit-order, .edit-payment, .edit-product, .edit-category', ctx).forEach(function(btn){
                 // Skip discount buttons - they have their own local handlers
@@ -282,8 +293,8 @@ x-init="
                     return;
                 }
                 
-                // Allow pages to opt-out of global binding to avoid duplication
-                if (btn.hasAttribute('data-local-modal')) return;
+                // Allow pages to opt-out of global binding to avoid duplication (element or ancestor)
+                if (isLocalOptOut(btn)) { console.log('Skipping local-modal element from global binder:', btn); return; }
                 if (btn.getAttribute('data-bound')) return;
                 btn.setAttribute('data-bound','1');
                 
