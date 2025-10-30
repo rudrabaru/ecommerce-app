@@ -122,41 +122,6 @@ x-init="
         }
     };
 
-    // Global discount modal opener
-    window.openDiscountModal = function(id){
-        console.log('openDiscountModal called with id:', id);
-        var target = '#discountModal';
-        var modal = window.AdminPanel.qs(target);
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'discountModal';
-            modal.className = 'modal fade';
-            modal.innerHTML = '<div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Discount Code</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body"><div class="p-3 text-center text-muted">Loading...</div></div></div></div>';
-            document.body.appendChild(modal);
-        }
-        
-        var url = id ? '/admin/discount-codes/' + id + '/edit' : '/admin/discount-codes/create';
-        fetch(url, { headers: { 'X-Requested-With':'XMLHttpRequest' }})
-            .then(r=>r.text()).then(function(html){
-                var body = modal.querySelector('.modal-body');
-                body.innerHTML = html;
-                // Rebind forms in the modal
-                if (window.AdminPanel.rebindAll) {
-                    window.AdminPanel.rebindAll(body);
-                }
-                try {
-                    var bsModal = new bootstrap.Modal(modal);
-                    bsModal.show();
-                } catch (e) {
-                    console.error('Bootstrap modal error:', e);
-                    if (window.jQuery) jQuery(modal).modal('show');
-                }
-            }).catch(function(err){
-                console.error('Discount modal error:', err);
-                if (window.Swal) Swal.fire('Error','Unable to open discount modal','error');
-            });
-    };
-
     // Debug function availability
     window.debugAdminFunctions = function() {
         console.log('=== Admin Functions Debug ===');
@@ -666,37 +631,6 @@ x-init="
                 })
                 .finally(function(){ BUSY = false; });
         });
-
-        // Provide a global Discount modal opener to eliminate errors on first click
-                    window.initializeDiscountModal = window.initializeDiscountModal || function(id){
-            var target = '#discountModal';
-            var modal = qs(target);
-            if (!modal) {
-                modal = document.createElement('div');
-                modal.id = 'discountModal';
-                modal.className = 'modal fade';
-                modal.innerHTML = '<div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Discount Code</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body"><div class="p-3 text-center text-muted">Loading...</div></div></div></div>';
-                document.body.appendChild(modal);
-            }
-            
-            var url = id ? '/admin/discount-codes/' + id + '/edit' : '/admin/discount-codes/create';
-            fetch(url, { headers: { 'X-Requested-With':'XMLHttpRequest' }})
-                .then(r=>r.text()).then(function(html){
-                    var body = modal.querySelector('.modal-body');
-                    body.innerHTML = html;
-                    rebindAll(body);
-                    try {
-                        var bsModal = new bootstrap.Modal(modal);
-                        bsModal.show();
-                    } catch (e) {
-                        console.error('Bootstrap modal error:', e);
-                        if (window.jQuery) jQuery(modal).modal('show');
-                    }
-                }).catch(function(err){
-                    console.error('Discount modal error:', err);
-                    if (window.Swal) Swal.fire('Error','Unable to open discount modal','error');
-                });
-        };
 
         // Initial bind
         document.addEventListener('DOMContentLoaded', function(){ rebindAll(document); });

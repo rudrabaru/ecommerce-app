@@ -65,17 +65,7 @@
                                 </button>
                             </label>
                             <div id="categoriesContainer">
-                                <div class="category-row mb-2">
-                                    <div class="d-flex gap-2">
-                                        <select name="category_ids[]" class="form-select category-select" required>
-                                            <option value="">Select Category</option>
-                                        </select>
-                                        <button type="button" class="btn btn-outline-danger remove-category" style="display: none;">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                    <div class="invalid-feedback"></div>
-                                </div>
+                                <!-- Categories will be dynamically populated here -->
                             </div>
                         </div>
                     </div>
@@ -83,7 +73,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="discountSaveBtn" onclick="window.saveDiscount()" disabled>
+                <button type="button" class="btn btn-primary" id="discountSaveBtn" onclick="window.saveDiscount()">
                     <span class="spinner-border spinner-border-sm d-none" id="discountSpinner" role="status" aria-hidden="true"></span>
                     Save
                 </button>
@@ -95,149 +85,10 @@
 @push('styles')
 <style>
     .category-row .remove-category {
-        visibility: hidden;
+        display: none;
     }
     .category-row:not(:only-child) .remove-category {
-        visibility: visible;
+        display: inline-flex;
     }
 </style>
 @endpush
-
-@push('scripts')
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        let categoriesCache = null;
-
-        async function loadCategories() {
-            if (categoriesCache) return categoriesCache;
-            
-            try {
-                const response = await fetch('/admin/discount-codes/create', {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                });
-                const data = await response.json();
-                categoriesCache = data.categories;
-                return categoriesCache;
-            } catch (error) {
-                console.error('Failed to load categories:', error);
-                window.Swal?.fire('Error', 'Failed to load categories', 'error');
-                return [];
-            }
-        }
-
-        function createCategoryRow() {
-            const template = document.querySelector('.category-row');
-            const newRow = template.cloneNode(true);
-            newRow.querySelector('select').value = '';
-            return newRow;
-        }
-
-        async function populateCategorySelect(select) {
-            const categories = await loadCategories();
-            select.innerHTML = '<option value="">Select Category</option>';
-            categories.forEach(category => {
-                const option = document.createElement('option');
-                option.value = category.id;
-                option.textContent = category.name;
-                select.appendChild(option);
-            });
-        }
-
-        // Initialize the first category dropdown
-        populateCategorySelect(document.querySelector('.category-select'));
-
-        // Add Category button handler
-        document.getElementById('addCategoryBtn').addEventListener('click', function() {
-            const container = document.getElementById('categoriesContainer');
-            const newRow = createCategoryRow();
-            container.appendChild(newRow);
-            populateCategorySelect(newRow.querySelector('.category-select'));
-
-            // Show/hide remove buttons based on number of rows
-            document.querySelectorAll('.remove-category').forEach(btn => {
-                btn.style.display = container.children.length > 1 ? '' : 'none';
-            });
-        });
-
-        // Remove category handler
-        document.getElementById('categoriesContainer').addEventListener('click', function(e) {
-            if (e.target.closest('.remove-category')) {
-                const row = e.target.closest('.category-row');
-                const container = row.parentElement;
-                row.remove();
-
-                // Show/hide remove buttons based on number of rows
-                document.querySelectorAll('.remove-category').forEach(btn => {
-                    btn.style.display = container.children.length > 1 ? '' : 'none';
-                });
-            }
-        });
-
-        // Update form validation to check for duplicate categories
-        const originalValidateForm = window.validateForm;
-        window.validateForm = function() {
-            let ok = originalValidateForm();
-            
-            // Check for duplicate categories
-            const selectedCategories = new Set();
-            document.querySelectorAll('.category-select').forEach(select => {
-                const value = select.value;
-                if (value && selectedCategories.has(value)) {
-                    select.classList.add('is-invalid');
-                    select.nextElementSibling.textContent = 'Category already selected';
-                    ok = false;
-                }
-                selectedCategories.add(value);
-            });
-
-            return ok;
-        };
-
-        // Reset form handler
-        const originalResetForm = window.resetDiscountForm;
-        window.resetDiscountForm = function() {
-            originalResetForm();
-            
-            // Reset categories to single empty row
-            const container = document.getElementById('categoriesContainer');
-            const firstRow = container.querySelector('.category-row');
-            container.innerHTML = '';
-            container.appendChild(firstRow);
-            firstRow.querySelector('select').value = '';
-            firstRow.querySelector('.remove-category').style.display = 'none';
-        };
-
-        // Fill form handler
-        const originalFillForm = window.fillForm;
-        window.fillForm = function(d) {
-            originalFillForm(d);
-            
-            // Handle multiple categories
-            const container = document.getElementById('categoriesContainer');
-            container.innerHTML = ''; // Clear existing rows
-            
-            const categories = d.categories || [];
-            categories.forEach((category, index) => {
-                const row = createCategoryRow();
-                container.appendChild(row);
-                const select = row.querySelector('.category-select');
-                populateCategorySelect(select).then(() => {
-                    select.value = category.id;
-                });
-            });
-
-            if (categories.length === 0) {
-                const row = createCategoryRow();
-                container.appendChild(row);
-                populateCategorySelect(row.querySelector('.category-select'));
-            }
-
-            // Show/hide remove buttons
-            document.querySelectorAll('.remove-category').forEach(btn => {
-                btn.style.display = container.children.length > 1 ? '' : 'none';
-            });
-        };
-    });
-</script>
-@endpush
-
