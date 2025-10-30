@@ -24,6 +24,7 @@ Route::middleware(['web', 'auth'])->group(function () {
     // Admin Orders - only admins can access
     Route::middleware(['ensure_role:admin'])->prefix('admin')->as('admin.')->group(function () {
         Route::get('orders/data', [OrdersController::class, 'data'])->name('orders.data');
+        Route::post('orders/eligible-discounts', [OrdersController::class, 'eligibleDiscounts'])->name('orders.eligible_discounts');
         Route::resource('orders', OrdersController::class)->names('orders');
     });
 });

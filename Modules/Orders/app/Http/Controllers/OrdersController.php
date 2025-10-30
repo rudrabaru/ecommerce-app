@@ -103,7 +103,7 @@ class OrdersController extends Controller
                 }
             }
             if (!empty($applicableIndexes)) {
-                if ($discount->discount_type === 'percent') {
+                if (in_array($discount->discount_type, ['percent','percentage'], true)) {
                     foreach ($applicableIndexes as $i) {
                         $itemsData[$i]['line_discount'] = round($itemsData[$i]['line'] * ($discount->discount_value/100), 2);
                         $itemsData[$i]['total_after_discount'] = $itemsData[$i]['line'] - $itemsData[$i]['line_discount'];
@@ -251,7 +251,7 @@ class OrdersController extends Controller
                     }
                 }
                 if (!empty($applicableIndexes)) {
-                    if ($discount->discount_type === 'percent') {
+                    if (in_array($discount->discount_type, ['percent','percentage'], true)) {
                         foreach ($applicableIndexes as $i) {
                             $itemsData[$i]['line_discount'] = round($itemsData[$i]['line'] * ($discount->discount_value/100), 2);
                             $itemsData[$i]['total_after_discount'] = $itemsData[$i]['line'] - $itemsData[$i]['line_discount'];
@@ -390,6 +390,13 @@ class OrdersController extends Controller
                 return $row->notes ? e($row->notes) : '-';
             })
             ->addColumn('discount_code', function($row){
+                // For provider, only show if any of his items received a discount (line_discount > 0)
+                if (Auth::user() && Auth::user()->hasRole('provider')) {
+                    $providerId = Auth::id();
+                    $providerItems = $row->orderItems->where('provider_id', $providerId);
+                    $hasDiscount = $providerItems->sum(function($it){ return (float)($it->line_discount ?? 0); }) > 0;
+                    return $hasDiscount ? e($row->discount_code) : '-';
+                }
                 return $row->discount_code ? e($row->discount_code) : '-';
             })
             ->addColumn('discount_amount', function($row){
@@ -419,6 +426,65 @@ class OrdersController extends Controller
             })
             ->rawColumns(['actions', 'order_status', 'products'])
             ->toJson();
+    }
+
+    /**
+     * Return eligible discount codes for the given products (Admin only).
+     */
+    public function eligibleDiscounts(Request $request)
+    {
+        abort_unless(Auth::user() && Auth::user()->hasRole('admin'), 403);
+
+        $validated = $request->validate([
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
+            'items.*.quantity' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $items = collect($validated['items']);
+        $productIds = $items->pluck('product_id')->all();
+
+        $products = \Modules\Products\Models\Product::whereIn('id', $productIds)->get(['id','price','category_id']);
+        $productsById = $products->keyBy('id');
+
+        // Compute original total (for optional min-order checks on server side)
+        $originalTotal = 0.0;
+        foreach ($items as $it) {
+            $product = $productsById->get((int) $it['product_id']);
+            if (!$product) { continue; }
+            $qty = max(1, (int) ($it['quantity'] ?? 1));
+            $originalTotal += (float) $product->price * $qty;
+        }
+
+        // Collect distinct category ids among selected products
+        $categoryIds = $products->pluck('category_id')->filter()->unique()->values()->all();
+
+        // Fetch active & currently valid discounts
+        $discounts = DiscountCode::active()->validNow()->notExceededUsage()->get();
+
+        // Filter to those that apply to at least one of the selected product categories
+        $eligible = $discounts->filter(function ($d) use ($categoryIds) {
+            return $d->appliesToCategoryIds($categoryIds);
+        })->values();
+
+        // Map to lightweight payload, include category_ids for precise client-side calculation
+        $payload = $eligible->map(function ($d) {
+            $catIds = $d->categories()->pluck('categories.id')->all();
+            return [
+                'id' => $d->id,
+                'code' => $d->code,
+                'discount_type' => $d->discount_type,
+                'discount_value' => (float) $d->discount_value,
+                'minimum_order_amount' => $d->minimum_order_amount ? (float) $d->minimum_order_amount : null,
+                'category_ids' => $catIds, // empty => global
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'original_total' => round($originalTotal, 2),
+            'discounts' => $payload,
+        ]);
     }
 
     private function authorizeView(Order $order): void

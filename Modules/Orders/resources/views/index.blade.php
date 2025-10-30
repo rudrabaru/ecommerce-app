@@ -105,13 +105,27 @@
                                     <select class="form-select" id="discount_code" name="discount_code">
                                         <option value="">No discount</option>
                                     </select>
-                                    <div class="form-text">Select a discount to apply. Discount applicability will be calculated per product.</div>
+                                    <div class="form-text">Select a discount to apply. Eligibility updates as items change.</div>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label for="discount_amount_display" class="form-label">Discount Amount</label>
                                     <div id="discount_amount_display" class="fw-bold">-</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Items Total</label>
+                                    <div id="order_total_display" class="fw-bold">-</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Final Total</label>
+                                    <div id="final_total_display" class="fw-bold">-</div>
                                 </div>
                             </div>
                         </div>
@@ -150,6 +164,7 @@
             @endphp
             var PRODUCTS = {!! $__orders_modal_products->toJson() !!};
             var DISCOUNTS = {!! $__orders_modal_discounts->toJson() !!};
+            var ELIGIBLE_DISCOUNTS = [];
 
             function initDataTable(){
                 if ($('#orders-table').length && !$.fn.DataTable.isDataTable('#orders-table')) {
@@ -220,35 +235,96 @@
                 return items;
             }
 
-            function updateDiscountAmountDisplay(){
+            function computeTotals(){
                 var items = gatherItems();
+                var originalTotal = 0;
+                var detailed = items.map(function(it){
+                    var p = PRODUCTS.find(function(x){ return x.id == it.product_id; });
+                    if (!p) return null;
+                    var line = (parseFloat(p.price)||0) * (parseInt(it.quantity)||1);
+                    originalTotal += line;
+                    return { line: line, category_id: p.category_id };
+                }).filter(Boolean);
+
                 var selectedCode = $('#discount_code').val();
-                if (!selectedCode) { $('#discount_amount_display').text('-'); return; }
-                var discount = DISCOUNTS.find(function(d){ return d.code == selectedCode; });
-                if (!discount) { $('#discount_amount_display').text('-'); return; }
-                // Compute approximate discount client-side using PRODUCTS data
-                var applicable = items.map(function(it){ var p = PRODUCTS.find(function(x){ return x.id == it.product_id; }); if (!p) return null; return { line: (parseFloat(p.price)||0)*it.quantity, category_id: p.category_id, provider_id: p.provider_id }; }).filter(Boolean);
-                var applicableTotal = applicable.filter(function(a){ return discount.categories && discount.categories.length ? discount.categories.includes(a.category_id) : true; }).reduce(function(s,a){ return s + a.line; }, 0);
-                if (applicableTotal <= 0) { $('#discount_amount_display').text('-'); return; }
-                var amount = 0;
-                if (discount.discount_type === 'percent') {
-                    amount = applicableTotal * (discount.discount_value/100);
+                var discount = null;
+                if (window.location.pathname.includes('/admin/')) {
+                    discount = ELIGIBLE_DISCOUNTS.find(function(d){ return d.code == selectedCode; });
                 } else {
-                    amount = discount.discount_value;
+                    discount = DISCOUNTS.find(function(d){ return d.code == selectedCode; });
                 }
-                $('#discount_amount_display').text('$'+(amount?amount.toFixed(2):'-'));
+
+                var discountAmount = 0;
+                if (discount) {
+                    var cats = (discount.category_ids && discount.category_ids.length) ? discount.category_ids : null;
+                    var applicableTotal = detailed.filter(function(a){ return cats ? cats.indexOf(a.category_id) !== -1 : true; }).reduce(function(s,a){ return s + a.line; }, 0);
+                    if (applicableTotal > 0) {
+                        var isPercent = (discount.discount_type === 'percent' || discount.discount_type === 'percentage');
+                        if (isPercent) {
+                            discountAmount = applicableTotal * (discount.discount_value/100);
+                        } else {
+                            discountAmount = Math.min(discount.discount_value, applicableTotal);
+                        }
+                    }
+                }
+
+                var finalTotal = Math.max(0, originalTotal - discountAmount);
+                $('#order_total_display').text(originalTotal ? ('$'+originalTotal.toFixed(2)) : '-');
+                $('#discount_amount_display').text(discountAmount ? ('$'+discountAmount.toFixed(2)) : '-');
+                $('#final_total_display').text(finalTotal ? ('$'+finalTotal.toFixed(2)) : (originalTotal?('$'+originalTotal.toFixed(2)):'-'));
+            }
+
+            function updateDiscountAmountDisplay(){
+                computeTotals();
+            }
+
+            function loadEligibleDiscounts(){
+                if (!window.location.pathname.includes('/admin/')) { return; }
+                var items = gatherItems();
+                var sel = $('#discount_code');
+                if (!items.length){
+                    ELIGIBLE_DISCOUNTS = [];
+                    sel.html('<option value="">No discount</option>');
+                    computeTotals();
+                    return;
+                }
+                fetch('/admin/orders/eligible-discounts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') },
+                    body: JSON.stringify({ items: items })
+                }).then(function(r){ return r.json(); }).then(function(res){
+                    if (!res || !res.success){ return; }
+                    ELIGIBLE_DISCOUNTS = res.discounts || [];
+                    var current = sel.val();
+                    sel.html('<option value="">No discount</option>');
+                    ELIGIBLE_DISCOUNTS.forEach(function(d){
+                        var isPercent = (d.discount_type === 'percent' || d.discount_type === 'percentage');
+                        var label = d.code + ' - ' + (isPercent ? (d.discount_value+'%') : ('$'+d.discount_value));
+                        sel.append('<option value="'+d.code+'">'+label+'</option>');
+                    });
+                    if (current && ELIGIBLE_DISCOUNTS.some(function(d){ return d.code === current; })){
+                        sel.val(current);
+                    } else {
+                        sel.val('');
+                    }
+                    computeTotals();
+                }).catch(function(){ /* silent */ });
             }
 
             // Bind UI events
-            $(document).on('click', '#addItemBtn', function(){ addOrderItemRow(); });
-            $(document).on('click', '.remove-item', function(){ $(this).closest('tr').remove(); updateSaveEnabled(); updateDiscountAmountDisplay(); });
+            $(document).on('click', '#addItemBtn', function(){ addOrderItemRow(); loadEligibleDiscounts(); });
+            $(document).on('click', '.remove-item', function(){ $(this).closest('tr').remove(); updateSaveEnabled(); loadEligibleDiscounts(); computeTotals(); });
             $(document).on('change', '.item-product, .item-qty, #discount_code', function(){
                 var tr = $(this).closest('tr');
                 var price = parseFloat(tr.find('.item-product option:selected').data('price') || 0);
                 var qty = parseInt(tr.find('.item-qty').val() || 1);
                 tr.find('.item-subtotal').text('$'+(price*qty).toFixed(2));
                 updateSaveEnabled();
-                updateDiscountAmountDisplay();
+                if ($(this).is('#discount_code')){
+                    computeTotals();
+                } else {
+                    loadEligibleDiscounts();
+                }
             });
 
             function updateSaveEnabled(){
@@ -259,14 +335,20 @@
                     var qty = $(this).find('.item-qty').val();
                     if (!pid || !qty){ ok = false; return false; }
                 });
-                $('#saveOrderBtn').prop('disabled', !ok || !$('#user_id').val());
+                var hasUser = !!$('#user_id').val();
+                var hasAddress = !!($.trim($('#shipping_address').val()||''));
+                $('#saveOrderBtn').prop('disabled', !ok || !hasUser || !hasAddress);
             }
 
             // Populate discount select on modal open
             function populateDiscounts(){
                 var sel = $('#discount_code');
                 sel.html('<option value="">No discount</option>');
-                DISCOUNTS.forEach(function(d){ sel.append('<option value="'+d.code+'">'+d.code+' - '+(d.discount_type==='percent'?d.discount_value+'%':'$'+d.discount_value) +'</option>'); });
+                if (window.location.pathname.includes('/admin/')){
+                    ELIGIBLE_DISCOUNTS = [];
+                } else {
+                    DISCOUNTS.forEach(function(d){ var isPercent = (d.discount_type==='percent'||d.discount_type==='percentage'); sel.append('<option value="'+d.code+'">'+d.code+' - '+(isPercent?d.discount_value+'%':'$'+d.discount_value) +'</option>'); });
+                }
             }
 
             // Open create modal
@@ -277,6 +359,7 @@
                 $('#orderModalLabel').text('Create Order');
                 renderOrderItems([]);
                 populateDiscounts();
+                loadEligibleDiscounts();
                 const modal = new bootstrap.Modal(document.getElementById('orderModal'));
                 modal.show();
             });
@@ -299,8 +382,16 @@
                     var items = (o.order_items || o.orderItems || []).map(function(it){ return { product_id: it.product_id, quantity: it.quantity, total: it.total }; });
                     renderOrderItems(items);
                     populateDiscounts();
-                    if (o.discount_code) $('#discount_code').val(o.discount_code);
-                    updateDiscountAmountDisplay();
+                    if (window.location.pathname.includes('/admin/')){
+                        setTimeout(function(){
+                            loadEligibleDiscounts();
+                            if (o.discount_code) $('#discount_code').val(o.discount_code);
+                            computeTotals();
+                        }, 0);
+                    } else {
+                        if (o.discount_code) $('#discount_code').val(o.discount_code);
+                        computeTotals();
+                    }
                     const modal = new bootstrap.Modal(document.getElementById('orderModal'));
                     modal.show();
                 }).catch(function(){ const modal = new bootstrap.Modal(document.getElementById('orderModal')); modal.show(); });
@@ -340,10 +431,18 @@
             $('#saveOrderBtn').on('click', function(){ $('#orderForm').submit(); });
 
             // ensure form submission triggers saveOrder
-            $('#orderForm').on('submit', function(e){ e.preventDefault(); window.saveOrder(); });
+            $('#orderForm').on('submit', function(e){
+                e.preventDefault();
+                updateSaveEnabled();
+                if ($('#saveOrderBtn').prop('disabled')){
+                    Swal.fire('Missing information', 'Please select a customer, add items, and fill shipping address.', 'warning');
+                    return;
+                }
+                window.saveOrder();
+            });
 
             // initial bootstrap
-            $(document).ready(function(){ initDataTable(); populateDiscounts(); updateSaveEnabled(); });
+            $(document).ready(function(){ initDataTable(); populateDiscounts(); updateSaveEnabled(); computeTotals(); });
         })();
     </script>
     @endpush
