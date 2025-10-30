@@ -9,7 +9,7 @@ use App\Http\Controllers\MainController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\UserAddressController;
-
+use App\Http\Controllers\Admin\DiscountCodeController;
 use Modules\Products\Http\Controllers\StorefrontProductsController;
 use Modules\Products\Http\Controllers\CategoryController;
 
@@ -184,4 +184,13 @@ Route::get('/verify-email/link/{token}', function (string $token) {
     return redirect()->route('login')->with('status', 'Email verified. Please login.');
 })->name('verification.link');
 
-
+// Admin - Discount Codes
+Route::middleware(['web','auth','ensure_role:admin'])->group(function () {
+    Route::get('/admin/discount-codes', [DiscountCodeController::class, 'index'])->name('admin.discounts.index');
+    Route::get('/admin/discount-codes/data', [DiscountCodeController::class, 'data'])->name('admin.discounts.data');
+    Route::get('/admin/discount-codes/create', [DiscountCodeController::class, 'create'])->name('admin.discounts.create');
+    Route::post('/admin/discount-codes', [DiscountCodeController::class, 'store'])->name('admin.discounts.store');
+    Route::get('/admin/discount-codes/{discount_code}/edit', [DiscountCodeController::class, 'edit'])->name('admin.discounts.edit');
+    Route::put('/admin/discount-codes/{discount_code}', [DiscountCodeController::class, 'update'])->name('admin.discounts.update');
+    Route::delete('/admin/discount-codes/{discount_code}', [DiscountCodeController::class, 'destroy'])->name('admin.discounts.destroy');
+});

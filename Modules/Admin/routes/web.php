@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Modules\Admin\Http\Controllers\AdminController;
 use Modules\Admin\Http\Controllers\AdminProfileController;
+use Modules\Admin\app\Http\Controllers\DiscountCodeController;
 
 /*
 |--------------------------------------------------------------------------
@@ -49,4 +50,13 @@ Route::middleware(['web','auth','ensure_role:admin'])->group(function () {
     Route::put('/admin/providers/{user}', [AdminController::class, 'updateProvider'])->name('admin.providers.update');
     Route::get('/admin/providers/data', [AdminController::class, 'providersData'])->name('admin.providers.data');
     Route::delete('/admin/providers/{user}', [AdminController::class, 'destroyProvider'])->name('admin.providers.destroy');
+
+    // Discount Codes
+    Route::get('/admin/discount-codes', [DiscountCodeController::class, 'index'])->name('admin.discounts.index');
+    Route::get('/admin/discount-codes/data', [DiscountCodeController::class, 'data'])->name('admin.discounts.data');
+    Route::get('/admin/discount-codes/create', [DiscountCodeController::class, 'create'])->name('admin.discounts.create');
+    Route::post('/admin/discount-codes', [DiscountCodeController::class, 'store'])->name('admin.discounts.store');
+    Route::get('/admin/discount-codes/{discount_code}/edit', [DiscountCodeController::class, 'edit'])->name('admin.discounts.edit');
+    Route::put('/admin/discount-codes/{discount_code}', [DiscountCodeController::class, 'update'])->name('admin.discounts.update');
+    Route::delete('/admin/discount-codes/{discount_code}', [DiscountCodeController::class, 'destroy'])->name('admin.discounts.destroy');
 });

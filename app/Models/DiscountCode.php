@@ -24,7 +24,6 @@ class DiscountCode extends Model
         'valid_from',
         'valid_until',
         'is_active',
-        'category_id',
     ];
 
     protected $casts = [
@@ -38,11 +37,7 @@ class DiscountCode extends Model
         return $this->belongsToMany(Category::class, 'discount_code_category');
     }
 
-    // Convenience for single-category UI
-    public function category(): BelongsTo
-    {
-        return $this->belongsTo(Category::class, 'category_id');
-    }
+    // No single category fallback: categories are stored via pivot table
 
     // Scopes
     public function scopeActive($q)
@@ -89,14 +84,12 @@ class DiscountCode extends Model
     public function appliesToCategoryIds(array $categoryIds): bool
     {
         $allowed = $this->categories()->pluck('categories.id')->all();
-        if (empty($allowed) && $this->category_id) {
-            $allowed = [$this->category_id];
-        }
 
+        // If discount has no categories attached, treat as global (applies to all)
         if (empty($allowed)) {
             return true;
         }
-         // if none selected, applies to all
+
         return array_intersect($allowed, $categoryIds) !== [];
     }
 }

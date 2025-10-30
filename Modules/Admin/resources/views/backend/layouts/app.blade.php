@@ -309,6 +309,8 @@ x-init="
 
         function bindEditButtons(ctx){
             qsa('[data-action="edit"], [data-action="create"], .btn-edit, .edit-user, .edit-provider, .edit-order, .edit-payment, .edit-product, .edit-category', ctx).forEach(function(btn){
+                // Allow pages to opt-out of global binding to avoid duplication
+                if (btn.hasAttribute('data-local-modal')) return;
                 if (btn.getAttribute('data-bound')) return;
                 btn.setAttribute('data-bound','1');
                 
@@ -317,7 +319,7 @@ x-init="
                     
                     var action = btn.getAttribute('data-action') || 'create';
                     var modalId = btn.getAttribute('data-modal') || btn.getAttribute('data-bs-target');
-                    var itemId = btn.getAttribute('data-id') || btn.getAttribute('data-user-id') || btn.getAttribute('data-provider-id') || btn.getAttribute('data-order-id') || btn.getAttribute('data-payment-id') || btn.getAttribute('data-product-id') || btn.getAttribute('data-category-id');
+                    var itemId = btn.getAttribute('data-id') || btn.getAttribute('data-user-id') || btn.getAttribute('data-provider-id') || btn.getAttribute('data-order-id') || btn.getAttribute('data-payment-id') || btn.getAttribute('data-product-id') || btn.getAttribute('data-category-id') || btn.getAttribute('data-discount-id');
                     
                     console.log('Modal button clicked:', {action, modalId, itemId});
                     
@@ -353,16 +355,28 @@ x-init="
                         if (titleElement) titleElement.textContent = titleElement.textContent.replace('Create', 'Edit');
                         if (methodInput) methodInput.value = 'PUT';
                         if (idInput) idInput.value = itemId;
+                        if (form) { form.action = determineSubmitUrl(modalId, itemId); }
                         
                         // Load data for editing
                         var editUrl = determineEditUrl(modalId, itemId);
                         if (editUrl) {
+                            // Show modal immediately for responsive UX, then populate
+                            try { new bootstrap.Modal(modal).show(); } catch(_){}
                             loadEditData(editUrl, modal);
                         }
                     } else {
                         if (titleElement) titleElement.textContent = titleElement.textContent.replace('Edit', 'Create');
                         if (methodInput) methodInput.value = 'POST';
                         if (idInput) idInput.value = '';
+                        if (form) { form.action = determineSubmitUrl(modalId, null); }
+                        // If this is discount create, fetch categories to populate select
+                        if ((modalId||'').includes('discount')) {
+                            fetch('/admin/discount-codes/create', { headers: { 'X-Requested-With':'XMLHttpRequest' }})
+                                .then(r=>r.json())
+                                .then(function(data){
+                                    populateCategories(modal, data.categories || [], null);
+                                }).catch(function(err){ console.warn('Failed loading categories', err); });
+                        }
                     }
                     
                     // Show modal
@@ -386,15 +400,29 @@ x-init="
             } else if (modalId.includes('provider')) {
                 baseUrl = '/admin/providers/' + itemId + '/edit';
             } else if (modalId.includes('order')) {
-                baseUrl = '/admin/orders/' + itemId + '/edit';
+                // Support both admin and provider contexts
+                var prefix = (window.location.pathname.indexOf('/provider/') !== -1) ? '/provider' : '/admin';
+                baseUrl = prefix + '/orders/' + itemId + '/edit';
             } else if (modalId.includes('payment')) {
                 baseUrl = '/admin/payments/' + itemId + '/edit';
             } else if (modalId.includes('product')) {
                 baseUrl = '/admin/products/' + itemId + '/edit';
             } else if (modalId.includes('category')) {
                 baseUrl = '/admin/categories/' + itemId + '/edit';
+            } else if (modalId.includes('discount')) {
+                baseUrl = '/admin/discount-codes/' + itemId + '/edit';
             }
             return baseUrl;
+        }
+
+        function determineSubmitUrl(modalId, itemId){
+            if (modalId.includes('discount')) {
+                return itemId ? ('/admin/discount-codes/' + itemId) : '/admin/discount-codes';
+            } else if (modalId.includes('order')) {
+                var prefix = (window.location.pathname.indexOf('/provider/') !== -1) ? '/provider' : '/admin';
+                return itemId ? (prefix + '/orders/' + itemId) : (prefix + '/orders');
+            }
+            return '';
         }
         
         function loadEditData(url, modal) {
@@ -403,7 +431,13 @@ x-init="
                 .then(function(data){
                     console.log('Edit data received:', data);
                     
-                    var item = data.user || data.product || data.category || data.order || data.payment || data;
+                    var item = data.user || data.product || data.category || data.order || data.payment || data.discount || data;
+
+                    // Populate discount categories if present
+                    if (data.categories && modal.querySelector('[name="category_id"]')) {
+                        var selectedId = (item && (item.category_id || (item.categories && item.categories[0] && item.categories[0].id))) || null;
+                        populateCategories(modal, data.categories, selectedId);
+                    }
                     
                     if (item) {
                         qsa('input, select, textarea', modal).forEach(function(input){
@@ -436,6 +470,22 @@ x-init="
                     console.error('Error loading edit data:', err);
                     if (window.Swal) Swal.fire('Error', 'Failed to load data for editing.', 'error');
                 });
+        }
+
+        function populateCategories(modal, categories, selectedId){
+            try {
+                var sel = modal.querySelector('#category_ids');
+                if (!sel) sel = modal.querySelector('[name="category_id"]');
+                if (!sel) return;
+                sel.innerHTML = '<option value="">Select Category</option>';
+                (categories||[]).forEach(function(c){
+                    var opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.name;
+                    if (selectedId && String(selectedId) === String(c.id)) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+            } catch(e){ console.warn('populateCategories failed', e); }
         }
 
         function bindToggleActions(ctx){
@@ -558,6 +608,8 @@ x-init="
             bindDeleteButtons(ctx);
             // Auto-mark modal forms for AJAX if not already
             qsa('.modal form', ctx).forEach(function(f){ if (!f.getAttribute('data-ajax-submit')) f.setAttribute('data-ajax-submit','1'); });
+            // Page-scoped modal initializers (ensures inline pattern works after PJAX)
+            try { initDiscountModalHandlers(ctx); } catch(e){ console.warn('initDiscountModalHandlers failed', e); }
         }
 
         // Expose rebindAll globally for external use
@@ -649,6 +701,139 @@ x-init="
         // Initial bind
         document.addEventListener('DOMContentLoaded', function(){ rebindAll(document); });
         document.addEventListener('ajaxPageLoaded', function(){ rebindAll(document); });
+    })();
+    </script>
+    <script>
+    // Discount modal initializer to support PJAX navigation
+    (function(){
+        function $(sel, root){ return (root||document).querySelector(sel); }
+        function $all(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
+        function onShow(modal, handler){
+            if (!window.jQuery) return;
+            jQuery(modal).off('show.bs.modal._discount').on('show.bs.modal._discount', handler);
+        }
+
+        window.initDiscountModalHandlers = function(ctx){
+            var modal = $('#discountModal', ctx||document);
+            if (!modal) return; // no discount modal on this page
+
+            // Define openDiscountModal once; re-assign is safe
+            window.openDiscountModal = function(id){
+                try {
+                    var form = $('#discountForm');
+                    // reset form state
+                    if (form) form.reset();
+                    $all('.is-invalid', form).forEach(function(el){ el.classList.remove('is-invalid'); });
+                    $all('.invalid-feedback', form).forEach(function(el){ el.textContent = ''; });
+                    var title = $('#discountModalLabel');
+                    var method = $('#discountMethod');
+                    var hiddenId = $('#discountId');
+                    var select = $('#category_ids');
+
+                    if (id) {
+                        if (title) title.textContent = 'Edit Discount';
+                        if (method) method.value = 'PUT';
+                        if (hiddenId) hiddenId.value = id;
+                        if (form) form.action = '/admin/discount-codes/' + id;
+                        fetch('/admin/discount-codes/' + id + '/edit', { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
+                            .then(function(r){ if (!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+                            .then(function(data){
+                                var categories = data.categories || [];
+                                var d = data.discount || {};
+                                var selected = d.category_id || ((d.categories||[])[0] && (d.categories[0].id));
+                                if (select) {
+                                    select.innerHTML = '<option value="">Select Category</option>';
+                                    categories.forEach(function(c){
+                                        var opt = document.createElement('option');
+                                        opt.value = c.id; opt.textContent = c.name;
+                                        if (selected && String(selected) === String(c.id)) opt.selected = true;
+                                        select.appendChild(opt);
+                                    });
+                                }
+                                // fill fields
+                                $all('input, select, textarea', form).forEach(function(input){
+                                    var name = input.name;
+                                    if (name && d[name] !== undefined) {
+                                        if (input.type === 'checkbox') input.checked = !!d[name];
+                                        else input.value = d[name];
+                                    }
+                                });
+                                // datetime formatting
+                                if (d.valid_from && $('#valid_from')) $('#valid_from').value = (d.valid_from+'').replace(' ','T').slice(0,16);
+                                if (d.valid_until && $('#valid_until')) $('#valid_until').value = (d.valid_until+'').replace(' ','T').slice(0,16);
+                            })
+                            .catch(function(err){ console.error('[Discount] Edit load failed:', err); if (window.Swal) Swal.fire('Error','Failed to load discount','error'); });
+                    } else {
+                        if (title) title.textContent = 'Create Discount';
+                        if (method) method.value = 'POST';
+                        if (hiddenId) hiddenId.value = '';
+                        if (form) form.action = '/admin/discount-codes';
+                        // fetch categories for create
+                        fetch('/admin/discount-codes/create', { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
+                            .then(function(r){ if (!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+                            .then(function(data){
+                                var categories = data.categories || [];
+                                if (select) {
+                                    select.innerHTML = '<option value="">Select Category</option>';
+                                    categories.forEach(function(c){
+                                        var opt = document.createElement('option');
+                                        opt.value = c.id; opt.textContent = c.name;
+                                        select.appendChild(opt);
+                                    });
+                                }
+                            })
+                            .catch(function(err){ console.error('[Discount] Categories load failed:', err); });
+                    }
+                } catch(e){ console.error('[Discount] openDiscountModal error:', e); }
+            };
+
+            // Save handler
+            window.saveDiscount = function(){
+                try {
+                    var form = $('#discountForm');
+                    var id = $('#discountId') && $('#discountId').value;
+                    var method = $('#discountMethod') && $('#discountMethod').value || 'POST';
+                    var url = id ? ('/admin/discount-codes/' + id) : '/admin/discount-codes';
+                    var fd = new FormData(form);
+                    fd.append('_method', method);
+                    var saveBtn = $('#discountSaveBtn');
+                    var spinner = $('#discountSpinner');
+                    if (spinner) spinner.classList.remove('d-none');
+                    if (saveBtn) saveBtn.disabled = true;
+                    fetch(url, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]')||{}).content }})
+                        .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(data){ if (!r.ok || data.success === false) { var err = new Error('Save failed'); err.payload = data; throw err; } return data; }); })
+                        .then(function(){
+                            try { var bs = bootstrap.Modal.getInstance(modal) || new bootstrap.Modal(modal); bs.hide(); } catch(_){}
+                            if (window.DataTableInstances && window.DataTableInstances['discounts-table']) {
+                                window.DataTableInstances['discounts-table'].ajax.reload(null, false);
+                            }
+                            if (window.Swal) Swal.fire('Success','Saved','success');
+                        })
+                        .catch(function(err){
+                            console.error('[Discount] Save error:', err, err && err.payload);
+                            var errors = (err && err.payload && err.payload.errors) || {};
+                            Object.keys(errors).forEach(function(k){
+                                var el = document.getElementById(k);
+                                if (el) { el.classList.add('is-invalid'); if (el.nextElementSibling && el.nextElementSibling.classList.contains('invalid-feedback')) el.nextElementSibling.textContent = errors[k][0]; }
+                            });
+                            if (window.Swal) Swal.fire('Error', (err && err.payload && err.payload.message) || 'Validation failed', 'error');
+                        })
+                        .finally(function(){ if (spinner) spinner.classList.add('d-none'); if (saveBtn) saveBtn.disabled = false; });
+                } catch(e){ console.error('[Discount] saveDiscount fatal error:', e); }
+            };
+
+            // Bind show handler each time
+            onShow(modal, function (event){
+                try {
+                    var btn = event.relatedTarget || {};
+                    var action = btn.getAttribute ? (btn.getAttribute('data-action') || 'create') : 'create';
+                    var id = btn.getAttribute ? (btn.getAttribute('data-id') || btn.getAttribute('data-discount-id')) : null;
+                    window.openDiscountModal((action === 'edit' && id) ? id : null);
+                } catch(e){ console.error('[Discount] show handler error:', e); }
+            });
+
+            console.log('[Discount] Modal handlers initialized');
+        };
     })();
     </script>
 </body>

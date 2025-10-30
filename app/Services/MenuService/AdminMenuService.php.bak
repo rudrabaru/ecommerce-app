@@ -53,7 +53,7 @@ class AdminMenuService
                     'id' => 'discounts',
                     'label' => 'Discount Codes',
                     'route' => route('admin.discounts.index'),
-                    'icon' => 'fas fa-tag',
+                    'icon' => 'lucide:percent',
                     'active' => request()->routeIs('admin.discounts.*')
                 ]
             ],
@@ -121,4 +121,3 @@ class AdminMenuService
         return false; // No submenus in current implementation
     }
 }
-

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Admin;
+namespace Modules\Admin\app\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreDiscountCodeRequest;
@@ -14,7 +14,7 @@ class DiscountCodeController extends Controller
 {
     public function index(): \Illuminate\View\View
     {
-        return view('admin.discounts.index');
+        return view('admin::backend.pages.discounts.index');
     }
 
     public function data(DataTables $dataTables)
@@ -22,7 +22,9 @@ class DiscountCodeController extends Controller
         $query = DiscountCode::query()->with('categories');
         return $dataTables->eloquent($query)
             ->addColumn('categories', function ($row) {
-                return $row->categories->pluck('name')->implode(', ');
+                return view('admin::backend.pages.discounts.partials.category-list', [
+                    'categories' => $row->categories
+                ])->render();
             })
             ->editColumn('is_active', fn ($r) => $r->is_active ? 'Active' : 'Inactive')
             ->editColumn('valid_from', function ($row) {
@@ -38,11 +40,11 @@ class DiscountCodeController extends Controller
             ->addColumn('actions', function ($row) {
                 $del = route('admin.discounts.destroy', $row->id);
                 return '<div class="btn-group" role="group">'
-                    .'<button class="btn btn-sm btn-outline-primary js-discount-edit" title="Edit" data-discount-id="'.$row->id.'"><i class="fas fa-pencil-alt"></i></button>'
+                    .'<button class="btn btn-sm btn-outline-primary js-discount-edit" title="Edit" data-discount-id="'.$row->id.'" data-action="edit" data-modal="#discountModal" data-id="'.$row->id.'" data-local-modal="1"><i class="fas fa-pencil-alt"></i></button>'
                     .'<button class="btn btn-sm btn-outline-danger js-delete" title="Delete" data-delete-url="'.$del.'"><i class="fas fa-trash"></i></button>'
                     .'</div>';
             })
-            ->rawColumns(['actions'])
+            ->rawColumns(['actions','categories'])
             ->toJson();
     }
 
@@ -55,13 +57,11 @@ class DiscountCodeController extends Controller
     public function store(StoreDiscountCodeRequest $request)
     {
         $data = $request->validated();
-        // Sync both single category_id and pivot for future extensibility
-        $categoryId = $data['category_id'];
+        $categoryIds = $request->input('category_ids', []);
+        
         $discount = DiscountCode::create($data);
-        // Persist primary category_id as well as pivot for compatibility
-        $discount->category_id = $categoryId;
-        $discount->save();
-        $discount->categories()->sync([$categoryId]);
+        $discount->categories()->sync($categoryIds);
+        
         if (request()->wantsJson() || request()->ajax()) {
             return response()->json(['success' => true, 'message' => 'Discount code created']);
         }
@@ -81,12 +81,11 @@ class DiscountCodeController extends Controller
     public function update(UpdateDiscountCodeRequest $request, DiscountCode $discount_code)
     {
         $data = $request->validated();
-        $categoryId = $data['category_id'];
+        $categoryIds = $request->input('category_ids', []);
+        
         $discount_code->update($data);
-        // Update primary category_id and pivot
-        $discount_code->category_id = $categoryId;
-        $discount_code->save();
-        $discount_code->categories()->sync([$categoryId]);
+        $discount_code->categories()->sync($categoryIds);
+        
         if (request()->wantsJson() || request()->ajax()) {
             return response()->json(['success' => true, 'message' => 'Discount code updated']);
         }

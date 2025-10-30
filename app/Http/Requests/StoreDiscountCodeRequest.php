@@ -45,7 +45,8 @@ class StoreDiscountCodeRequest extends FormRequest
             'valid_from' => ['required','date'],
             'valid_until' => ['required','date','after:valid_from'],
             'is_active' => ['required','boolean'],
-            'category_id' => ['required','integer','exists:categories,id'],
+            'category_ids' => ['required','array'],
+            'category_ids.*' => ['required','integer','exists:categories,id'],
         ];
     }
 }
