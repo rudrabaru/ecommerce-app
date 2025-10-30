@@ -3,7 +3,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="mb-0">Discount Codes</h1>
             <div>
-                <button type="button" id="createDiscountBtn" class="btn btn-primary" data-action="create">
+                <button type="button" id="createDiscountBtn" class="btn btn-primary">
                     <i class="fas fa-plus"></i> Create Discount Code
                 </button>
             </div>
@@ -39,294 +39,344 @@
     @push('scripts')
     <script>
     (function(){
+        'use strict';
+        
         // Prevent multiple initializations
         if (window.DiscountModalInitialized) {
-            console.log('Discount modal handlers already initialized, skipping...');
+            console.log('[Discount] Handlers already initialized, skipping...');
             return;
         }
         window.DiscountModalInitialized = true;
+        console.log('[Discount] Initializing handlers...');
 
-        console.log('Initializing discount modal handlers...');
-
-        // Helper: fetch categories
-        async function fetchCategories() {
-            try {
-                const response = await $.ajax({
-                    url: '/admin/discount-codes/create',
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                    cache: false
-                });
-                return response.categories || [];
-            } catch(e) {
-                console.error('Failed to fetch categories:', e);
-                if (window.Swal) Swal.fire('Error', 'Could not load categories.', 'error');
-                return [];
-            }
+        var $ = window.jQuery;
+        if (!$) {
+            console.error('[Discount] jQuery not available');
+            return;
         }
 
-        // Helper: build a category select with provided category options
-        function buildCategorySelect(categories, value) {
-            const $select = $('<select name="category_ids[]" class="form-select category-select" required><option value="">Select Category</option></select>');
-            categories.forEach(cat => $select.append(`<option value="${cat.id}">${cat.name}</option>`));
-            if (value) $select.val(value);
+        // Helper: fetch categories from server
+        function fetchCategories() {
+            return $.ajax({
+                url: '/admin/discount-codes/create',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                cache: false
+            }).then(function(response) {
+                return response.categories || [];
+            }).catch(function(err) {
+                console.error('[Discount] Failed to fetch categories:', err);
+                if (window.Swal) Swal.fire('Error', 'Could not load categories.', 'error');
+                return [];
+            });
+        }
+
+        // Helper: build a category select element
+        function buildCategorySelect(categories, selectedValue) {
+            var $select = $('<select name="category_ids[]" class="form-select category-select" required></select>');
+            $select.append('<option value="">Select Category</option>');
+            
+            $.each(categories, function(i, cat) {
+                var $option = $('<option></option>').val(cat.id).text(cat.name);
+                if (selectedValue && String(selectedValue) === String(cat.id)) {
+                    $option.prop('selected', true);
+                }
+                $select.append($option);
+            });
+            
             return $select;
         }
 
-        // Helper: update remove buttons
-        function updateRemoveBtns($container) {
-            const rowCount = $container.find('.category-row').length;
-            $container.find('.remove-category').each(function(){
+        // Helper: update visibility of remove buttons
+        function updateRemoveButtons($container) {
+            var rowCount = $container.find('.category-row').length;
+            $container.find('.remove-category').each(function() {
                 $(this).toggle(rowCount > 1);
             });
         }
 
-        // Helper: populate categories in existing container
-        async function populateCategoriesContainer($container, selectedCategories = []) {
-            const cats = await fetchCategories();
-            $container.empty();
-            
-            if (selectedCategories.length > 0) {
-                // Edit mode - create row for each selected category
-                selectedCategories.forEach(category => {
-                    const $row = $('<div class="category-row mb-2"><div class="d-flex gap-2"></div><div class="invalid-feedback"></div></div>');
-                    const $select = buildCategorySelect(cats, category.id);
-                    $row.find('.d-flex').append($select).append('<button type="button" class="btn btn-outline-danger remove-category"><i class="fas fa-times"></i></button>');
+        // Helper: populate categories container
+        function populateCategoriesContainer($container, selectedCategories) {
+            return fetchCategories().then(function(categories) {
+                $container.empty();
+                
+                if (selectedCategories && selectedCategories.length > 0) {
+                    // Edit mode - create row for each selected category
+                    $.each(selectedCategories, function(i, category) {
+                        var $row = $('<div class="category-row mb-2"></div>');
+                        var $flexDiv = $('<div class="d-flex gap-2"></div>');
+                        var $select = buildCategorySelect(categories, category.id);
+                        var $removeBtn = $('<button type="button" class="btn btn-outline-danger remove-category"><i class="fas fa-times"></i></button>');
+                        
+                        $flexDiv.append($select).append($removeBtn);
+                        $row.append($flexDiv).append('<div class="invalid-feedback"></div>');
+                        $container.append($row);
+                    });
+                } else {
+                    // Create mode - single empty row
+                    var $row = $('<div class="category-row mb-2"></div>');
+                    var $flexDiv = $('<div class="d-flex gap-2"></div>');
+                    var $select = buildCategorySelect(categories, null);
+                    var $removeBtn = $('<button type="button" class="btn btn-outline-danger remove-category"><i class="fas fa-times"></i></button>');
+                    
+                    $flexDiv.append($select).append($removeBtn);
+                    $row.append($flexDiv).append('<div class="invalid-feedback"></div>');
                     $container.append($row);
-                });
-            } else {
-                // Create mode - single empty row
-                const $row = $('<div class="category-row mb-2"><div class="d-flex gap-2"></div><div class="invalid-feedback"></div></div>');
-                const $select = buildCategorySelect(cats);
-                $row.find('.d-flex').append($select).append('<button type="button" class="btn btn-outline-danger remove-category"><i class="fas fa-times"></i></button>');
-                $container.append($row);
-            }
-            
-            updateRemoveBtns($container);
+                }
+                
+                updateRemoveButtons($container);
+            });
         }
 
-        // Create Discount button handler - Use body delegation for maximum compatibility
-        $('body').off('click.discountCreate', '#createDiscountBtn').on('click.discountCreate', '#createDiscountBtn', async function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('Create discount button clicked');
-            
-            const $form = $('#discountForm');
-            const $container = $('#categoriesContainer');
-            const modal = document.getElementById('discountModal');
-            
-            if (!modal) {
-                console.error('Discount modal not found');
-                return;
-            }
-            
-            // Reset form
+        // Helper: reset and prepare form for create/edit
+        function resetForm($form, mode, discountId) {
             $form[0].reset();
             $form.find('.is-invalid').removeClass('is-invalid');
             $form.find('.invalid-feedback').text('');
-            $('#discountMethod').val('POST');
-            $('#discountId').val('');
-            $form[0].action = '/admin/discount-codes';
-            $('#discountModalLabel').text('Create Discount');
             
-            // Populate categories
-            await populateCategoriesContainer($container, []);
-            
-            // Show modal
-            const bsModal = new bootstrap.Modal(modal);
-            bsModal.show();
-        });
+            if (mode === 'edit' && discountId) {
+                $('#discountMethod').val('PUT');
+                $('#discountId').val(discountId);
+                $form[0].action = '/admin/discount-codes/' + discountId;
+                $('#discountModalLabel').text('Edit Discount');
+            } else {
+                $('#discountMethod').val('POST');
+                $('#discountId').val('');
+                $form[0].action = '/admin/discount-codes';
+                $('#discountModalLabel').text('Create Discount');
+            }
+        }
 
-        // Edit Discount handler - Use body delegation with multiple selectors
-        $('body').off('click.discountEdit', '.js-discount-edit').on('click.discountEdit', '.js-discount-edit', async function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const $btn = $(this);
-            const editId = $btn.data('discount-id') || $btn.data('id');
-            console.log('Edit discount button clicked, ID:', editId);
-            
-            const $form = $('#discountForm');
-            const $container = $('#categoriesContainer');
-            const modal = document.getElementById('discountModal');
-            
-            if (!modal) {
-                console.error('Discount modal not found');
-                return;
-            }
-            
-            if (!editId) {
-                console.error('No discount ID found');
-                return;
-            }
-            
-            // Reset form
-            $form[0].reset();
-            $form.find('.is-invalid').removeClass('is-invalid');
-            $form.find('.invalid-feedback').text('');
-            $('#discountMethod').val('PUT');
-            $('#discountId').val(editId);
-            $form[0].action = `/admin/discount-codes/${editId}`;
-            $('#discountModalLabel').text('Edit Discount');
-            
-            try {
-                // Fetch discount data
-                const data = await $.ajax({ 
-                    url: `/admin/discount-codes/${editId}/edit`, 
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                    cache: false
-                });
+        // Helper: load discount data for edit
+        function loadDiscountData(discountId, $form, $container) {
+            return $.ajax({
+                url: '/admin/discount-codes/' + discountId + '/edit',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                cache: false
+            }).then(function(data) {
+                var d = data.discount;
                 
-                const d = data.discount;
-                
-                // Prefill fields
-                $('#code').val(d.code || '').trigger('input');
+                // Fill form fields
+                $('#code').val(d.code || '');
                 $('#discount_type').val(d.discount_type || 'fixed');
                 $('#discount_value').val(d.discount_value || '');
                 $('#minimum_order_amount').val(d.minimum_order_amount || '');
                 $('#usage_limit').val(d.usage_limit || '');
-                $('#is_active').val(d.is_active ? 1 : 0);
+                $('#is_active').val(d.is_active ? '1' : '0');
                 
                 // Format datetime fields
                 if (d.valid_from) {
-                    $('#valid_from').val((d.valid_from+'').replace(' ','T').slice(0,16));
+                    var validFrom = String(d.valid_from).replace(' ', 'T').slice(0, 16);
+                    $('#valid_from').val(validFrom);
                 }
                 if (d.valid_until) {
-                    $('#valid_until').val((d.valid_until+'').replace(' ','T').slice(0,16));
+                    var validUntil = String(d.valid_until).replace(' ', 'T').slice(0, 16);
+                    $('#valid_until').val(validUntil);
                 }
                 
-                // Populate categories with selected values
-                await populateCategoriesContainer($container, d.categories || []);
-                
-                // Show modal
-                const bsModal = new bootstrap.Modal(modal);
-                bsModal.show();
-                
-            } catch(e) {
-                console.error('Failed to load discount data:', e);
-                if (window.Swal) Swal.fire('Error','Failed to load discount data','error');
+                // Populate categories
+                return populateCategoriesContainer($container, d.categories || []);
+            }).catch(function(err) {
+                console.error('[Discount] Failed to load discount data:', err);
+                if (window.Swal) Swal.fire('Error', 'Failed to load discount data.', 'error');
+                throw err;
+            });
+        }
+
+        // Create button handler (uses event delegation on body)
+        $(document).off('click.discountCreate').on('click.discountCreate', '#createDiscountBtn', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('[Discount] Create button clicked');
+            
+            var $form = $('#discountForm');
+            var $container = $('#categoriesContainer');
+            var modal = document.getElementById('discountModal');
+            
+            if (!modal || !$form.length) {
+                console.error('[Discount] Modal or form not found');
+                return;
             }
+            
+            resetForm($form, 'create', null);
+            
+            // Populate categories then show modal
+            populateCategoriesContainer($container, []).then(function() {
+                var bsModal = bootstrap.Modal.getOrCreateInstance(modal);
+                bsModal.show();
+            });
         });
 
-        // Add category row handler
-        $('body').off('click.addCategory', '#addCategoryBtn').on('click.addCategory', '#addCategoryBtn', async function(e){
+        // Edit button handler (uses event delegation on document)
+        $(document).off('click.discountEdit').on('click.discountEdit', '.js-discount-edit', function(e) {
             e.preventDefault();
-            console.log('Add category button clicked');
+            e.stopPropagation();
             
-            const $container = $('#categoriesContainer');
-            const cats = await fetchCategories();
+            var $btn = $(this);
+            var discountId = $btn.data('discount-id') || $btn.data('id');
+            console.log('[Discount] Edit button clicked, ID:', discountId);
             
-            const $row = $('<div class="category-row mb-2"><div class="d-flex gap-2"></div><div class="invalid-feedback"></div></div>');
-            const $select = buildCategorySelect(cats);
-            $row.find('.d-flex').append($select).append('<button type="button" class="btn btn-outline-danger remove-category"><i class="fas fa-times"></i></button>');
-            $container.append($row);
+            var $form = $('#discountForm');
+            var $container = $('#categoriesContainer');
+            var modal = document.getElementById('discountModal');
             
-            updateRemoveBtns($container);
+            if (!modal || !$form.length) {
+                console.error('[Discount] Modal or form not found');
+                return;
+            }
+            
+            if (!discountId) {
+                console.error('[Discount] No discount ID found');
+                return;
+            }
+            
+            resetForm($form, 'edit', discountId);
+            
+            // Load data then show modal
+            loadDiscountData(discountId, $form, $container).then(function() {
+                var bsModal = bootstrap.Modal.getOrCreateInstance(modal);
+                bsModal.show();
+            });
         });
 
-        // Remove category row handler
-        $('body').off('click.removeCategory', '#categoriesContainer .remove-category').on('click.removeCategory', '#categoriesContainer .remove-category', function(e){
+        // Add category button handler
+        $(document).off('click.addCategory').on('click.addCategory', '#addCategoryBtn', function(e) {
             e.preventDefault();
-            console.log('Remove category button clicked');
+            console.log('[Discount] Add category button clicked');
             
-            const $btn = $(this);
-            const $row = $btn.closest('.category-row');
-            const $container = $('#categoriesContainer');
+            var $container = $('#categoriesContainer');
+            
+            fetchCategories().then(function(categories) {
+                var $row = $('<div class="category-row mb-2"></div>');
+                var $flexDiv = $('<div class="d-flex gap-2"></div>');
+                var $select = buildCategorySelect(categories, null);
+                var $removeBtn = $('<button type="button" class="btn btn-outline-danger remove-category"><i class="fas fa-times"></i></button>');
+                
+                $flexDiv.append($select).append($removeBtn);
+                $row.append($flexDiv).append('<div class="invalid-feedback"></div>');
+                $container.append($row);
+                
+                updateRemoveButtons($container);
+            });
+        });
+
+        // Remove category button handler (uses delegation on container)
+        $(document).off('click.removeCategory').on('click.removeCategory', '#categoriesContainer .remove-category', function(e) {
+            e.preventDefault();
+            console.log('[Discount] Remove category button clicked');
+            
+            var $btn = $(this);
+            var $row = $btn.closest('.category-row');
+            var $container = $('#categoriesContainer');
             
             // Ensure at least one row remains
             if ($container.find('.category-row').length > 1) {
                 $row.remove();
-                updateRemoveBtns($container);
+                updateRemoveButtons($container);
             }
         });
 
-        // Validation and uppercasing code
-        $('body').off('input.discountValidation change.discountValidation', '#discountForm input, #discountForm select')
-            .on('input.discountValidation change.discountValidation', '#discountForm input, #discountForm select', function(e){
-            if (e.target && e.target.id === 'code') {
-                e.target.value = e.target.value.toUpperCase();
+        // Form input validation handler
+        $(document).off('input.discountValidation change.discountValidation')
+            .on('input.discountValidation change.discountValidation', '#discountForm input, #discountForm select', function(e) {
+            
+            // Uppercase code field
+            if (this.id === 'code') {
+                this.value = this.value.toUpperCase();
             }
             
             // Remove validation errors on input
-            if ($(this).hasClass('is-invalid')) {
-                $(this).removeClass('is-invalid');
-                $(this).siblings('.invalid-feedback').text('');
+            var $input = $(this);
+            if ($input.hasClass('is-invalid')) {
+                $input.removeClass('is-invalid');
+                $input.siblings('.invalid-feedback').text('');
             }
         });
 
         // Form submission handler
-        $('body').off('submit.discountForm', '#discountForm').on('submit.discountForm', '#discountForm', function(e) {
+        $(document).off('submit.discountForm').on('submit.discountForm', '#discountForm', function(e) {
             e.preventDefault();
-            console.log('Discount form submitted');
+            console.log('[Discount] Form submitted');
             
-            const form = this;
-            const formData = new FormData(form);
-            const method = $('#discountMethod').val() || 'POST';
-            const url = form.action;
-            const $saveBtn = $('#discountSaveBtn');
-            const $spinner = $('#discountSpinner');
+            var form = this;
+            var $form = $(form);
+            var formData = new FormData(form);
+            var url = form.action;
+            var $saveBtn = $('#discountSaveBtn');
+            var $spinner = $('#discountSpinner');
             
             // Show loading state
             $saveBtn.prop('disabled', true);
             $spinner.removeClass('d-none');
             
             // Clear previous errors
-            $(form).find('.is-invalid').removeClass('is-invalid');
-            $(form).find('.invalid-feedback').text('');
+            $form.find('.is-invalid').removeClass('is-invalid');
+            $form.find('.invalid-feedback').text('');
             
             fetch(url, {
                 method: 'POST',
                 body: formData,
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
                 }
             })
-            .then(r => r.json())
-            .then(function(data){
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                console.log('[Discount] Form response:', data);
+                
                 if (data.success) {
                     // Close modal
-                    const modal = document.getElementById('discountModal');
-                    const bsModal = bootstrap.Modal.getInstance(modal);
+                    var modal = document.getElementById('discountModal');
+                    var bsModal = bootstrap.Modal.getInstance(modal);
                     if (bsModal) bsModal.hide();
                     
                     // Reload DataTable
                     if (window.DataTableInstances && window.DataTableInstances['discounts-table']) {
-                        window.DataTableInstances['discounts-table'].ajax.reload();
+                        window.DataTableInstances['discounts-table'].ajax.reload(null, false);
                     }
                     
                     // Show success message
-                    if (window.Swal) Swal.fire('Success', data.message || 'Discount code saved successfully!', 'success');
+                    if (window.Swal) {
+                        Swal.fire('Success', data.message || 'Discount code saved successfully!', 'success');
+                    }
                 } else {
                     // Show validation errors
                     if (data.errors) {
-                        Object.keys(data.errors).forEach(function(field){
-                            const $input = $(`[name="${field}"]`);
+                        $.each(data.errors, function(field, messages) {
+                            var $input = $('[name="' + field + '"]');
                             if ($input.length) {
                                 $input.addClass('is-invalid');
-                                $input.siblings('.invalid-feedback').text(data.errors[field][0]);
+                                $input.siblings('.invalid-feedback').text(messages[0]);
                             }
                         });
                     }
-                    if (window.Swal) Swal.fire('Error', data.message || 'Please fix the errors above.', 'error');
+                    
+                    if (window.Swal) {
+                        Swal.fire('Error', data.message || 'Please fix the errors above.', 'error');
+                    }
                 }
             })
-            .catch(function(err){
-                console.error('Form submission error:', err);
-                if (window.Swal) Swal.fire('Error', 'An error occurred while saving.', 'error');
+            .catch(function(err) {
+                console.error('[Discount] Form submission error:', err);
+                if (window.Swal) {
+                    Swal.fire('Error', 'An error occurred while saving.', 'error');
+                }
             })
-            .finally(function(){
+            .finally(function() {
                 $saveBtn.prop('disabled', false);
                 $spinner.addClass('d-none');
             });
         });
 
-        // Save button handler
+        // Global save function for modal button
         window.saveDiscount = function() {
-            console.log('Save discount called');
+            console.log('[Discount] Save button clicked');
             $('#discountForm').trigger('submit');
         };
 
-        console.log('Discount modal handlers initialized successfully');
+        console.log('[Discount] Handlers initialized successfully');
     })();
     </script>
     @endpush

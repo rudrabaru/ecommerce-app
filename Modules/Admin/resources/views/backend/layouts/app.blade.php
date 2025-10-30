@@ -272,8 +272,16 @@ x-init="
             });
         }
 
+        // Replace the bindEditButtons function in app.blade.php with this:
+
         function bindEditButtons(ctx){
             qsa('[data-action="edit"], [data-action="create"], .btn-edit, .edit-user, .edit-provider, .edit-order, .edit-payment, .edit-product, .edit-category', ctx).forEach(function(btn){
+                // Skip discount buttons - they have their own local handlers
+                if (btn.classList.contains('js-discount-edit') || btn.id === 'createDiscountBtn') {
+                    console.log('Skipping discount button from global handler:', btn.id || btn.className);
+                    return;
+                }
+                
                 // Allow pages to opt-out of global binding to avoid duplication
                 if (btn.hasAttribute('data-local-modal')) return;
                 if (btn.getAttribute('data-bound')) return;
@@ -284,7 +292,7 @@ x-init="
                     
                     var action = btn.getAttribute('data-action') || 'create';
                     var modalId = btn.getAttribute('data-modal') || btn.getAttribute('data-bs-target');
-                    var itemId = btn.getAttribute('data-id') || btn.getAttribute('data-user-id') || btn.getAttribute('data-provider-id') || btn.getAttribute('data-order-id') || btn.getAttribute('data-payment-id') || btn.getAttribute('data-product-id') || btn.getAttribute('data-category-id') || btn.getAttribute('data-discount-id');
+                    var itemId = btn.getAttribute('data-id') || btn.getAttribute('data-user-id') || btn.getAttribute('data-provider-id') || btn.getAttribute('data-order-id') || btn.getAttribute('data-payment-id') || btn.getAttribute('data-product-id') || btn.getAttribute('data-category-id');
                     
                     console.log('Modal button clicked:', {action, modalId, itemId});
                     
@@ -334,14 +342,6 @@ x-init="
                         if (methodInput) methodInput.value = 'POST';
                         if (idInput) idInput.value = '';
                         if (form) { form.action = determineSubmitUrl(modalId, null); }
-                        // If this is discount create, fetch categories to populate select
-                        if ((modalId||'').includes('discount')) {
-                            fetch('/admin/discount-codes/create', { headers: { 'X-Requested-With':'XMLHttpRequest' }})
-                                .then(r=>r.json())
-                                .then(function(data){
-                                    populateCategories(modal, data.categories || [], null);
-                                }).catch(function(err){ console.warn('Failed loading categories', err); });
-                        }
                     }
                     
                     // Show modal

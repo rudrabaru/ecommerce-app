@@ -56,17 +56,24 @@ class DiscountCodeController extends Controller
 
     public function store(StoreDiscountCodeRequest $request)
     {
-        $data = $request->validated();
-        $categoryIds = $request->input('category_ids', []);
-        
-        $discount = DiscountCode::create($data);
-        $discount->categories()->sync($categoryIds);
-        
-        if (request()->wantsJson() || request()->ajax()) {
-            return response()->json(['success' => true, 'message' => 'Discount code created']);
-        }
+        try {
+            $data = $request->validated();
+            $categoryIds = $request->input('category_ids', []);
+            
+            $discount = DiscountCode::create($data);
+            $discount->categories()->sync($categoryIds);
+            
+            if (request()->wantsJson() || request()->ajax()) {
+                return response()->json(['success' => true, 'message' => 'Discount code created successfully']);
+            }
 
-        return redirect()->route('admin.discounts.index')->with('status', 'Discount code created');
+            return redirect()->route('admin.discounts.index')->with('status', 'Discount code created successfully');
+        } catch (\Exception $e) {
+            if (request()->wantsJson() || request()->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Failed to create discount code', 'error' => $e->getMessage()], 422);
+            }
+            return redirect()->back()->withErrors(['error' => 'Failed to create discount code'])->withInput();
+        }
     }
 
     public function edit(DiscountCode $discount_code)
@@ -80,17 +87,24 @@ class DiscountCodeController extends Controller
 
     public function update(UpdateDiscountCodeRequest $request, DiscountCode $discount_code)
     {
-        $data = $request->validated();
-        $categoryIds = $request->input('category_ids', []);
-        
-        $discount_code->update($data);
-        $discount_code->categories()->sync($categoryIds);
-        
-        if (request()->wantsJson() || request()->ajax()) {
-            return response()->json(['success' => true, 'message' => 'Discount code updated']);
-        }
+        try {
+            $data = $request->validated();
+            $categoryIds = $request->input('category_ids', []);
+            
+            $discount_code->update($data);
+            $discount_code->categories()->sync($categoryIds);
+            
+            if (request()->wantsJson() || request()->ajax()) {
+                return response()->json(['success' => true, 'message' => 'Discount code updated successfully']);
+            }
 
-        return redirect()->route('admin.discounts.index')->with('status', 'Discount code updated');
+            return redirect()->route('admin.discounts.index')->with('status', 'Discount code updated successfully');
+        } catch (\Exception $e) {
+            if (request()->wantsJson() || request()->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Failed to update discount code', 'error' => $e->getMessage()], 422);
+            }
+            return redirect()->back()->withErrors(['error' => 'Failed to update discount code'])->withInput();
+        }
     }
 
     public function destroy(DiscountCode $discount_code)
