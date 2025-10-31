@@ -45,12 +45,17 @@ class PaymentsController extends Controller
             })
             ->editColumn('amount', fn ($row) => '$' . number_format($row->amount, 2))
             ->editColumn('status', function ($row) {
-                $badgeClass = match($row->status) {
-                    'pending' => 'badge-warning',
-                    'paid' => 'badge-success',
-                    default => 'badge-secondary'
-                };
-                return '<span class="badge ' . $badgeClass . '">' . ucfirst($row->status) . '</span>';
+                $status = $row->status;
+                $map = [
+                    'pending' => 'bg-warning',
+                    'processing' => 'bg-info',
+                    'paid' => 'bg-success',
+                    'failed' => 'bg-danger',
+                    'refunded' => 'bg-secondary',
+                    'cancelled' => 'bg-danger',
+                ];
+                $cls = $map[$status] ?? 'bg-secondary';
+                return '<span class="badge rounded-pill ' . $cls . '">' . ucfirst($status) . '</span>';
             })
             ->editColumn('created_at', function ($row) {
                 return optional($row->created_at)

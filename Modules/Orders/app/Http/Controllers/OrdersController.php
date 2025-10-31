@@ -365,23 +365,33 @@ class OrdersController extends Controller
             ->addColumn('total', function ($row) {
                 if (Auth::user()->hasRole('provider')) {
                     $providerId = Auth::id();
-                    $subtotal = $row->orderItems->where('provider_id', $providerId)->sum(function ($item) {
-                        return (float) $item->total;
+                    $providerItems = $row->orderItems->where('provider_id', $providerId);
+                    // Use original line totals for provider subtotal; discount is tracked separately in line_discount
+                    $subtotal = $providerItems->sum(function ($item) {
+                        return (float) ($item->line_total ?? $item->total);
                     });
-                    return '$' . number_format($subtotal, 2);
+                    $providerDiscount = $providerItems->sum(function ($item) {
+                        return (float) ($item->line_discount ?? 0);
+                    });
+                    $final = max(0, (float) $subtotal - (float) $providerDiscount);
+                    return '$' . number_format($final, 2);
                 }
                 return '$' . number_format($row->total_amount, 2);
             })
             ->editColumn('order_status', function ($row) {
                 $status = $row->order_status ?? $row->status;
-                $badgeClass = match($status) {
-                    'pending' => 'badge-warning',
-                    'shipped' => 'badge-info',
-                    'delivered' => 'badge-success',
-                    'cancelled' => 'badge-danger',
-                    default => 'badge-secondary'
-                };
-                return '<span class="badge ' . $badgeClass . '">' . ucfirst($status) . '</span>';
+                $map = [
+                    'pending' => 'bg-warning',
+                    'confirmed' => 'bg-info',
+                    'processing' => 'bg-primary',
+                    'shipped' => 'bg-primary',
+                    'delivered' => 'bg-success',
+                    'completed' => 'bg-success',
+                    'cancelled' => 'bg-danger',
+                    'refunded' => 'bg-secondary',
+                ];
+                $cls = $map[$status] ?? 'bg-secondary';
+                return '<span class="badge rounded-pill ' . $cls . '">' . ucfirst($status) . '</span>';
             })
             ->addColumn('shipping_address', function($row){
                 return $row->shipping_address ? e($row->shipping_address) : '-';

@@ -207,8 +207,8 @@
                                 <td>${order.customer_name}</td>
                                 <td>${order.product_name}</td>
                                 <td>$${parseFloat(order.total_amount).toFixed(2)}</td>
-                                <td><span class="badge ${statusClass}">${order.status}</span></td>
-                                <td>${new Date(order.created_at).toLocaleDateString()}</td>
+                                <td><span class="badge rounded-pill ${statusClass}">${order.status}</span></td>
+                                <td>${order.created_at}</td>
                             </tr>
                         `;
                     });
@@ -253,12 +253,15 @@
 
         function getStatusClass(status) {
             switch(status) {
-                case 'pending': return 'badge-warning';
-                case 'confirmed': return 'badge-info';
-                case 'shipped': return 'badge-primary';
-                case 'delivered': return 'badge-success';
-                case 'cancelled': return 'badge-danger';
-                default: return 'badge-secondary';
+                case 'pending': return 'bg-warning';
+                case 'confirmed': return 'bg-info';
+                case 'processing': return 'bg-primary';
+                case 'shipped': return 'bg-primary';
+                case 'delivered': return 'bg-success';
+                case 'completed': return 'bg-success';
+                case 'cancelled': return 'bg-danger';
+                case 'refunded': return 'bg-secondary';
+                default: return 'bg-secondary';
             }
         }
     </script>

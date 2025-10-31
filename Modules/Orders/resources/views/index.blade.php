@@ -161,10 +161,22 @@
             @php
                 $__orders_modal_products = auth()->user()->hasRole('provider') ? \Modules\Products\Models\Product::where('provider_id', auth()->id())->get() : \Modules\Products\Models\Product::all();
                 $__orders_modal_discounts = \App\Models\DiscountCode::active()->validNow()->notExceededUsage()->get();
+                // Build light payload with category_ids for provider-side client filtering
+                $__orders_modal_discounts_payload = $__orders_modal_discounts->map(function($d){
+                    return [
+                        'id' => $d->id,
+                        'code' => $d->code,
+                        'discount_type' => $d->discount_type,
+                        'discount_value' => (float) $d->discount_value,
+                        'minimum_order_amount' => $d->minimum_order_amount ? (float) $d->minimum_order_amount : null,
+                        'category_ids' => $d->categories()->pluck('categories.id')->all(),
+                    ];
+                });
             @endphp
             var PRODUCTS = {!! $__orders_modal_products->toJson() !!};
-            var DISCOUNTS = {!! $__orders_modal_discounts->toJson() !!};
+            var DISCOUNTS = {!! $__orders_modal_discounts_payload->toJson() !!};
             var ELIGIBLE_DISCOUNTS = [];
+            var PROVIDER_PREFILL_DISCOUNT = null; // if set, provider modal uses this discount amount from server
 
             function initDataTable(){
                 if ($('#orders-table').length && !$.fn.DataTable.isDataTable('#orders-table')) {
@@ -211,7 +223,13 @@
                 var tr = document.createElement('tr');
                 var productId = item.product_id || '';
                 var qty = item.quantity || 1;
-                var subtotal = item.total || 0;
+                // Always compute subtotal from product price and quantity to avoid mixing in any prior discounts
+                var unit = 0;
+                if (productId) {
+                    var p = PRODUCTS.find(function(x){ return x.id == productId; });
+                    unit = p ? (parseFloat(p.price) || 0) : 0;
+                }
+                var subtotal = unit * (parseInt(qty) || 1);
                 tr.innerHTML = '\n                    <td><select class="form-select item-product">'+buildProductOptions(productId)+'</select></td>\n                    <td><input type="number" class="form-control item-qty" min="1" value="'+qty+'"></td>\n                    <td class="item-subtotal">$'+Number(subtotal).toFixed(2)+'</td>\n                    <td><button type="button" class="btn btn-link text-danger p-0 remove-item" title="Remove"><i class="fas fa-times"></i></button></td>\n                ';
                 tbody.appendChild(tr);
                 updateSaveEnabled();
@@ -255,7 +273,10 @@
                 }
 
                 var discountAmount = 0;
-                if (discount) {
+                // If provider has a prefilled server discount, prefer it (keeps modal consistent with list)
+                if (window.location.pathname.includes('/provider/') && PROVIDER_PREFILL_DISCOUNT !== null) {
+                    discountAmount = parseFloat(PROVIDER_PREFILL_DISCOUNT) || 0;
+                } else if (discount) {
                     var cats = (discount.category_ids && discount.category_ids.length) ? discount.category_ids : null;
                     var applicableTotal = detailed.filter(function(a){ return cats ? cats.indexOf(a.category_id) !== -1 : true; }).reduce(function(s,a){ return s + a.line; }, 0);
                     if (applicableTotal > 0) {
@@ -278,7 +299,7 @@
                 computeTotals();
             }
 
-            function loadEligibleDiscounts(){
+            function loadEligibleDiscounts(preferredCode){
                 if (!window.location.pathname.includes('/admin/')) { return; }
                 var items = gatherItems();
                 var sel = $('#discount_code');
@@ -302,7 +323,9 @@
                         var label = d.code + ' - ' + (isPercent ? (d.discount_value+'%') : ('$'+d.discount_value));
                         sel.append('<option value="'+d.code+'">'+label+'</option>');
                     });
-                    if (current && ELIGIBLE_DISCOUNTS.some(function(d){ return d.code === current; })){
+                    if (preferredCode && ELIGIBLE_DISCOUNTS.some(function(d){ return d.code === preferredCode; })){
+                        sel.val(preferredCode);
+                    } else if (current && ELIGIBLE_DISCOUNTS.some(function(d){ return d.code === current; })){
                         sel.val(current);
                     } else {
                         sel.val('');
@@ -324,6 +347,8 @@
                     computeTotals();
                 } else {
                     loadEligibleDiscounts();
+                    // Always recompute totals on product/qty change (provider or admin)
+                    computeTotals();
                 }
             });
 
@@ -347,7 +372,22 @@
                 if (window.location.pathname.includes('/admin/')){
                     ELIGIBLE_DISCOUNTS = [];
                 } else {
-                    DISCOUNTS.forEach(function(d){ var isPercent = (d.discount_type==='percent'||d.discount_type==='percentage'); sel.append('<option value="'+d.code+'">'+d.code+' - '+(isPercent?d.discount_value+'%':'$'+d.discount_value) +'</option>'); });
+                    // Provider: filter discounts by current items' categories (if any)
+                    var items = gatherItems();
+                    if (items.length){
+                        var itemCategoryIds = [];
+                        items.forEach(function(it){
+                            var p = PRODUCTS.find(function(x){ return x.id == it.product_id; });
+                            if (p && p.category_id != null && itemCategoryIds.indexOf(p.category_id) === -1){ itemCategoryIds.push(p.category_id); }
+                        });
+                        DISCOUNTS.filter(function(d){
+                            // empty category_ids => global; otherwise intersects with item categories
+                            if (!d.category_ids || d.category_ids.length === 0) return true;
+                            return d.category_ids.some(function(cid){ return itemCategoryIds.indexOf(cid) !== -1; });
+                        }).forEach(function(d){ var isPercent = (d.discount_type==='percent'||d.discount_type==='percentage'); sel.append('<option value="'+d.code+'">'+d.code+' - '+(isPercent?d.discount_value+'%':'$'+d.discount_value) +'</option>'); });
+                    } else {
+                        DISCOUNTS.forEach(function(d){ var isPercent = (d.discount_type==='percent'||d.discount_type==='percentage'); sel.append('<option value="'+d.code+'">'+d.code+' - '+(isPercent?d.discount_value+'%':'$'+d.discount_value) +'</option>'); });
+                    }
                 }
             }
 
@@ -360,6 +400,7 @@
                 renderOrderItems([]);
                 populateDiscounts();
                 loadEligibleDiscounts();
+                PROVIDER_PREFILL_DISCOUNT = null;
                 const modal = new bootstrap.Modal(document.getElementById('orderModal'));
                 modal.show();
             });
@@ -379,17 +420,26 @@
                     if (o.shipping_address) $('#shipping_address').val(o.shipping_address);
                     if (o.notes) $('#notes').val(o.notes);
                     // orderItems may be relation objects
-                    var items = (o.order_items || o.orderItems || []).map(function(it){ return { product_id: it.product_id, quantity: it.quantity, total: it.total }; });
+                    var rawItems = (o.order_items || o.orderItems || []);
+                    var items = rawItems.map(function(it){ return { product_id: it.product_id, quantity: it.quantity, total: it.total, line_discount: (it.line_discount || 0) }; });
+                    if (window.location.pathname.includes('/provider/')){
+                        // Keep only this provider's products in the modal
+                        items = items.filter(function(it){ return PRODUCTS.some(function(p){ return p.id == it.product_id; }); });
+                    }
                     renderOrderItems(items);
                     populateDiscounts();
                     if (window.location.pathname.includes('/admin/')){
                         setTimeout(function(){
-                            loadEligibleDiscounts();
-                            if (o.discount_code) $('#discount_code').val(o.discount_code);
-                            computeTotals();
+                            loadEligibleDiscounts(o.discount_code || '');
+                            // computeTotals will be called inside loadEligibleDiscounts after selection
                         }, 0);
                     } else {
-                        if (o.discount_code) $('#discount_code').val(o.discount_code);
+                        // Prefill discount amount from server for this provider
+                        var providerDiscount = items.reduce(function(s,it){ return s + (parseFloat(it.line_discount)||0); }, 0);
+                        PROVIDER_PREFILL_DISCOUNT = providerDiscount;
+                        var providerHasDiscount = providerDiscount > 0;
+                        $('#discount_code').val(providerHasDiscount ? (o.discount_code || '') : '');
+                        // Recompute totals using server discount
                         computeTotals();
                     }
                     const modal = new bootstrap.Modal(document.getElementById('orderModal'));

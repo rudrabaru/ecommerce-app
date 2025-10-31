@@ -50,15 +50,20 @@ class ProviderDashboardController extends Controller
                     ->filter()
                     ->values()
                     ->implode(', ');
-                $subtotal = $providerItems->sum(function ($it) { return (float) $it->total; });
+                // Use original line totals minus provider discount share for a fair recent total
+                $subtotal = $providerItems->sum(function ($it) { return (float) ($it->line_total ?? $it->total); });
+                $providerDiscount = $providerItems->sum(function ($it) { return (float) ($it->line_discount ?? 0); });
+                $final = max(0, (float) $subtotal - (float) $providerDiscount);
                 return [
                     'id' => $order->id,
                     'order_number' => $order->order_number ?? ('ORD-' . $order->id),
                     'customer_name' => optional($order->user)->name,
                     'product_name' => $productNames,
-                    'total_amount' => $subtotal,
+                    'total_amount' => $final,
                     'status' => $order->order_status ?? $order->status ?? 'pending',
-                    'created_at' => optional($order->created_at),
+                    'created_at' => optional($order->created_at)
+                        ? $order->created_at->copy()->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s')
+                        : null,
                 ];
             })->values();
 
