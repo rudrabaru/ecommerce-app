@@ -3,7 +3,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="mb-0">Discount Codes</h1>
             <div>
-                <button type="button" id="createDiscountBtn" class="btn btn-primary">
+                <button type="button" id="createDiscountBtn" class="btn btn-primary" data-action="create" data-modal="#discountCreateModal" data-bs-toggle="modal" data-bs-target="#discountCreateModal">
                     <i class="fas fa-plus"></i> Create Discount Code
                 </button>
             </div>
@@ -182,61 +182,7 @@
             });
         }
 
-        // Create button handler (uses event delegation on body)
-        $(document).off('click.discountCreate').on('click.discountCreate', '#createDiscountBtn', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('[Discount] Create button clicked');
-            
-            var $form = $('#discountForm');
-            var $container = $('#categoriesContainer');
-            var modal = document.getElementById('discountModal');
-            
-            if (!modal || !$form.length) {
-                console.error('[Discount] Modal or form not found');
-                return;
-            }
-            
-            resetForm($form, 'create', null);
-            
-            // Populate categories then show modal
-            populateCategoriesContainer($container, []).then(function() {
-                var bsModal = bootstrap.Modal.getOrCreateInstance(modal);
-                bsModal.show();
-            });
-        });
-
-        // Edit button handler (uses event delegation on document)
-        $(document).off('click.discountEdit').on('click.discountEdit', '.js-discount-edit', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            var $btn = $(this);
-            var discountId = $btn.data('discount-id') || $btn.data('id');
-            console.log('[Discount] Edit button clicked, ID:', discountId);
-            
-            var $form = $('#discountForm');
-            var $container = $('#categoriesContainer');
-            var modal = document.getElementById('discountModal');
-            
-            if (!modal || !$form.length) {
-                console.error('[Discount] Modal or form not found');
-                return;
-            }
-            
-            if (!discountId) {
-                console.error('[Discount] No discount ID found');
-                return;
-            }
-            
-            resetForm($form, 'edit', discountId);
-            
-            // Load data then show modal
-            loadDiscountData(discountId, $form, $container).then(function() {
-                var bsModal = bootstrap.Modal.getOrCreateInstance(modal);
-                bsModal.show();
-            });
-        });
+        // Create/Edit click handled by global modal binder; modal opens immediately and data loads on show
 
         // Add category button handler
         $(document).off('click.addCategory').on('click.addCategory', '#addCategoryBtn', function(e) {

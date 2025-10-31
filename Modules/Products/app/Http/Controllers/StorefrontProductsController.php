@@ -15,7 +15,9 @@ class StorefrontProductsController extends Controller
      */
     public function shop(Request $request)
     {
-        $query = Product::query()->where('is_approved', true)->with(['category', 'provider']);
+        $query = Product::query()
+            ->where(function($q){ $q->where('is_approved', true)->orWhereNull('is_approved'); })
+            ->with(['category', 'provider']);
 
         if ($search = $request->get('q')) {
             $query->where(function ($q) use ($search) {
@@ -114,7 +116,7 @@ class StorefrontProductsController extends Controller
 
         $product->load(['category', 'provider']);
 
-        $relatedProducts = Product::where('is_approved', true)
+        $relatedProducts = Product::where(function($q){ $q->where('is_approved', true)->orWhereNull('is_approved'); })
             ->where('category_id', $product->category_id)
             ->where('id', '!=', $product->id)
             ->take(4)
@@ -135,10 +137,9 @@ class StorefrontProductsController extends Controller
             ->validNow()
             ->notExceededUsage()
             ->where(function ($query) use ($categoryId) {
-                $query->where('category_id', $categoryId)
-                      ->orWhereHas('categories', function ($q) use ($categoryId) {
-                          $q->where('categories.id', $categoryId);
-                      });
+                $query->whereHas('categories', function ($q) use ($categoryId) {
+                    $q->where('categories.id', $categoryId);
+                })->orWhereDoesntHave('categories'); // treat no categories as global
             })
             ->orderBy('discount_value', 'desc')
             ->get();

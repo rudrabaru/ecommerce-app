@@ -238,7 +238,7 @@ class CategoryController extends Controller
     {
         $category = Category::findOrFail($id);
         // 12 products per page within a category
-        $productsQuery = Product::where('is_approved', true)
+        $productsQuery = Product::where(function($q){ $q->where('is_approved', true)->orWhereNull('is_approved'); })
             ->where('category_id', $category->id)
             ->orderByDesc('id');
 

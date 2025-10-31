@@ -17,7 +17,7 @@ class StorefrontCategoryController extends Controller
     public function show($id)
     {
         $category = Category::findOrFail($id);
-        $products = Product::where('is_approved', true)
+        $products = Product::where(function($q){ $q->where('is_approved', true)->orWhereNull('is_approved'); })
             ->where('category_id', $category->id)
             ->orderByDesc('id')
             ->paginate(12, ['id','title','price','image']);
