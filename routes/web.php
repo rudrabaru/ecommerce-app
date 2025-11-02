@@ -40,7 +40,7 @@ Route::middleware('auth')->group(function () {
 
     // My Orders page (replaces success/failure redirects with SweetAlerts)
     Route::get('/myorder', function () {
-        $orders = \App\Models\Order::with(['orderItems.product','paymentMethod'])
+        $orders = \App\Models\Order::with(['orderItems.product', 'orderItems.provider', 'paymentMethod'])
             ->where('user_id', Auth::id())
             ->latest('id')
             ->get();

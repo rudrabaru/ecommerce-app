@@ -263,7 +263,7 @@ class CheckoutController extends Controller
                 'discount_amount' => $discountAmountTotal,
             ]);
 
-            // Create order items
+            // Create order items with initial pending status
             foreach ($orderItems as $orderItem) {
                 \App\Models\OrderItem::create([
                     'order_id' => $order->id,
@@ -274,8 +274,12 @@ class CheckoutController extends Controller
                     'line_total' => $orderItem['line_total'],
                     'line_discount' => $orderItem['line_discount'],
                     'total' => $orderItem['total'],
+                    'order_status' => \App\Models\OrderItem::STATUS_PENDING,
                 ]);
             }
+            
+            // Recalculate order status after all items are created (ensures aggregate status is correct)
+            $order->recalculateOrderStatus();
 
             // Create payment record (pending initially; confirm will mark paid)
             Payment::create([
@@ -311,7 +315,7 @@ class CheckoutController extends Controller
                 // Send confirmation email for each order (queue for resilience)
                 foreach ($created as $orderNumber) {
                     $order = Order::where('order_number', $orderNumber)
-                        ->with(['orderItems.product','paymentMethod','user'])
+                        ->with(['orderItems.product', 'orderItems.provider', 'paymentMethod', 'user'])
                         ->first();
                     if ($order && $order->user && $order->user->email) {
                         try {

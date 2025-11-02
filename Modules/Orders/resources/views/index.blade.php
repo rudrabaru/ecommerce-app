@@ -71,9 +71,15 @@
                                     <label for="order_status" class="form-label">Order Status</label>
                                     <select class="form-select" id="order_status" name="order_status">
                                         <option value="pending">Pending</option>
-                                        <option value="shipped">Shipped</option>
-                                        <option value="delivered">Delivered</option>
-                                        <option value="cancelled">Cancelled</option>
+                                        @if(auth()->user()->hasRole('admin'))
+                                            <option value="shipped">Shipped</option>
+                                            <option value="delivered">Delivered</option>
+                                            <option value="cancelled">Cancelled</option>
+                                        @elseif(auth()->user()->hasRole('provider'))
+                                            <option value="shipped">Shipped</option>
+                                            <option value="delivered">Delivered</option>
+                                            <option value="cancelled">Cancelled</option>
+                                        @endif
                                     </select>
                                     <div class="invalid-feedback"></div>
                                 </div>
@@ -149,6 +155,45 @@
                         <span class="spinner-border spinner-border-sm d-none" id="orderSaveSpinner" role="status" aria-hidden="true"></span>
                         Save Order
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Order Items Modal (for item-level status management) -->
+    <div class="modal fade" id="orderItemsModal" tabindex="-1" aria-labelledby="orderItemsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="orderItemsModalLabel">Order Items - #<span id="orderItemsModalOrderNumber"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <strong>Order Status:</strong> 
+                        <span id="orderItemsModalOrderStatus" class="badge rounded-pill"></span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="orderItemsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Provider</th>
+                                    <th>Quantity</th>
+                                    <th>Unit Price</th>
+                                    <th>Total</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="orderItemsTableBody">
+                                <!-- Items will be populated via AJAX -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
@@ -416,7 +461,11 @@
                 $('#orderModalLabel').text('Edit Order');
                 fetch('/'+prefix+'/orders/'+id, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); }).then(function(o){
                     if (o.user_id) $('#user_id').val(o.user_id);
-                    if (o.order_status) $('#order_status').val(o.order_status);
+                    if (o.order_status) {
+                        $('#order_status').val(o.order_status);
+                        // Update status dropdown based on role and current status
+                        updateStatusDropdown(o.order_status);
+                    }
                     if (o.shipping_address) $('#shipping_address').val(o.shipping_address);
                     if (o.notes) $('#notes').val(o.notes);
                     // orderItems may be relation objects
@@ -490,6 +539,217 @@
                 }
                 window.saveOrder();
             });
+
+            // View order items modal
+            $(document).on('click', '.view-order-items', function(e) {
+                e.preventDefault();
+                const orderId = $(this).data('id');
+                const prefix = window.location.pathname.includes('/admin/') ? 'admin' : 'provider';
+                
+                fetch('/' + prefix + '/orders/' + orderId, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(response => response.json())
+                .then(order => {
+                    $('#orderItemsModalOrderNumber').text(order.order_number);
+                    $('#orderItemsModalOrderStatus').text(order.order_status).attr('class', 'badge rounded-pill ' + getStatusBadgeClass(order.order_status));
+                    
+                    const tbody = $('#orderItemsTableBody');
+                    tbody.empty();
+                    
+                    const items = order.order_items || order.orderItems || [];
+                    const isProvider = window.location.pathname.includes('/provider/');
+                    const currentUserId = {{ auth()->id() }};
+                    
+                    items.forEach(function(item) {
+                        // Filter items for provider view
+                        if (isProvider && item.provider_id !== currentUserId) {
+                            return;
+                        }
+                        
+                        const allowedTransitions = item.allowed_transitions || [];
+                        let statusDropdown = '<span class="badge ' + getStatusBadgeClass(item.order_status) + '">' + item.order_status.charAt(0).toUpperCase() + item.order_status.slice(1) + '</span>';
+                        
+                        if (allowedTransitions.length > 0) {
+                            statusDropdown = '<div class="btn-group">';
+                            statusDropdown += '<button type="button" class="btn btn-sm btn-outline-info dropdown-toggle" data-bs-toggle="dropdown">';
+                            statusDropdown += item.order_status.charAt(0).toUpperCase() + item.order_status.slice(1) + '</button>';
+                            statusDropdown += '<ul class="dropdown-menu">';
+                            allowedTransitions.forEach(function(status) {
+                                statusDropdown += '<li><a class="dropdown-item update-item-status-btn" href="#" data-order-id="' + orderId + '" data-item-id="' + item.id + '" data-status="' + status + '">';
+                                statusDropdown += status.charAt(0).toUpperCase() + status.slice(1) + '</a></li>';
+                            });
+                            statusDropdown += '</ul></div>';
+                        }
+                        
+                        const row = '<tr>' +
+                            '<td>' + (item.product ? item.product.title : 'Product') + '</td>' +
+                            '<td>' + (item.provider ? item.provider.name : 'N/A') + '</td>' +
+                            '<td>' + item.quantity + '</td>' +
+                            '<td>$' + parseFloat(item.unit_price).toFixed(2) + '</td>' +
+                            '<td>$' + parseFloat(item.total).toFixed(2) + '</td>' +
+                            '<td>' + statusDropdown + '</td>' +
+                            '<td></td>' +
+                            '</tr>';
+                        tbody.append(row);
+                    });
+                    
+                    if (tbody.children().length === 0) {
+                        tbody.append('<tr><td colspan="7" class="text-center text-muted">No items found</td></tr>');
+                    }
+                    
+                    const modal = new bootstrap.Modal(document.getElementById('orderItemsModal'));
+                    modal.show();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire('Error', 'Failed to load order items', 'error');
+                });
+            });
+            
+            function getStatusBadgeClass(status) {
+                const map = {
+                    'pending': 'bg-warning',
+                    'shipped': 'bg-primary',
+                    'delivered': 'bg-success',
+                    'cancelled': 'bg-danger'
+                };
+                return map[status] || 'bg-secondary';
+            }
+            
+            // Item status update handler
+            $(document).on('click', '.update-item-status-btn', function(e) {
+                e.preventDefault();
+                const orderId = $(this).data('order-id');
+                const itemId = $(this).data('item-id');
+                const newStatus = $(this).data('status');
+                const btn = $(this);
+                const originalText = btn.text();
+                
+                btn.text('Updating...').prop('disabled', true);
+                
+                const prefix = window.location.pathname.includes('/admin/') ? 'admin' : 'provider';
+                const url = '/' + prefix + '/orders/' + orderId + '/items/' + itemId + '/update-status';
+                
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        order_status: newStatus
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Update modal content
+                        if ($('#orderItemsModal').hasClass('show')) {
+                            $('.view-order-items[data-id="' + orderId + '"]').click();
+                        }
+                        
+                        // Reload DataTable
+                        if (window.DataTableInstances && window.DataTableInstances['orders-table']) {
+                            window.DataTableInstances['orders-table'].ajax.reload(null, false);
+                        }
+                        
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Status Updated',
+                            text: data.message || 'Order item status updated successfully',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        Swal.fire('Error', data.message || 'Failed to update status', 'error');
+                        btn.text(originalText).prop('disabled', false);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire('Error', 'An error occurred while updating status', 'error');
+                    btn.text(originalText).prop('disabled', false);
+                });
+            });
+
+            // Status update handler (order-level)
+            $(document).on('click', '.update-status-btn', function(e) {
+                e.preventDefault();
+                const orderId = $(this).data('order-id');
+                const newStatus = $(this).data('status');
+                const btn = $(this);
+                const originalText = btn.text();
+                
+                btn.text('Updating...').prop('disabled', true);
+                
+                const prefix = window.location.pathname.includes('/admin/') ? 'admin' : 'provider';
+                const url = '/' + prefix + '/orders/' + orderId + '/update-status';
+                
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        order_status: newStatus
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        if (window.DataTableInstances && window.DataTableInstances['orders-table']) {
+                            window.DataTableInstances['orders-table'].ajax.reload(null, false);
+                        }
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Status Updated',
+                            text: data.message || 'Order status updated successfully',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    } else {
+                        Swal.fire('Error', data.message || 'Failed to update status', 'error');
+                        btn.text(originalText).prop('disabled', false);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire('Error', 'An error occurred while updating status', 'error');
+                    btn.text(originalText).prop('disabled', false);
+                });
+            });
+            
+            // Update status dropdown options based on role and current status (for edit modal)
+            function updateStatusDropdown(currentStatus) {
+                const statusSelect = $('#order_status');
+                const isAdmin = window.location.pathname.includes('/admin/');
+                const isProvider = window.location.pathname.includes('/provider/');
+                
+                statusSelect.empty();
+                statusSelect.append('<option value="' + currentStatus + '" selected>' + currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1) + '</option>');
+                
+                if (isAdmin) {
+                    // Admin can set any status
+                    const allStatuses = ['pending', 'shipped', 'delivered', 'cancelled'];
+                    allStatuses.forEach(function(status) {
+                        if (status !== currentStatus) {
+                            statusSelect.append('<option value="' + status + '">' + status.charAt(0).toUpperCase() + status.slice(1) + '</option>');
+                        }
+                    });
+                } else if (isProvider) {
+                    // Provider: pending → shipped, shipped → delivered, pending → cancelled
+                    if (currentStatus === 'pending') {
+                        statusSelect.append('<option value="shipped">Shipped</option>');
+                        statusSelect.append('<option value="cancelled">Cancelled</option>');
+                    } else if (currentStatus === 'shipped') {
+                        statusSelect.append('<option value="delivered">Delivered</option>');
+                    }
+                }
+            }
 
             // initial bootstrap
             $(document).ready(function(){ initDataTable(); populateDiscounts(); updateSaveEnabled(); computeTotals(); });

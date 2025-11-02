@@ -37,7 +37,7 @@ class ProviderDashboardController extends Controller
 
         $providerId = Auth::id();
 
-        $orders = Order::with(['user', 'orderItems.product'])
+        $orders = Order::with(['user', 'orderItems.product', 'orderItems.provider'])
             ->whereJsonContains('provider_ids', $providerId)
             ->latest('id')
             ->limit(5)
