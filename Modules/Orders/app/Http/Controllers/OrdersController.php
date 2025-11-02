@@ -174,7 +174,9 @@ class OrdersController extends Controller
             return response()->json($order);
         }
 
-        return view('orders::show', compact('order'));
+        // Redirect to index if not AJAX request (show functionality handled in modal)
+        $route = auth()->user()->hasRole('admin') ? 'admin.orders.index' : 'provider.orders.index';
+        return redirect()->route($route);
     }
 
     /**

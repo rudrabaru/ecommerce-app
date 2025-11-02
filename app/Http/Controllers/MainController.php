@@ -21,12 +21,5 @@ class MainController extends Controller
         return view('index', ['products' => $products]);
     }
 
-    public function cart()
-    {
-        // For compatibility, redirect to the new cart page that renders session data
-        return redirect()->route('cart.index');
-    }
-
-
     // Storefront routes are served by Modules\Products\Http\Controllers\StorefrontProductsController
 }

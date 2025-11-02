@@ -26,8 +26,13 @@ class ProductsController extends Controller
      */
     public function create()
     {
-        $categories = Category::orderBy('name')->get();
-        return view('products::create', compact('categories'));
+        if (request()->wantsJson() || request()->ajax()) {
+            $categories = Category::orderBy('name')->get();
+            return response()->json(['categories' => $categories]);
+        }
+        // Redirect to index where modal handles create
+        $route = auth()->user()->hasRole('admin') ? 'admin.products.index' : 'provider.products.index';
+        return redirect()->route($route);
     }
 
     /**
@@ -88,7 +93,14 @@ class ProductsController extends Controller
     {
         $product = Product::with('category', 'provider')->findOrFail($id);
         $this->authorizeView($product);
-        return view('products::show', compact('product'));
+        
+        if (request()->wantsJson() || request()->ajax()) {
+            return response()->json($product);
+        }
+        
+        // Redirect to index if not AJAX request
+        $route = auth()->user()->hasRole('admin') ? 'admin.products.index' : 'provider.products.index';
+        return redirect()->route($route);
     }
 
     /**
@@ -100,11 +112,16 @@ class ProductsController extends Controller
         $this->authorizeUpdate($product);
 
         if (request()->wantsJson() || request()->ajax()) {
-            return response()->json($product);
+            $categories = Category::orderBy('name')->get();
+            return response()->json([
+                'product' => $product,
+                'categories' => $categories
+            ]);
         }
 
-        $categories = Category::orderBy('name')->get();
-        return view('products::edit', compact('product', 'categories'));
+        // Redirect to index where modal handles edit
+        $route = auth()->user()->hasRole('admin') ? 'admin.products.index' : 'provider.products.index';
+        return redirect()->route($route);
     }
 
     /**
