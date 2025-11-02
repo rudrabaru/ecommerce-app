@@ -21,15 +21,6 @@ class AdminController extends Controller
     }
 
     /**
-     * Show the specified resource.
-     */
-    public function show($id)
-    {
-        $user = User::with('roles')->findOrFail($id);
-        return response()->json($user);
-    }
-
-    /**
      * Show the form for creating a new resource.
      */
     public function create()

@@ -8,11 +8,7 @@ export default defineConfig({
             input: [
                 'resources/css/app.css',
                 'resources/js/app.js',
-                'Modules/Admin/resources/js/admin-navigation.js',
-                'Modules/Admin/resources/js/admin-debug.js',
-                'Modules/Admin/resources/js/admin-comprehensive-test.js',
-                'Modules/Admin/resources/js/users.js',
-                'Modules/Admin/resources/js/providers.js'
+                'Modules/Admin/resources/js/admin-navigation.js'
             ],
             refresh: true,
         }),
