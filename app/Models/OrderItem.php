@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 class OrderItem extends Model
 {
@@ -90,10 +89,10 @@ class OrderItem extends Model
                 return [];
             }
             
-            // Provider: pending → shipped, shipped → delivered, pending → cancelled
+            // Provider: pending → shipped/delivered/cancelled, shipped → delivered
             $transitions = [];
             if ($currentStatus === self::STATUS_PENDING) {
-                $transitions = [self::STATUS_SHIPPED, self::STATUS_CANCELLED];
+                $transitions = [self::STATUS_SHIPPED, self::STATUS_DELIVERED, self::STATUS_CANCELLED];
             } elseif ($currentStatus === self::STATUS_SHIPPED) {
                 $transitions = [self::STATUS_DELIVERED];
             }
@@ -121,6 +120,7 @@ class OrderItem extends Model
 
     /**
      * Transition order item status with validation
+     * CRITICAL: This updates item status and triggers order recalculation
      */
     public function transitionTo(string $newStatus): bool
     {
@@ -129,18 +129,20 @@ class OrderItem extends Model
         }
 
         $oldStatus = $this->order_status;
+        // Use Eloquent save so relations/attributes are kept consistent and timestamps are updated
         $this->order_status = $newStatus;
-        
-        // Save directly using DB to avoid triggering updated event before recalculation
-        DB::table('order_items')->where('id', $this->id)->update(['order_status' => $newStatus]);
-        
-        // Refresh model
+        $this->save();
+
+        // Refresh model to reflect latest state
         $this->refresh();
 
-        // Manually trigger order recalculation
-        $order = Order::find($this->order_id);
-        if ($order) {
-            $order->recalculateOrderStatus();
+        // Manually trigger order recalculation (ensure fresh instance is used)
+        // This will update the aggregate order status but NEVER remove provider_ids
+        if ($this->order_id) {
+            $order = Order::find($this->order_id);
+            if ($order) {
+                $order->recalculateOrderStatus();
+            }
         }
 
         // Fire appropriate event

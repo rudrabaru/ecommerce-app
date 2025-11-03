@@ -1,22 +1,9 @@
 <x-header />
 
-<!-- Breadcrumb Section Begin -->
-<section class="breadcrumb-option">
-    <div class="container">
-        <div class="row">
-            <div class="col-lg-12">
-                <div class="breadcrumb__text">
-                    <h4>My Addresses</h4>
-                    <div class="breadcrumb__links">
-                        <a href="{{ route('home') }}">Home</a>
-                        <span>My Addresses</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-<!-- Breadcrumb Section End -->
+<x-breadcrumbs :items="[
+    ['label' => 'Home', 'route' => route('home')],
+    ['label' => 'My Addresses']
+]" />
 
 <!-- Addresses Section Begin -->
 <section class="checkout spad">
@@ -56,9 +43,9 @@
                                             @if($address->address_line_2)
                                                 <p>{{ $address->address_line_2 }}</p>
                                             @endif
-                                            <p>{{ $address->city }}, {{ $address->state }} {{ $address->postal_code }}</p>
-                                            <p>{{ $address->country }}</p>
-                                            <p><strong>Phone:</strong> {{ $address->phone }}</p>
+                                            <p>{{ optional($address->city)->name }}, {{ optional($address->state)->name }} {{ $address->postal_code }}</p>
+                                            <p>{{ optional($address->country)->name }}</p>
+                                            <p><strong>Phone:</strong> {{ $address->country_code }} {{ $address->phone }}</p>
                                         </div>
                                         <div class="address-actions">
                                             <button type="button" class="btn btn-sm btn-outline-primary" onclick="openAddressModal({{ $address->id }})">
@@ -242,47 +229,116 @@ $(document).ready(function() {
     };
 
     window.setDefaultAddress = function(id) {
-        if (confirm('Set this address as default?')) {
-            $.ajax({
-                url: '/addresses/' + id + '/set-default',
-                method: 'POST',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-                },
-                success: function(response) {
-                    if (response.success) {
-                        location.reload();
-                    }
-                },
-                error: function() {
-                    alert('Failed to set default address');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Set as default?',
+                text: 'This will become your primary shipping address.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#e7ab3c',
+                confirmButtonText: 'Yes, set default'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '/addresses/' + id + '/set-default',
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                Swal.fire({ icon: 'success', title: 'Default updated', timer: 1200, showConfirmButton: false })
+                                    .then(() => location.reload());
+                            } else {
+                                Swal.fire('Error', response.message || 'Failed to set default address', 'error');
+                            }
+                        },
+                        error: function() {
+                            Swal.fire('Error', 'Failed to set default address', 'error');
+                        }
+                    });
                 }
             });
+        } else {
+            if (confirm('Set this address as default?')) {
+                $.ajax({
+                    url: '/addresses/' + id + '/set-default',
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            location.reload();
+                        }
+                    },
+                    error: function() {
+                        alert('Failed to set default address');
+                    }
+                });
+            }
         }
     };
 
     window.deleteAddress = function(id) {
-        if (confirm('Are you sure you want to delete this address?')) {
-            $.ajax({
-                url: '/addresses/' + id,
-                method: 'POST',
-                data: {
-                    _method: 'DELETE',
-                    _token: $('meta[name="csrf-token"]').attr('content')
-                },
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                success: function(response) {
-                    if (response.success) {
-                        location.reload();
-                    }
-                },
-                error: function() {
-                    alert('Failed to delete address');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Delete this address?',
+                text: 'This action cannot be undone.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'Yes, delete it'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '/addresses/' + id,
+                        method: 'POST',
+                        data: {
+                            _method: 'DELETE',
+                            _token: $('meta[name="csrf-token"]').attr('content')
+                        },
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                Swal.fire({ icon: 'success', title: 'Address deleted', timer: 1200, showConfirmButton: false })
+                                    .then(() => location.reload());
+                            } else {
+                                Swal.fire('Error', response.message || 'Failed to delete address', 'error');
+                            }
+                        },
+                        error: function() {
+                            Swal.fire('Error', 'Failed to delete address', 'error');
+                        }
+                    });
                 }
             });
+        } else {
+            if (confirm('Are you sure you want to delete this address?')) {
+                $.ajax({
+                    url: '/addresses/' + id,
+                    method: 'POST',
+                    data: {
+                        _method: 'DELETE',
+                        _token: $('meta[name="csrf-token"]').attr('content')
+                    },
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            location.reload();
+                        }
+                    },
+                    error: function() {
+                        alert('Failed to delete address');
+                    }
+                });
+            }
         }
     };
 

@@ -381,34 +381,35 @@ class OrdersController extends Controller
 
     public function data(DataTables $dataTables)
     {
+        // CRITICAL: Eager load relationships to avoid N+1 queries
+        // Load orderItems with fresh status data
         $query = Order::query()->with(['user', 'orderItems.product', 'orderItems.provider']);
 
-        // Role-based filtering: for providers, ensure visibility by existence of items for that provider
+        // Role-based filtering: for providers, filter by provider_ids JSON array
+        // IMPORTANT: This ensures orders remain visible as long as provider_id exists in the array
+        // Orders will NOT disappear when status changes because filtering is based on provider_ids only
         if (Auth::user()->hasRole('provider')) {
             $providerId = Auth::id();
-            $query->whereExists(function ($q) use ($providerId) {
-                $q->selectRaw('1')
-                  ->from('order_items')
-                  ->whereColumn('order_items.order_id', 'orders.id')
-                  ->where('order_items.provider_id', $providerId);
-            });
+            // Use whereJsonContains to check if provider_id exists in the provider_ids JSON array
+            $query->whereJsonContains('provider_ids', $providerId);
         }
 
         return $dataTables->eloquent($query)
             ->addColumn('customer_name', fn ($row) => $row->user->name)
             ->addColumn('products', function ($row) {
                 $items = $row->orderItems;
-                if (Auth::user()->hasRole('provider')) {
-                    $items = $items->where('provider_id', Auth::id());
+                $isProvider = Auth::user()->hasRole('provider');
+                $providerId = Auth::id();
+                
+                if ($isProvider) {
+                    // Provider: only show their items
+                    $items = $items->where('provider_id', $providerId);
                 }
-                $products = $items->map(function ($item) {
+                
+                $products = $items->map(function ($item) use ($isProvider) {
                     if ($item->product) {
                         $imageUrl = $item->product->image_url;
                         $fallback = 'https://placehold.co/60x60?text=%20';
-                        // Provider view should NOT display item-level status badges in products column
-                        $statusBadge = Auth::user()->hasRole('provider')
-                            ? ''
-                            : '<span class="badge badge-sm ' . $item->getStatusBadgeClass() . '">' . $item->getStatusDisplayName() . '</span>';
                         
                         $itemHtml = '<div class="d-flex align-items-center justify-content-between mb-2 p-2 border rounded">';
                         $itemHtml .= '<div class="d-flex align-items-center">';
@@ -418,14 +419,15 @@ class OrdersController extends Controller
                                  onerror="this.onerror=null;this.src=\'' . $fallback . '\';" />';
                         $itemHtml .= '<div>';
                         $itemHtml .= '<div class="small fw-semibold">' . e($item->product->title) . ' (x' . $item->quantity . ')</div>';
-                        if (Auth::user()->hasRole('admin')) {
+                        if (!$isProvider) {
+                            // Admin: show provider name and individual item status badge
                             $itemHtml .= '<div class="small text-muted">Provider: ' . e($item->provider->name ?? 'N/A') . '</div>';
+                            $statusBadge = '<span class="badge badge-sm ' . $item->getStatusBadgeClass() . '">' . $item->getStatusDisplayName() . '</span>';
+                            $itemHtml .= '<div class="mt-1">' . $statusBadge . '</div>';
                         }
+                        // Provider: NO status badge in Products column (shown only in Status column)
                         $itemHtml .= '</div>';
                         $itemHtml .= '</div>';
-                        if (!empty($statusBadge)) {
-                            $itemHtml .= '<div>' . $statusBadge . '</div>';
-                        }
                         $itemHtml .= '</div>';
                         
                         return $itemHtml;
@@ -439,7 +441,7 @@ class OrdersController extends Controller
                 if (Auth::user()->hasRole('provider')) {
                     $providerId = Auth::id();
                     $providerItems = $row->orderItems->where('provider_id', $providerId);
-                    // Use original line totals for provider subtotal; discount is tracked separately in line_discount
+                    // Use original line totals for provider subtotal
                     $subtotal = $providerItems->sum(function ($item) {
                         return (float) ($item->line_total ?? $item->total);
                     });
@@ -452,6 +454,7 @@ class OrdersController extends Controller
                 return '$' . number_format($row->total_amount, 2);
             })
             ->editColumn('order_status', function ($row) {
+                // Get fresh order instance to ensure we have latest status
                 $order = Order::find($row->id);
                 if (!$order) {
                     $status = $row->order_status ?? 'pending';
@@ -459,12 +462,14 @@ class OrdersController extends Controller
                 }
 
                 if (Auth::user() && Auth::user()->hasRole('provider')) {
+                    // Provider: calculate aggregated status based ONLY on their items
                     $providerId = Auth::id();
                     $items = $order->orderItems->where('provider_id', $providerId);
                     [$status, $cls] = $this->aggregateStatusForItems($items);
                     return '<span class="badge rounded-pill ' . $cls . '">' . ucfirst($status) . '</span>';
                 }
 
+                // Admin: show aggregate order-level status (updates only when all items match)
                 $cls = $order->getStatusBadgeClass();
                 return '<span class="badge rounded-pill ' . $cls . '">' . $order->getStatusDisplayName() . '</span>';
             })
@@ -475,7 +480,7 @@ class OrdersController extends Controller
                 return $row->notes ? e($row->notes) : '-';
             })
             ->addColumn('discount_code', function($row){
-                // For provider, only show if any of his items received a discount (line_discount > 0)
+                // For provider, only show if any of their items received a discount
                 if (Auth::user() && Auth::user()->hasRole('provider')) {
                     $providerId = Auth::id();
                     $providerItems = $row->orderItems->where('provider_id', $providerId);
@@ -500,8 +505,33 @@ class OrdersController extends Controller
             })
             ->addColumn('actions', function ($row) {
                 $prefix = (Auth::user() && Auth::user()->hasRole('admin')) ? 'admin' : 'provider';
-                $order = Order::find($row->id);
-                $allowedStatuses = $order ? $order->getAllowedTransitions() : [];
+                $isProvider = Auth::user()->hasRole('provider');
+                $allowedStatuses = [];
+                
+                // Calculate allowed status transitions based on role
+                if ($isProvider) {
+                    // Provider: calculate allowed transitions based on their items' aggregated status
+                    $providerId = Auth::id();
+                    $providerItems = $row->orderItems->where('provider_id', $providerId);
+                    
+                    if ($providerItems->isNotEmpty()) {
+                        // Get the current effective status for provider's items
+                        [$currentStatus, $cls] = $this->aggregateStatusForItems($providerItems);
+                        
+                        // Provider transitions: pending → shipped/delivered/cancelled, shipped → delivered
+                        if ($currentStatus === OrderItem::STATUS_PENDING) {
+                            $allowedStatuses = [OrderItem::STATUS_SHIPPED, OrderItem::STATUS_DELIVERED, OrderItem::STATUS_CANCELLED];
+                        } elseif ($currentStatus === OrderItem::STATUS_SHIPPED) {
+                            $allowedStatuses = [OrderItem::STATUS_DELIVERED];
+                        }
+                    }
+                } else {
+                    // Admin: use order-level status transitions
+                    $order = Order::find($row->id);
+                    if ($order) {
+                        $allowedStatuses = $order->getAllowedTransitions();
+                    }
+                }
                 
                 $btns = '<div class="btn-group" role="group">';
                 
@@ -513,7 +543,7 @@ class OrdersController extends Controller
                 if (!empty($allowedStatuses)) {
                     $btns .= '<div class="btn-group" role="group">';
                     $btns .= '<button type="button" class="btn btn-sm btn-outline-info dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">';
-                    $btns .= '<i class="fas fa-sync-alt"></i> Order</button>';
+                    $btns .= '<i class="fas fa-sync-alt"></i> ' . ($isProvider ? 'My Items' : 'Order') . '</button>';
                     $btns .= '<ul class="dropdown-menu">';
                     foreach ($allowedStatuses as $status) {
                         $statusLabel = ucfirst($status);
@@ -543,21 +573,31 @@ class OrdersController extends Controller
 
     /**
      * Aggregate item statuses for a set of items according to earliest-active rule.
+     * Returns [status, badgeClass]
      */
     private function aggregateStatusForItems($items): array
     {
+        if ($items->isEmpty()) {
+            return [Order::STATUS_PENDING, 'bg-warning'];
+        }
+
         $counts = [
             Order::STATUS_PENDING => 0,
             Order::STATUS_SHIPPED => 0,
             Order::STATUS_DELIVERED => 0,
             Order::STATUS_CANCELLED => 0,
         ];
+        
         foreach ($items as $it) {
             $st = $it->order_status ?? Order::STATUS_PENDING;
-            if (isset($counts[$st])) { $counts[$st]++; }
+            if (isset($counts[$st])) { 
+                $counts[$st]++; 
+            }
         }
-        $total = max(1, $items->count());
+        
+        $total = $items->count();
 
+        // Priority: pending < shipped < delivered, cancelled only if all cancelled
         if ($counts[Order::STATUS_CANCELLED] === $total) {
             return [Order::STATUS_CANCELLED, 'bg-danger'];
         }
@@ -570,9 +610,15 @@ class OrdersController extends Controller
         if ($counts[Order::STATUS_SHIPPED] > 0) {
             return [Order::STATUS_SHIPPED, 'bg-primary'];
         }
-        // fallback
+        
+        // Fallback
         return [Order::STATUS_PENDING, 'bg-warning'];
     }
+
+    /**
+     * Aggregate item statuses for a set of items according to earliest-active rule.
+     */
+    
 
     /**
      * Return eligible discount codes for the given products (Admin only).

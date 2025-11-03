@@ -134,6 +134,7 @@ class Order extends Model
 
     /**
      * Get valid status transitions for the current user role
+     * NOTE: For providers, these transitions apply to their ITEMS, not the order itself
      */
     public function getAllowedTransitions(): array
     {
@@ -146,7 +147,7 @@ class Order extends Model
         $currentStatus = $this->order_status ?? self::STATUS_PENDING;
 
         if ($user->hasRole('admin')) {
-            // Admin can transition to any status except revert from delivered
+            // Admin can transition order-level status to any status except revert from delivered
             $allStatuses = [self::STATUS_PENDING, self::STATUS_SHIPPED, self::STATUS_DELIVERED, self::STATUS_CANCELLED];
             if ($currentStatus === self::STATUS_DELIVERED) {
                 // Cannot revert from delivered
@@ -156,10 +157,11 @@ class Order extends Model
         }
 
         if ($user->hasRole('provider')) {
-            // Provider: pending → shipped, shipped → delivered, pending → cancelled
+            // Provider: these transitions will be applied to their items, not the order
+            // pending → shipped/delivered/cancelled, shipped → delivered
             $transitions = [];
             if ($currentStatus === self::STATUS_PENDING) {
-                $transitions = [self::STATUS_SHIPPED, self::STATUS_CANCELLED];
+                $transitions = [self::STATUS_SHIPPED, self::STATUS_DELIVERED, self::STATUS_CANCELLED];
             } elseif ($currentStatus === self::STATUS_SHIPPED) {
                 $transitions = [self::STATUS_DELIVERED];
             }
@@ -270,6 +272,7 @@ class Order extends Model
 
     /**
      * Recalculate order status based on item statuses
+     * This only updates the aggregate order status, never removes provider_ids
      */
     public function recalculateOrderStatus(): void
     {
@@ -301,6 +304,7 @@ class Order extends Model
         $newStatus = $currentStatus;
 
         // Logic: Calculate aggregate status (earliest active state when mixed)
+        // Priority: pending < shipped < delivered, cancelled only if all cancelled
         if ($statusCounts[self::STATUS_CANCELLED] === $totalItems) {
             // All items cancelled
             $newStatus = self::STATUS_CANCELLED;
@@ -308,13 +312,13 @@ class Order extends Model
             // All items delivered
             $newStatus = self::STATUS_DELIVERED;
         } elseif ($statusCounts[self::STATUS_PENDING] > 0) {
-            // Any pending keeps the order at Pending
+            // Any pending keeps the order at Pending (earliest active stage)
             $newStatus = self::STATUS_PENDING;
         } elseif ($statusCounts[self::STATUS_SHIPPED] > 0) {
             // No pending, at least one shipped (others may be delivered/cancelled) => Shipped
             $newStatus = self::STATUS_SHIPPED;
         } elseif ($statusCounts[self::STATUS_DELIVERED] > 0) {
-            // Mixed delivered/cancelled with no shipped/pending => Delivered (earliest among present)
+            // Mixed delivered/cancelled with no shipped/pending => Delivered
             $newStatus = self::STATUS_DELIVERED;
         } else {
             // Fallback
@@ -322,19 +326,22 @@ class Order extends Model
         }
 
         // Only update if status changed
-        // Use direct DB query to get current status to avoid stale data
         $currentStatus = DB::table('orders')->where('id', $this->id)->value('order_status');
-        
+
         if ($newStatus !== $currentStatus) {
             $oldStatus = $currentStatus;
-            
-            // Use direct DB update to avoid triggering model events
-            DB::table('orders')->where('id', $this->id)->update(['order_status' => $newStatus]);
-            
+
+            // Use direct DB update to avoid policy checks during recalculation
+            // CRITICAL: Only update order_status, never touch provider_ids
+            DB::table('orders')->where('id', $this->id)->update([
+                'order_status' => $newStatus,
+                'updated_at' => now(),
+            ]);
+
             // Refresh the model
             $this->refresh();
 
-            // Fire order-level events if all items completed
+            // Fire order-level events for significant changes
             if ($newStatus === self::STATUS_DELIVERED && $oldStatus !== self::STATUS_DELIVERED) {
                 event(new \App\Events\OrderDelivered($this, $oldStatus));
             } elseif ($newStatus === self::STATUS_CANCELLED && $oldStatus !== self::STATUS_CANCELLED) {

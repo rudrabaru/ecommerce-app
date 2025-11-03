@@ -71,15 +71,9 @@
                                     <label for="order_status" class="form-label">Order Status</label>
                                     <select class="form-select" id="order_status" name="order_status">
                                         <option value="pending">Pending</option>
-                                        @if(auth()->user()->hasRole('admin'))
-                                            <option value="shipped">Shipped</option>
-                                            <option value="delivered">Delivered</option>
-                                            <option value="cancelled">Cancelled</option>
-                                        @elseif(auth()->user()->hasRole('provider'))
-                                            <option value="shipped">Shipped</option>
-                                            <option value="delivered">Delivered</option>
-                                            <option value="cancelled">Cancelled</option>
-                                        @endif
+                                        <option value="shipped">Shipped</option>
+                                        <option value="delivered">Delivered</option>
+                                        <option value="cancelled">Cancelled</option>
                                     </select>
                                     <div class="invalid-feedback"></div>
                                 </div>
@@ -230,7 +224,7 @@
                     window.DataTableInstances['orders-table'] = $('#orders-table').DataTable({
                         processing: true,
                         serverSide: true,
-                        ajax: { url: ajaxUrl, cache: false },
+                        ajax: ajaxUrl,
                         columns: [
                             { data: 'id', name: 'id', width: '60px' },
                             { data: 'order_number', name: 'order_number' },
@@ -275,7 +269,7 @@
                     unit = p ? (parseFloat(p.price) || 0) : 0;
                 }
                 var subtotal = unit * (parseInt(qty) || 1);
-                tr.innerHTML = '\n                    <td><select class="form-select item-product">'+buildProductOptions(productId)+'</select></td>\n                    <td><input type="number" class="form-control item-qty" min="1" value="'+qty+'"></td>\n                    <td class="item-subtotal">$'+Number(subtotal).toFixed(2)+'</td>\n                    <td><button type="button" class="btn btn-link text-danger p-0 remove-item" title="Remove"><i class="fas fa-times"></i></button></td>\n                ';
+                tr.innerHTML = '<td><select class="form-select item-product">'+buildProductOptions(productId)+'</select></td><td><input type="number" class="form-control item-qty" min="1" value="'+qty+'"></td><td class="item-subtotal">$'+Number(subtotal).toFixed(2)+'</td><td><button type="button" class="btn btn-link text-danger p-0 remove-item" title="Remove"><i class="fas fa-times"></i></button></td>';
                 tbody.appendChild(tr);
                 updateSaveEnabled();
                 updateDiscountAmountDisplay();
@@ -436,6 +430,52 @@
                 }
             }
 
+            // Update status dropdown options for CREATE modal (all statuses available)
+            function updateStatusDropdownForCreate() {
+                var statusSelect = $('#order_status');
+                statusSelect.empty();
+                statusSelect.append('<option value="pending">Pending</option>');
+                statusSelect.append('<option value="shipped">Shipped</option>');
+                statusSelect.append('<option value="delivered">Delivered</option>');
+                statusSelect.append('<option value="cancelled">Cancelled</option>');
+            }
+            
+            // Update status dropdown options for EDIT modal based on role and current status
+            function updateStatusDropdownForEdit(currentStatus) {
+                var statusSelect = $('#order_status');
+                var isAdmin = window.location.pathname.includes('/admin/');
+                var isProvider = window.location.pathname.includes('/provider/');
+                
+                statusSelect.empty();
+                
+                // Always show current status first
+                var statusLabel = currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1);
+                statusSelect.append('<option value="' + currentStatus + '" selected>' + statusLabel + '</option>');
+                
+                if (isAdmin) {
+                    // Admin can transition to any status (but not revert from delivered)
+                    var allStatuses = ['pending', 'shipped', 'delivered', 'cancelled'];
+                    if (currentStatus !== 'delivered') {
+                        allStatuses.forEach(function(status) {
+                            if (status !== currentStatus) {
+                                var label = status.charAt(0).toUpperCase() + status.slice(1);
+                                statusSelect.append('<option value="' + status + '">' + label + '</option>');
+                            }
+                        });
+                    }
+                } else if (isProvider) {
+                    // Provider transitions: pending → shipped/delivered/cancelled, shipped → delivered
+                    if (currentStatus === 'pending') {
+                        statusSelect.append('<option value="shipped">Shipped</option>');
+                        statusSelect.append('<option value="delivered">Delivered</option>');
+                        statusSelect.append('<option value="cancelled">Cancelled</option>');
+                    } else if (currentStatus === 'shipped') {
+                        statusSelect.append('<option value="delivered">Delivered</option>');
+                    }
+                    // No additional options for 'delivered' or 'cancelled' - they are terminal states
+                }
+            }
+
             // Open create modal
             $(document).on('click', '[data-action="create"]', function(){
                 $('#orderForm')[0].reset();
@@ -446,7 +486,11 @@
                 populateDiscounts();
                 loadEligibleDiscounts();
                 PROVIDER_PREFILL_DISCOUNT = null;
-                const modal = new bootstrap.Modal(document.getElementById('orderModal'));
+                
+                // Reset status dropdown to show all options for create
+                updateStatusDropdownForCreate();
+                
+                var modal = new bootstrap.Modal(document.getElementById('orderModal'));
                 modal.show();
             });
 
@@ -464,7 +508,7 @@
                     if (o.order_status) {
                         $('#order_status').val(o.order_status);
                         // Update status dropdown based on role and current status
-                        updateStatusDropdown(o.order_status);
+                        updateStatusDropdownForEdit(o.order_status);
                     }
                     if (o.shipping_address) $('#shipping_address').val(o.shipping_address);
                     if (o.notes) $('#notes').val(o.notes);
@@ -491,9 +535,9 @@
                         // Recompute totals using server discount
                         computeTotals();
                     }
-                    const modal = new bootstrap.Modal(document.getElementById('orderModal'));
+                    var modal = new bootstrap.Modal(document.getElementById('orderModal'));
                     modal.show();
-                }).catch(function(){ const modal = new bootstrap.Modal(document.getElementById('orderModal')); modal.show(); });
+                }).catch(function(){ var modal = new bootstrap.Modal(document.getElementById('orderModal')); modal.show(); });
             });
 
             // Save handler
@@ -516,8 +560,25 @@
                         var modalEl = document.getElementById('orderModal');
                         var modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
                         modal.hide();
+                        // Reload DataTable while preserving pagination and filters
                         if (window.DataTableInstances && window.DataTableInstances['orders-table']){
-                            window.DataTableInstances['orders-table'].ajax.reload(null, false);
+                            const table = window.DataTableInstances['orders-table'];
+                            const currentPage = table.page();
+                            const currentSearch = table.search();
+                            const currentOrder = table.order();
+                            const currentLength = table.page.len();
+                            
+                            table.ajax.reload(function(json) {
+                                if (currentLength) table.page.len(currentLength);
+                                if (json.recordsTotal > 0) {
+                                    const totalPages = Math.ceil(json.recordsTotal / table.page.len());
+                                    const targetPage = currentPage[0] < totalPages ? currentPage[0] : 0;
+                                    table.page(targetPage);
+                                }
+                                if (currentSearch) table.search(currentSearch);
+                                if (currentOrder && currentOrder.length > 0) table.order(currentOrder);
+                                table.draw(false);
+                            }, false);
                         }
                         Swal.fire('Success', data.message || 'Order saved', 'success');
                     } else {
@@ -567,10 +628,24 @@
                             return;
                         }
                         
+                        // Admin can update item statuses in modal, providers can update their own items
                         const allowedTransitions = item.allowed_transitions || [];
                         let statusDropdown = '<span class="badge ' + getStatusBadgeClass(item.order_status) + '">' + item.order_status.charAt(0).toUpperCase() + item.order_status.slice(1) + '</span>';
                         
-                        if (allowedTransitions.length > 0) {
+                        // Show status dropdown for admin OR for provider (provider can update their own items in modal)
+                        if (!isProvider && allowedTransitions.length > 0) {
+                            // Admin: show dropdown in modal
+                            statusDropdown = '<div class="btn-group">';
+                            statusDropdown += '<button type="button" class="btn btn-sm btn-outline-info dropdown-toggle" data-bs-toggle="dropdown">';
+                            statusDropdown += item.order_status.charAt(0).toUpperCase() + item.order_status.slice(1) + '</button>';
+                            statusDropdown += '<ul class="dropdown-menu">';
+                            allowedTransitions.forEach(function(status) {
+                                statusDropdown += '<li><a class="dropdown-item update-item-status-btn" href="#" data-order-id="' + orderId + '" data-item-id="' + item.id + '" data-status="' + status + '">';
+                                statusDropdown += status.charAt(0).toUpperCase() + status.slice(1) + '</a></li>';
+                            });
+                            statusDropdown += '</ul></div>';
+                        } else if (isProvider && allowedTransitions.length > 0 && item.provider_id === currentUserId) {
+                            // Provider: can update their own items in modal
                             statusDropdown = '<div class="btn-group">';
                             statusDropdown += '<button type="button" class="btn btn-sm btn-outline-info dropdown-toggle" data-bs-toggle="dropdown">';
                             statusDropdown += item.order_status.charAt(0).toUpperCase() + item.order_status.slice(1) + '</button>';
@@ -586,8 +661,8 @@
                             '<td>' + (item.product ? item.product.title : 'Product') + '</td>' +
                             '<td>' + (item.provider ? item.provider.name : 'N/A') + '</td>' +
                             '<td>' + item.quantity + '</td>' +
-                            '<td>$' + parseFloat(item.unit_price).toFixed(2) + '</td>' +
-                            '<td>$' + parseFloat(item.total).toFixed(2) + '</td>' +
+                            '<td> + parseFloat(item.unit_price).toFixed(2) + '</td>' +
+                            '<td> + parseFloat(item.total).toFixed(2) + '</td>' +
                             '<td>' + statusDropdown + '</td>' +
                             '<td></td>' +
                             '</tr>';
@@ -650,9 +725,31 @@
                             $('.view-order-items[data-id="' + orderId + '"]').click();
                         }
                         
-                        // Reload DataTable
+                        // Reload DataTable while preserving current page and filters
                         if (window.DataTableInstances && window.DataTableInstances['orders-table']) {
-                            window.DataTableInstances['orders-table'].ajax.reload(null, false);
+                            const table = window.DataTableInstances['orders-table'];
+                            const currentPage = table.page();
+                            const currentSearch = table.search();
+                            const currentOrder = table.order();
+                            const currentLength = table.page.len();
+                            
+                            table.ajax.reload(function(json) {
+                                if (currentLength) {
+                                    table.page.len(currentLength);
+                                }
+                                if (json.recordsTotal > 0) {
+                                    const totalPages = Math.ceil(json.recordsTotal / table.page.len());
+                                    const targetPage = currentPage[0] < totalPages ? currentPage[0] : 0;
+                                    table.page(targetPage);
+                                }
+                                if (currentSearch) {
+                                    table.search(currentSearch);
+                                }
+                                if (currentOrder && currentOrder.length > 0) {
+                                    table.order(currentOrder);
+                                }
+                                table.draw(false);
+                            }, false);
                         }
                         
                         Swal.fire({
@@ -701,9 +798,33 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
+                        // Reload DataTable while preserving current page and filters
                         if (window.DataTableInstances && window.DataTableInstances['orders-table']) {
-                            window.DataTableInstances['orders-table'].ajax.reload(null, false);
+                            const table = window.DataTableInstances['orders-table'];
+                            const currentPage = table.page();
+                            const currentSearch = table.search();
+                            const currentOrder = table.order();
+                            const currentLength = table.page.len();
+                            
+                            table.ajax.reload(function(json) {
+                                if (currentLength) {
+                                    table.page.len(currentLength);
+                                }
+                                if (json.recordsTotal > 0) {
+                                    const totalPages = Math.ceil(json.recordsTotal / table.page.len());
+                                    const targetPage = currentPage[0] < totalPages ? currentPage[0] : 0;
+                                    table.page(targetPage);
+                                }
+                                if (currentSearch) {
+                                    table.search(currentSearch);
+                                }
+                                if (currentOrder && currentOrder.length > 0) {
+                                    table.order(currentOrder);
+                                }
+                                table.draw(false);
+                            }, false);
                         }
+                        
                         Swal.fire({
                             icon: 'success',
                             title: 'Status Updated',
@@ -722,43 +843,14 @@
                     btn.text(originalText).prop('disabled', false);
                 });
             });
-            
-            // Update status dropdown: always show all statuses but disable invalid transitions for the current role/state
-            function updateStatusDropdown(currentStatus) {
-                const statusSelect = $('#order_status');
-                const isAdmin = window.location.pathname.includes('/admin/');
-                const isProvider = window.location.pathname.includes('/provider/');
-                const allStatuses = ['pending', 'shipped', 'delivered', 'cancelled'];
-
-                function isAllowed(target) {
-                    if (isAdmin) {
-                        // Admin cannot revert from delivered
-                        if (currentStatus === 'delivered') return false;
-                        return target !== currentStatus;
-                    }
-                    if (isProvider) {
-                        if (currentStatus === 'pending') {
-                            return target === 'shipped' || target === 'cancelled';
-                        }
-                        if (currentStatus === 'shipped') {
-                            return target === 'delivered';
-                        }
-                        return false;
-                    }
-                    // User cannot change here (UI read-only)
-                    return false;
-                }
-
-                statusSelect.empty();
-                allStatuses.forEach(function(status){
-                    const selected = (status === currentStatus) ? ' selected' : '';
-                    const disabled = (!isAllowed(status) && !selected) ? ' disabled' : '';
-                    statusSelect.append('<option value="' + status + '"'+selected+disabled+'>' + status.charAt(0).toUpperCase() + status.slice(1) + '</option>');
-                });
-            }
 
             // initial bootstrap
-            $(document).ready(function(){ initDataTable(); populateDiscounts(); updateSaveEnabled(); computeTotals(); });
+            $(document).ready(function(){ 
+                initDataTable(); 
+                populateDiscounts(); 
+                updateSaveEnabled(); 
+                computeTotals(); 
+            });
         })();
     </script>
     @endpush

@@ -142,27 +142,28 @@
                 </div>
                 <div class="col-lg-6 col-md-6">
                     <nav class="header__menu mobile-menu">
+                        @php
+                            $isAccountNav = request()->routeIs('profile.*') || request()->routeIs('orders.myorder') || request()->routeIs('addresses.*');
+                        @endphp
                         <ul>
-                            <li class="{{ request()->routeIs('home') ? 'active' : '' }}"><a href="{{ route('home') }}">Home</a></li>
-                            <li class="{{ request()->routeIs('shop*') ? 'active' : '' }}"><a href="{{ route('shop') }}">Shop</a></li>
-                            <li class="{{ request()->routeIs('categories.*') ? 'active' : '' }}"><a href="{{ route('categories.index') }}">Categories</a></li>
-                            @if (Route::has('login'))
-                                @guest
-                                    <li><a href="{{ route('login') }}">Log in</a></li>
-                                    @if (Route::has('register'))
-                                        <li><a href="{{ route('register') }}">Register</a></li>
-                                    @endif
-                                @else
-                                    <li class="dropdown">
-                                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">
-                                            My Account <i class="fa fa-caret-down"></i>
-                                        </a>
-                                        <ul class="dropdown-menu">
-                                            <li><a href="{{ route('addresses.index') }}">My Addresses</a></li>
-                                            <li><a href="{{ route('profile.edit') }}">Profile</a></li>
-                                        </ul>
-                                    </li>
-                                @endguest
+                            @if($isAccountNav)
+                                <li class="{{ request()->routeIs('home') ? 'active' : '' }}"><a href="{{ route('home') }}">Home</a></li>
+                                <li class="{{ request()->routeIs('orders.myorder') ? 'active' : '' }}"><a href="{{ route('orders.myorder') }}">My Orders</a></li>
+                                <li class="{{ request()->routeIs('addresses.*') ? 'active' : '' }}"><a href="{{ route('addresses.index') }}">My Addresses</a></li>
+                            @else
+                                <li class="{{ request()->routeIs('home') ? 'active' : '' }}"><a href="{{ route('home') }}">Home</a></li>
+                                <li class="{{ request()->routeIs('shop*') ? 'active' : '' }}"><a href="{{ route('shop') }}">Shop</a></li>
+                                <li class="{{ request()->routeIs('categories.*') ? 'active' : '' }}"><a href="{{ route('categories.index') }}">Categories</a></li>
+                                @if (Route::has('login'))
+                                    @guest
+                                        <li><a href="{{ route('login') }}">Log in</a></li>
+                                        @if (Route::has('register'))
+                                            <li><a href="{{ route('register') }}">Register</a></li>
+                                        @endif
+                                    @else
+                                        <li><a href="{{ route('profile.edit') }}">My Profile</a></li>
+                                    @endguest
+                                @endif
                             @endif
                         </ul>
                     </nav>

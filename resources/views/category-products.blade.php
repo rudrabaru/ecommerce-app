@@ -1,5 +1,11 @@
 <x-header />
 
+<x-breadcrumbs :items="[
+    ['label' => 'Home', 'route' => route('home')],
+    ['label' => 'Categories', 'route' => route('categories.index')],
+    ['label' => $category->name]
+]" />
+
 <section class="shop spad">
     <div class="container">
         <div class="row mb-3">
