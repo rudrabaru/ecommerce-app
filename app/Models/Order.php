@@ -257,6 +257,18 @@ class Order extends Model
     }
 
     /**
+     * Returns item status if all items share the same status; otherwise null.
+     */
+    public function getUniformItemStatus(): ?string
+    {
+        $statuses = $this->orderItems()->pluck('order_status');
+        if ($statuses->isEmpty()) {
+            return null;
+        }
+        return $statuses->unique()->count() === 1 ? $statuses->first() : null;
+    }
+
+    /**
      * Recalculate order status based on item statuses
      */
     public function recalculateOrderStatus(): void
@@ -288,25 +300,25 @@ class Order extends Model
         $currentStatus = DB::table('orders')->where('id', $this->id)->value('order_status');
         $newStatus = $currentStatus;
 
-        // Logic: Calculate aggregate status
+        // Logic: Calculate aggregate status (earliest active state when mixed)
         if ($statusCounts[self::STATUS_CANCELLED] === $totalItems) {
             // All items cancelled
             $newStatus = self::STATUS_CANCELLED;
         } elseif ($statusCounts[self::STATUS_DELIVERED] === $totalItems) {
             // All items delivered
             $newStatus = self::STATUS_DELIVERED;
-        } elseif ($statusCounts[self::STATUS_DELIVERED] > 0 && $statusCounts[self::STATUS_CANCELLED] > 0) {
-            // Some delivered, some cancelled - use "shipped" as intermediate
-            $newStatus = self::STATUS_SHIPPED;
-        } elseif ($statusCounts[self::STATUS_SHIPPED] > 0 || $statusCounts[self::STATUS_DELIVERED] > 0) {
-            // At least one item shipped or delivered
-            $newStatus = self::STATUS_SHIPPED;
-        } elseif ($statusCounts[self::STATUS_PENDING] === $totalItems) {
-            // All items pending
+        } elseif ($statusCounts[self::STATUS_PENDING] > 0) {
+            // Any pending keeps the order at Pending
             $newStatus = self::STATUS_PENDING;
-        } else {
-            // Mixed states - default to shipped if any progress made
+        } elseif ($statusCounts[self::STATUS_SHIPPED] > 0) {
+            // No pending, at least one shipped (others may be delivered/cancelled) => Shipped
             $newStatus = self::STATUS_SHIPPED;
+        } elseif ($statusCounts[self::STATUS_DELIVERED] > 0) {
+            // Mixed delivered/cancelled with no shipped/pending => Delivered (earliest among present)
+            $newStatus = self::STATUS_DELIVERED;
+        } else {
+            // Fallback
+            $newStatus = $currentStatus ?? self::STATUS_PENDING;
         }
 
         // Only update if status changed

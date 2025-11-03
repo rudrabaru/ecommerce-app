@@ -18,12 +18,24 @@ class ProviderDashboardController extends Controller
 
         $stats = [
             'total_products' => Product::where('provider_id', $providerId)->count(),
-            // Orders table stores multiple providers in JSON column provider_ids
-            'total_orders' => Order::whereJsonContains('provider_ids', $providerId)->count(),
-            'pending_orders' => Order::whereJsonContains('provider_ids', $providerId)
+            // Use existence of provider's items to count orders robustly
+            'total_orders' => Order::whereExists(function($q) use ($providerId){
+                    $q->selectRaw('1')->from('order_items')
+                      ->whereColumn('order_items.order_id', 'orders.id')
+                      ->where('order_items.provider_id', $providerId);
+                })->count(),
+            'pending_orders' => Order::whereExists(function($q) use ($providerId){
+                    $q->selectRaw('1')->from('order_items')
+                      ->whereColumn('order_items.order_id', 'orders.id')
+                      ->where('order_items.provider_id', $providerId);
+                })
                 ->whereIn('order_status', ['pending', 'confirmed'])
                 ->count(),
-            'completed_orders' => Order::whereJsonContains('provider_ids', $providerId)
+            'completed_orders' => Order::whereExists(function($q) use ($providerId){
+                    $q->selectRaw('1')->from('order_items')
+                      ->whereColumn('order_items.order_id', 'orders.id')
+                      ->where('order_items.provider_id', $providerId);
+                })
                 ->whereIn('order_status', ['delivered', 'completed'])
                 ->count(),
         ];
@@ -38,7 +50,11 @@ class ProviderDashboardController extends Controller
         $providerId = Auth::id();
 
         $orders = Order::with(['user', 'orderItems.product', 'orderItems.provider'])
-            ->whereJsonContains('provider_ids', $providerId)
+            ->whereExists(function($q) use ($providerId){
+                $q->selectRaw('1')->from('order_items')
+                  ->whereColumn('order_items.order_id', 'orders.id')
+                  ->where('order_items.provider_id', $providerId);
+            })
             ->latest('id')
             ->limit(5)
             ->get()

@@ -28,7 +28,17 @@
                             <hr>
                             
                             <!-- Order Items -->
-                            <h6 class="mb-3">Order Items:</h6>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="mb-0">Order Items:</h6>
+                                @if($order->order_status === 'pending')
+                                    <button type="button" 
+                                            class="btn btn-danger btn-sm" 
+                                            onclick="cancelOrder({{ $order->id }})"
+                                            id="cancelBtn{{ $order->id }}">
+                                        <i class="fas fa-times"></i> Cancel Order
+                                    </button>
+                                @endif
+                            </div>
                             @foreach($order->orderItems as $item)
                                 <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
                                     <div class="d-flex align-items-center flex-grow-1">
@@ -56,14 +66,6 @@
                                     </div>
                                     <div class="text-end">
                                         <div class="fw-bold">${{ number_format((float)$item->total, 2) }}</div>
-                                        @if(auth()->user()->hasRole('user') && $item->order_status === 'pending')
-                                            <button type="button" 
-                                                    class="btn btn-danger btn-sm mt-2" 
-                                                    onclick="cancelOrderItem({{ $order->id }}, {{ $item->id }})"
-                                                    id="cancelItemBtn{{ $item->id }}">
-                                                <i class="fas fa-times"></i> Cancel Item
-                                            </button>
-                                        @endif
                                     </div>
                                 </div>
                             @endforeach
@@ -189,87 +191,5 @@ function cancelOrder(orderId) {
     }
 }
 
-function cancelOrderItem(orderId, itemId) {
-    const btn = document.getElementById('cancelItemBtn' + itemId);
-    const originalText = btn.innerHTML;
-    
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            title: 'Cancel Item?',
-            text: 'Are you sure you want to cancel this item? This action cannot be undone.',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            confirmButtonText: 'Yes, cancel it!',
-            cancelButtonText: 'No, keep it'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                btn.disabled = true;
-                btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Cancelling...';
-                
-                fetch('/user/orders/' + orderId + '/items/' + itemId + '/cancel', {
-                    method: 'POST',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                        'Content-Type': 'application/json'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Item Cancelled',
-                            text: data.message || 'The item has been cancelled successfully.',
-                            timer: 2000,
-                            showConfirmButton: false
-                        }).then(() => {
-                            location.reload();
-                        });
-                    } else {
-                        Swal.fire('Error', data.message || 'Failed to cancel item', 'error');
-                        btn.disabled = false;
-                        btn.innerHTML = originalText;
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    Swal.fire('Error', 'An error occurred while cancelling the item', 'error');
-                    btn.disabled = false;
-                    btn.innerHTML = originalText;
-                });
-            }
-        });
-    } else {
-        if (confirm('Are you sure you want to cancel this item?')) {
-            btn.disabled = true;
-            fetch('/user/orders/' + orderId + '/items/' + itemId + '/cancel', {
-                method: 'POST',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Item cancelled successfully');
-                    location.reload();
-                } else {
-                    alert(data.message || 'Failed to cancel item');
-                    btn.disabled = false;
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred');
-                btn.disabled = false;
-            });
-        }
-    }
-}
-
 window.cancelOrder = cancelOrder;
-window.cancelOrderItem = cancelOrderItem;
 </script>

@@ -20,7 +20,14 @@ class SendOrderShippedNotification implements ShouldQueue
         $order = $event->order;
         
         if ($order->user && $order->user->email) {
-            Mail::to($order->user->email)->send(new OrderShippedMail($order));
+            try {
+                // Queue mail to respect provider limits; swallow transport rate-limit exceptions
+                Mail::to($order->user->email)->queue(new OrderShippedMail($order));
+            } catch (\Throwable $e) {
+                \Log::warning('OrderShipped mail throttled or failed: '.$e->getMessage(), [
+                    'order_id' => $order->id,
+                ]);
+            }
         }
     }
 }

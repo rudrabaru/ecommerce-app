@@ -57,12 +57,11 @@ class CheckoutController extends Controller
             });
         }
 
-        $addresses = $user->addresses()->with(['country', 'state', 'city'])->where('type', 'shipping')->orderBy('created_at', 'asc')->get();
-        
-        // Check if user has at least one shipping address
-        if ($addresses->count() == 0) {
-            return redirect()->route('profile')->with('error', 'Please add a shipping address before checkout.');
-        }
+        // Allow checkout page to open even if user has no saved shipping address yet.
+        // Users can add a new address from the checkout "Add Address" modal.
+        $addresses = $user
+            ? $user->addresses()->with(['country', 'state', 'city'])->where('type', 'shipping')->orderBy('created_at', 'asc')->get()
+            : collect();
         
         $paymentMethods = PaymentMethod::getActiveMethods();
 
@@ -399,7 +398,7 @@ class CheckoutController extends Controller
         DB::transaction(function () use ($validated, $userId) {
             $orders = Order::whereIn('id', $validated['order_ids'])
                 ->where('user_id', $userId)
-                ->where('status', 'pending')
+                ->where('order_status', 'pending')
                 ->get();
 
             foreach ($orders as $order) {

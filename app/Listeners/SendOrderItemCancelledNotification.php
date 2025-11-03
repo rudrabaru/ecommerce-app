@@ -17,11 +17,7 @@ class SendOrderItemCancelledNotification implements ShouldQueue
      */
     public function handle(OrderItemCancelled $event): void
     {
-        $orderItem = $event->orderItem;
-        $order = $orderItem->order;
-        
-        if ($order && $order->user && $order->user->email) {
-            Mail::to($order->user->email)->send(new OrderItemCancelledMail($orderItem));
-        }
+        // Suppress per-item emails; a single email is sent when the order status changes at the order level
+        return;
     }
 }

@@ -230,7 +230,7 @@
                     window.DataTableInstances['orders-table'] = $('#orders-table').DataTable({
                         processing: true,
                         serverSide: true,
-                        ajax: ajaxUrl,
+                        ajax: { url: ajaxUrl, cache: false },
                         columns: [
                             { data: 'id', name: 'id', width: '60px' },
                             { data: 'order_number', name: 'order_number' },
@@ -723,32 +723,38 @@
                 });
             });
             
-            // Update status dropdown options based on role and current status (for edit modal)
+            // Update status dropdown: always show all statuses but disable invalid transitions for the current role/state
             function updateStatusDropdown(currentStatus) {
                 const statusSelect = $('#order_status');
                 const isAdmin = window.location.pathname.includes('/admin/');
                 const isProvider = window.location.pathname.includes('/provider/');
-                
-                statusSelect.empty();
-                statusSelect.append('<option value="' + currentStatus + '" selected>' + currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1) + '</option>');
-                
-                if (isAdmin) {
-                    // Admin can set any status
-                    const allStatuses = ['pending', 'shipped', 'delivered', 'cancelled'];
-                    allStatuses.forEach(function(status) {
-                        if (status !== currentStatus) {
-                            statusSelect.append('<option value="' + status + '">' + status.charAt(0).toUpperCase() + status.slice(1) + '</option>');
-                        }
-                    });
-                } else if (isProvider) {
-                    // Provider: pending → shipped, shipped → delivered, pending → cancelled
-                    if (currentStatus === 'pending') {
-                        statusSelect.append('<option value="shipped">Shipped</option>');
-                        statusSelect.append('<option value="cancelled">Cancelled</option>');
-                    } else if (currentStatus === 'shipped') {
-                        statusSelect.append('<option value="delivered">Delivered</option>');
+                const allStatuses = ['pending', 'shipped', 'delivered', 'cancelled'];
+
+                function isAllowed(target) {
+                    if (isAdmin) {
+                        // Admin cannot revert from delivered
+                        if (currentStatus === 'delivered') return false;
+                        return target !== currentStatus;
                     }
+                    if (isProvider) {
+                        if (currentStatus === 'pending') {
+                            return target === 'shipped' || target === 'cancelled';
+                        }
+                        if (currentStatus === 'shipped') {
+                            return target === 'delivered';
+                        }
+                        return false;
+                    }
+                    // User cannot change here (UI read-only)
+                    return false;
                 }
+
+                statusSelect.empty();
+                allStatuses.forEach(function(status){
+                    const selected = (status === currentStatus) ? ' selected' : '';
+                    const disabled = (!isAllowed(status) && !selected) ? ' disabled' : '';
+                    statusSelect.append('<option value="' + status + '"'+selected+disabled+'>' + status.charAt(0).toUpperCase() + status.slice(1) + '</option>');
+                });
             }
 
             // initial bootstrap

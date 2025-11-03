@@ -383,9 +383,15 @@ class OrdersController extends Controller
     {
         $query = Order::query()->with(['user', 'orderItems.product', 'orderItems.provider']);
 
-        // Role-based filtering via orders.provider_ids (JSON array)
+        // Role-based filtering: for providers, ensure visibility by existence of items for that provider
         if (Auth::user()->hasRole('provider')) {
-            $query->whereJsonContains('provider_ids', Auth::id());
+            $providerId = Auth::id();
+            $query->whereExists(function ($q) use ($providerId) {
+                $q->selectRaw('1')
+                  ->from('order_items')
+                  ->whereColumn('order_items.order_id', 'orders.id')
+                  ->where('order_items.provider_id', $providerId);
+            });
         }
 
         return $dataTables->eloquent($query)
@@ -399,7 +405,10 @@ class OrdersController extends Controller
                     if ($item->product) {
                         $imageUrl = $item->product->image_url;
                         $fallback = 'https://placehold.co/60x60?text=%20';
-                        $statusBadge = '<span class="badge badge-sm ' . $item->getStatusBadgeClass() . '">' . $item->getStatusDisplayName() . '</span>';
+                        // Provider view should NOT display item-level status badges in products column
+                        $statusBadge = Auth::user()->hasRole('provider')
+                            ? ''
+                            : '<span class="badge badge-sm ' . $item->getStatusBadgeClass() . '">' . $item->getStatusDisplayName() . '</span>';
                         
                         $itemHtml = '<div class="d-flex align-items-center justify-content-between mb-2 p-2 border rounded">';
                         $itemHtml .= '<div class="d-flex align-items-center">';
@@ -414,7 +423,9 @@ class OrdersController extends Controller
                         }
                         $itemHtml .= '</div>';
                         $itemHtml .= '</div>';
-                        $itemHtml .= '<div>' . $statusBadge . '</div>';
+                        if (!empty($statusBadge)) {
+                            $itemHtml .= '<div>' . $statusBadge . '</div>';
+                        }
                         $itemHtml .= '</div>';
                         
                         return $itemHtml;
@@ -442,13 +453,20 @@ class OrdersController extends Controller
             })
             ->editColumn('order_status', function ($row) {
                 $order = Order::find($row->id);
-                if ($order) {
-                    $status = $order->order_status;
-                    $cls = $order->getStatusBadgeClass();
-                    return '<span class="badge rounded-pill ' . $cls . '">' . $order->getStatusDisplayName() . '</span>';
+                if (!$order) {
+                    $status = $row->order_status ?? 'pending';
+                    return '<span class="badge rounded-pill bg-secondary">' . ucfirst($status) . '</span>';
                 }
-                $status = $row->order_status ?? 'pending';
-                return '<span class="badge rounded-pill bg-secondary">' . ucfirst($status) . '</span>';
+
+                if (Auth::user() && Auth::user()->hasRole('provider')) {
+                    $providerId = Auth::id();
+                    $items = $order->orderItems->where('provider_id', $providerId);
+                    [$status, $cls] = $this->aggregateStatusForItems($items);
+                    return '<span class="badge rounded-pill ' . $cls . '">' . ucfirst($status) . '</span>';
+                }
+
+                $cls = $order->getStatusBadgeClass();
+                return '<span class="badge rounded-pill ' . $cls . '">' . $order->getStatusDisplayName() . '</span>';
             })
             ->addColumn('shipping_address', function($row){
                 return $row->shipping_address ? e($row->shipping_address) : '-';
@@ -521,6 +539,39 @@ class OrdersController extends Controller
             })
             ->rawColumns(['actions', 'order_status', 'products'])
             ->toJson();
+    }
+
+    /**
+     * Aggregate item statuses for a set of items according to earliest-active rule.
+     */
+    private function aggregateStatusForItems($items): array
+    {
+        $counts = [
+            Order::STATUS_PENDING => 0,
+            Order::STATUS_SHIPPED => 0,
+            Order::STATUS_DELIVERED => 0,
+            Order::STATUS_CANCELLED => 0,
+        ];
+        foreach ($items as $it) {
+            $st = $it->order_status ?? Order::STATUS_PENDING;
+            if (isset($counts[$st])) { $counts[$st]++; }
+        }
+        $total = max(1, $items->count());
+
+        if ($counts[Order::STATUS_CANCELLED] === $total) {
+            return [Order::STATUS_CANCELLED, 'bg-danger'];
+        }
+        if ($counts[Order::STATUS_DELIVERED] === $total) {
+            return [Order::STATUS_DELIVERED, 'bg-success'];
+        }
+        if ($counts[Order::STATUS_PENDING] > 0) {
+            return [Order::STATUS_PENDING, 'bg-warning'];
+        }
+        if ($counts[Order::STATUS_SHIPPED] > 0) {
+            return [Order::STATUS_SHIPPED, 'bg-primary'];
+        }
+        // fallback
+        return [Order::STATUS_PENDING, 'bg-warning'];
     }
 
     /**
@@ -639,42 +690,96 @@ class OrdersController extends Controller
         }
 
         $newStatus = $validated['order_status'];
-        
-        if ($order->order_status === $newStatus) {
+
+        // Provider: update only their own items in this order (group action)
+        if (Auth::user()->hasRole('provider')) {
+            $providerId = Auth::id();
+            $items = $order->orderItems()->where('provider_id', $providerId)->get();
+
+            if ($items->isEmpty()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No items for this provider in the order.'
+                ], 404);
+            }
+
+            // Validate transitions for all items first
+            foreach ($items as $item) {
+                if (!$item->canTransitionTo($newStatus)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Status transition not allowed for one or more items.'
+                    ], 403);
+                }
+            }
+
+            // Perform transitions
+            foreach ($items as $item) {
+                $item->transitionTo($newStatus);
+            }
+
+            // Optional notes update on order
+            if (isset($validated['notes'])) {
+                $order->update(['notes' => $validated['notes']]);
+            }
+
+            // Recalculate parent order status and, if uniform, transition order (fires single email)
+            $order->recalculateOrderStatus();
+            $order->refresh();
+            if ($uniform = $order->getUniformItemStatus()) {
+                if ($uniform !== $order->order_status) {
+                    $order->transitionTo($uniform);
+                }
+            }
             return response()->json([
                 'success' => true,
-                'message' => 'Order status unchanged',
-                'order' => $order->fresh()
+                'message' => 'Provider items updated successfully',
+                'order' => $order->load(['user','orderItems.product','orderItems.provider'])
             ]);
         }
 
-        if (!$order->canTransitionTo($newStatus)) {
+        // Admin: update all items to the requested status (cannot revert delivered)
+        if (Auth::user()->hasRole('admin')) {
+            $items = $order->orderItems()->get();
+
+            foreach ($items as $item) {
+                if (!$item->canTransitionTo($newStatus)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Status transition not allowed for at least one item (e.g., cannot revert from Delivered).'
+                    ], 403);
+                }
+            }
+
+            foreach ($items as $item) {
+                $item->transitionTo($newStatus);
+            }
+
+            if (isset($validated['notes'])) {
+                $order->update(['notes' => $validated['notes']]);
+            }
+
+            // After bulk change, recalc and transition order once (single email)
+            $order->recalculateOrderStatus();
+            $order->refresh();
+            if ($order->order_status !== $newStatus) {
+                // If recalculated status differs and matches newStatus, transition
+                if ($order->getUniformItemStatus() === $newStatus) {
+                    $order->transitionTo($newStatus);
+                }
+            }
             return response()->json([
-                'success' => false,
-                'message' => 'Status transition not allowed. Current status: ' . $order->order_status
-            ], 403);
+                'success' => true,
+                'message' => 'Order items updated successfully',
+                'order' => $order->load(['user','orderItems.product','orderItems.provider'])
+            ]);
         }
 
-        $oldStatus = $order->order_status;
-        $success = $order->transitionTo($newStatus);
-
-        if (!$success) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update order status'
-            ], 500);
-        }
-
-        // Update notes if provided
-        if (isset($validated['notes'])) {
-            $order->update(['notes' => $validated['notes']]);
-        }
-
+        // Fallback: role not supported here
         return response()->json([
-            'success' => true,
-            'message' => 'Order status updated successfully',
-            'order' => $order->fresh()->load(['user', 'orderItems.product'])
-        ]);
+            'success' => false,
+            'message' => 'Operation not permitted for this role.'
+        ], 403);
     }
 
     private function authorizeView(Order $order): void
