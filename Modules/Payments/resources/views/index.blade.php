@@ -245,6 +245,7 @@
                 const id = $(this).data('id');
                 deletePayment(id);
             });
+            if (window.bindCrudModal) { window.bindCrudModal('paymentModal', function(){ openPaymentModal(null); }); }
         });
 
         // Re-initialize on AJAX page load
@@ -257,6 +258,7 @@
                     openPaymentModal(paymentId);
                 });
             }
+            if (window.bindCrudModal) { window.bindCrudModal('paymentModal', function(){ openPaymentModal(null); }); }
         });
 
         function savePayment() {

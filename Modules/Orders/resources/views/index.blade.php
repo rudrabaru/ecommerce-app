@@ -639,6 +639,7 @@
                 
                 // Load modal data on page load
                 loadModalData();
+                if (window.bindCrudModal) { window.bindCrudModal('orderModal', function(){ openOrderModal(null); }); }
             });
 
             // Re-initialize on AJAX page load
@@ -657,6 +658,7 @@
                 
                 // Reload modal data
                 loadModalData();
+                if (window.bindCrudModal) { window.bindCrudModal('orderModal', function(){ openOrderModal(null); }); }
             });
 
             // Save handler

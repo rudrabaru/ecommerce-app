@@ -164,6 +164,7 @@
                 fileNameDisplayId: 'fileName',
                 imagePreviewId: 'imagePreview'
             });
+            if (window.bindCrudModal) { window.bindCrudModal('productModal', function(){ openProductModal(null); }); }
         });
         
         // Re-initialize on AJAX page load
@@ -184,6 +185,7 @@
                     }
                 });
             }
+            if (window.bindCrudModal) { window.bindCrudModal('productModal', function(){ openProductModal(null); }); }
         });
 
         // DataTable is now initialized globally - no need for individual initialization

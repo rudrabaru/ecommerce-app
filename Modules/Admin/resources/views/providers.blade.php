@@ -539,6 +539,7 @@
                 }
             });
         }
+        if (window.bindCrudModal) { window.bindCrudModal('providerModal', function(){ openProviderModal(null); }); }
     });
     
     // Re-initialize on AJAX page load
@@ -552,6 +553,7 @@
                 }
             });
         }
+        if (window.bindCrudModal) { window.bindCrudModal('providerModal', function(){ openProviderModal(null); }); }
     });
     </script>
 </x-app-layout>

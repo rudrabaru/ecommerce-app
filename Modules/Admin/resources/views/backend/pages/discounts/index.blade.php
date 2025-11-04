@@ -199,6 +199,7 @@
                     }
                 });
             }
+            if (window.bindCrudModal) { window.bindCrudModal('discountModal', function(){ openDiscountModal(null); }); }
         });
 
         // Re-initialize on AJAX page load
@@ -219,6 +220,7 @@
                     }
                 });
             }
+            if (window.bindCrudModal) { window.bindCrudModal('discountModal', function(){ openDiscountModal(null); }); }
         });
 
         // Add category button handler

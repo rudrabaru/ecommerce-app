@@ -565,6 +565,8 @@ class OrdersController extends Controller
                 }
                 
                 $btns .= '</div>'; 
+                // 🧩 TEMP DEBUG: check if data-id and HTML are correct
+                dd($row->id, $btns);
                 return $btns;
             })
             ->rawColumns(['actions', 'order_status', 'products'])

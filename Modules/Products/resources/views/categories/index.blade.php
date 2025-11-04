@@ -298,6 +298,7 @@
             $('#image').on('change', function(){
                 validateCategoryForm();
             });
+            if (window.bindCrudModal) { window.bindCrudModal('categoryModal', function(){ openCategoryModal(null); }); }
         });
     </script>
 </x-app-layout>

@@ -507,6 +507,40 @@
         </script>
         
         <script>
+            // Global helper to bind CRUD modals consistently
+            (function(){
+                // Binds a modal to trigger the supplied onCreate callback when opened via a create button
+                // It re-binds on initial load and after AJAX page swaps
+                function bind(modalId, onCreate){
+                    var modal = document.getElementById(modalId);
+                    if (!modal || typeof onCreate !== 'function') return;
+
+                    // Avoid stacking multiple listeners
+                    if (modal.__crudBindAttached) return;
+                    modal.__crudBindAttached = true;
+
+                    modal.addEventListener('show.bs.modal', function(event){
+                        var button = event.relatedTarget;
+                        if (!button) return;
+                        if (button.dataset && button.dataset.action === 'create') {
+                            try { onCreate(); } catch(e){ console.error('bindCrudModal onCreate error:', e); }
+                        }
+                    });
+                }
+
+                // Public API
+                window.bindCrudModal = function(modalId, onCreate){
+                    // Bind now (in case modal already exists in DOM)
+                    bind(modalId, onCreate);
+                    // Rebind after AJAX navigations (modal element persists)
+                    window.addEventListener('ajaxPageLoaded', function(){
+                        setTimeout(function(){ bind(modalId, onCreate); }, 0);
+                    });
+                };
+            })();
+        </script>
+        
+        <script>
             // Global delegated delete handler and generic modal validation
             (function(){
                 function reloadAllTables(){

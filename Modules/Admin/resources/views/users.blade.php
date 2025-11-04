@@ -530,6 +530,7 @@
                 }
             });
         }
+        if (window.bindCrudModal) { window.bindCrudModal('userModal', function(){ openUserModal(null); }); }
     });
     
     // Re-initialize on AJAX page load
@@ -543,6 +544,7 @@
                 }
             });
         }
+        if (window.bindCrudModal) { window.bindCrudModal('userModal', function(){ openUserModal(null); }); }
     });
     </script>
 </x-app-layout>
