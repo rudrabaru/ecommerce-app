@@ -160,183 +160,225 @@
 
     @push('scripts')
         <script>
-        // AJAX-powered Payments DataTable
-        function initPaymentsTable() {
-            console.log('initPaymentsTable called');
+        // Ensure function is available on window immediately
+        window.openPaymentModal = window.openPaymentModal || function() {};
+        
+        // DataTable is now initialized globally - no need for custom initialization
+        
+        // Open payment modal function (reassign to ensure it's available)
+        window.openPaymentModal = function(paymentId = null) {
+            const form = document.getElementById('paymentForm');
+            const modalTitle = document.getElementById('paymentModalLabel');
             
-            if (!$('#payments-table').length) {
-                console.log('Payments table element not found');
-                return null;
-            }
+            // Reset form
+            form.reset();
+            document.querySelectorAll('.form-control').forEach(el => {
+                el.classList.remove('is-invalid');
+            });
             
-            if ($.fn.DataTable.isDataTable('#payments-table')) {
-                console.log('Destroying existing payments table');
-                try {
-                    $('#payments-table').DataTable().destroy();
-                } catch (e) {
-                    console.log('Error destroying existing table:', e);
+            if (paymentId) {
+                // Edit mode
+                modalTitle.textContent = 'Edit Payment';
+                document.getElementById('paymentMethod').value = 'PUT';
+                document.getElementById('paymentId').value = paymentId;
+                
+                // Hide currency field for edit
+                const currencyField = document.getElementById('currency');
+                if (currencyField) {
+                    currencyField.disabled = true;
+                    currencyField.required = false;
+                    currencyField.closest('.mb-3').style.display = 'none';
+                }
+                
+                // Load payment data
+                const prefix = window.location.pathname.includes('/admin/') ? 'admin' : 'provider';
+                fetch(`/${prefix}/payments/${paymentId}/edit`, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(response => response.json())
+                .then(p => {
+                    document.getElementById('order_id').value = p.order_id || '';
+                    document.getElementById('payment_method_id').value = p.payment_method_id || '';
+                    document.getElementById('amount').value = p.amount || '';
+                    document.getElementById('status').value = p.status || 'pending';
+                })
+                .catch(error => {
+                    console.error('Error loading payment:', error);
+                    if (window.Swal) Swal.fire('Error', 'Failed to load payment data', 'error');
+                });
+            } else {
+                // Create mode
+                modalTitle.textContent = 'Create Payment';
+                document.getElementById('paymentMethod').value = 'POST';
+                document.getElementById('paymentId').value = '';
+                
+                // Show currency field for create
+                const currencyField = document.getElementById('currency');
+                if (currencyField) {
+                    currencyField.disabled = false;
+                    currencyField.closest('.mb-3').style.display = 'block';
                 }
             }
-            
-            $('#payments-table').empty();
-            
-            const tableHtml = `
-                <thead class="table-light">
-                    <tr>
-                        <th data-column="id" data-width="60px">ID</th>
-                        <th data-column="order_id">Order ID</th>
-                        <th data-column="amount">Amount</th>
-                        <th data-column="status">Status</th>
-                        <th data-column="created_at">Created At</th>
-                        <th data-column="actions" data-orderable="false" data-searchable="false">Actions</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            `;
-            
-            $('#payments-table').html(tableHtml);
+        };
 
-            const paymentsTable = $('#payments-table').DataTable({
-                processing: true,
-                serverSide: true,
-                ajax: {
-                    url: $('#payments-table').data('dt-url'),
-                    type: 'GET',
-                    error: function(xhr, error, thrown) {
-                        console.error('DataTable AJAX error:', error, thrown);
-                        if (window.Swal) {
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Error',
-                                text: 'Failed to load payments data'
-                            });
+        // Initialize modal behavior
+        document.addEventListener('DOMContentLoaded', function() {
+            const paymentModal = document.getElementById('paymentModal');
+            if (paymentModal) {
+                paymentModal.addEventListener('show.bs.modal', function(event) {
+                    const button = event.relatedTarget;
+                    if (button) {
+                        // Get payment ID from data-payment-id, data-id, or onclick
+                        const paymentId = button.getAttribute('data-payment-id') || button.getAttribute('data-id');
+                        // openPaymentModal is already called via onclick, but ensure it's set
+                        if (paymentId && !button.dataset.action) {
+                            // Edit mode - already handled by onclick
+                        } else if (button.dataset.action === 'create') {
+                            openPaymentModal(null);
                         }
                     }
-                },
-                pageLength: $('#payments-table').data('dt-page-length') || 25,
-                order: JSON.parse($('#payments-table').attr('data-dt-order') || '[[0, "desc"]]'),
-                stateSave: true,
-                stateDuration: 60 * 60 * 24,
-                columns: [
-                    { data: 'id', name: 'id' },
-                    { data: 'order_number', name: 'order_number' },
-                    { data: 'payment_method', name: 'payment_method' },
-                    { data: 'amount', name: 'amount' },
-                    { data: 'status', name: 'status' },
-                    { data: 'created_at', name: 'created_at' },
-                    { data: 'actions', name: 'actions', orderable: false, searchable: false }
-                ],
-                drawCallback: function(settings) {
-                    console.log('Payments DataTable drawCallback executed');
-                    $('[data-bs-toggle="tooltip"]').tooltip();
-                },
-                language: {
-                    processing: '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>',
-                    emptyTable: 'No payments found',
-                    zeroRecords: 'No matching payments found'
-                },
-                responsive: true,
-                autoWidth: false,
-                initComplete: function() {
-                    console.log('Payments DataTable initialization complete');
-                }
-            });
-
-            window.paymentsTable = paymentsTable;
-            console.log('Payments table initialized successfully:', paymentsTable);
-            return paymentsTable;
-        }
-
-        $(document).ready(function() {
-            console.log('Payments.js document ready');
-            
-            if ($('#payments-table').length && !$.fn.DataTable.isDataTable('#payments-table')) {
-                console.log('Auto-initializing payments table');
-                initPaymentsTable();
+                });
             }
 
             // Delegated handlers for actions
-            $(document).on('click', '.js-payment-edit', function(){
-                const id = $(this).data('id');
-                openPaymentModal(id);
-                const modal = new bootstrap.Modal(document.getElementById('paymentModal'));
-                modal.show();
-            });
             $(document).on('click', '.js-payment-delete', function(){
                 const id = $(this).data('id');
                 deletePayment(id);
             });
         });
 
-        window.initPaymentsTable = initPaymentsTable;
-
-        // CRUD helpers for payments
-        function openPaymentModal(paymentId = null) {
-            $('#paymentForm')[0].reset();
-            $('#paymentId').val('');
-            $('#paymentMethod').val('POST');
-            if (paymentId) {
-                $('#paymentModalLabel').text('Edit Payment');
-                $('#paymentMethod').val('PUT');
-                $('#paymentId').val(paymentId);
-                // Hide/disable currency for edit
-                $('#currency').prop('disabled', true).prop('required', false).closest('.mb-3').hide();
-                fetch(`/{{ auth()->user()->hasRole('admin') ? 'admin' : 'provider' }}/payments/${paymentId}/edit`, {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                })
-                .then(r=>r.json())
-                .then(p=>{
-                    $('#order_id').val(p.order_id);
-                    $('#payment_method_id').val(p.payment_method_id);
-                    $('#amount').val(p.amount);
-                    $('#status').val(p.status);
+        // Re-initialize on AJAX page load
+        window.addEventListener('ajaxPageLoaded', function() {
+            const paymentModal = document.getElementById('paymentModal');
+            if (paymentModal) {
+                paymentModal.addEventListener('show.bs.modal', function(event) {
+                    const button = event.relatedTarget;
+                    const paymentId = button ? button.getAttribute('data-payment-id') : null;
+                    openPaymentModal(paymentId);
                 });
-            } else {
-                $('#paymentModalLabel').text('Create Payment');
             }
-        }
+        });
 
         function savePayment() {
             const form = document.getElementById('paymentForm');
             const formData = new FormData(form);
-            const paymentId = $('#paymentId').val();
-            let url = "/{{ auth()->user()->hasRole('admin') ? 'admin' : 'provider' }}/payments";
-            if (paymentId) { url += `/${paymentId}`; }
+            const paymentId = document.getElementById('paymentId').value;
+            const prefix = window.location.pathname.includes('/admin/') ? 'admin' : 'provider';
+            
+            let url = `/${prefix}/payments`;
+            if (paymentId) { 
+                url += `/${paymentId}`;
+                formData.append('_method', 'PUT');
+            }
+            
             fetch(url, {
                 method: 'POST',
                 body: formData,
-                headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') }
-            })
-            .then(r=>r.json()).then(data=>{
-                if (data.success) {
-                    $('#paymentModal').modal('hide');
-                    $('#payments-table').DataTable().ajax.reload(null, false);
-                    Swal.fire('Success', data.message, 'success');
-                } else {
-                    Swal.fire('Error', data.message || 'Validation error', 'error');
+                headers: { 
+                    'X-Requested-With': 'XMLHttpRequest', 
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content 
                 }
-            }).catch(()=> Swal.fire('Error','An error occurred','error'));
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('paymentModal'));
+                    if (modal) modal.hide();
+                    
+                    // Reload DataTable using global function
+                    window.reloadDataTable('payments-table');
+                    
+                    if (window.Swal) {
+                        Swal.fire('Success', data.message || 'Payment saved successfully', 'success');
+                    } else {
+                        alert(data.message || 'Payment saved successfully');
+                    }
+                } else {
+                    // Show validation errors
+                    if (data.errors) {
+                        Object.keys(data.errors).forEach(key => {
+                            const input = document.getElementById(key) || document.querySelector(`[name="${key}"]`);
+                            if (input) {
+                                input.classList.add('is-invalid');
+                                const feedback = input.nextElementSibling;
+                                if (feedback && feedback.classList.contains('invalid-feedback')) {
+                                    feedback.textContent = data.errors[key][0];
+                                }
+                            }
+                        });
+                    }
+                    
+                    if (window.Swal) {
+                        Swal.fire('Error', data.message || 'Validation error', 'error');
+                    } else {
+                        alert(data.message || 'Validation error');
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error saving payment:', error);
+                if (window.Swal) {
+                    Swal.fire('Error', 'An error occurred while saving', 'error');
+                } else {
+                    alert('An error occurred while saving');
+                }
+            });
         }
 
         function deletePayment(id) {
-            Swal.fire({ title:'Are you sure?', icon:'warning', showCancelButton:true }).then(res=>{
+            const confirmFn = window.Swal ?
+                () => Swal.fire({
+                    title: 'Are you sure?',
+                    text: 'This action cannot be undone.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',
+                    confirmButtonText: 'Yes, delete it!'
+                }) :
+                () => Promise.resolve({ isConfirmed: window.confirm('Are you sure you want to delete this payment?') });
+            
+            confirmFn().then(res => {
                 if (!res.isConfirmed) return;
-                fetch(`/{{ auth()->user()->hasRole('admin') ? 'admin' : 'provider' }}/payments/${id}`, {
+                
+                const prefix = window.location.pathname.includes('/admin/') ? 'admin' : 'provider';
+                fetch(`/${prefix}/payments/${id}`, {
                     method: 'DELETE',
-                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') }
-                }).then(r=>r.json()).then(data=>{
+                    headers: { 
+                        'X-Requested-With': 'XMLHttpRequest', 
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content 
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
                     if (data.success) {
-                        $('#payments-table').DataTable().ajax.reload();
-                        Swal.fire('Deleted', data.message, 'success');
+                        // Reload DataTable using global function
+                        window.reloadDataTable('payments-table');
+                        
+                        if (window.Swal) {
+                            Swal.fire('Deleted!', data.message || 'Payment deleted successfully', 'success');
+                        } else {
+                            alert(data.message || 'Payment deleted successfully');
+                        }
                     } else {
-                        Swal.fire('Error', data.message || 'Failed to delete', 'error');
+                        if (window.Swal) {
+                            Swal.fire('Error', data.message || 'Failed to delete payment', 'error');
+                        } else {
+                            alert(data.message || 'Failed to delete payment');
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error deleting payment:', error);
+                    if (window.Swal) {
+                        Swal.fire('Error', 'Failed to delete payment', 'error');
+                    } else {
+                        alert('Failed to delete payment');
                     }
                 });
             });
         }
 
         // Expose helpers for inline onclick handlers
-        window.openPaymentModal = openPaymentModal;
         window.savePayment = savePayment;
         window.deletePayment = deletePayment;
         </script>

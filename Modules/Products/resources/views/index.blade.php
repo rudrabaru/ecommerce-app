@@ -4,7 +4,7 @@
             <h1 class="mb-0">Products</h1>
             <div>
                 @if(auth()->user()->hasRole('provider') || auth()->user()->hasRole('admin'))
-                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#productModal">
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#productModal" data-action="create">
                         <i class="fas fa-plus"></i> Create Product
                     </button>
                 @endif
@@ -134,14 +134,29 @@
 
     <script src="{{ asset('js/image-preview-handler.js') }}"></script>
     <script>
+        // Ensure function is available on window immediately
+        window.openProductModal = window.openProductModal || function() {};
+        
         // Initialize modal behavior
         document.addEventListener('DOMContentLoaded', function() {
             const productModal = document.getElementById('productModal');
-            productModal.addEventListener('show.bs.modal', function(event) {
-                const button = event.relatedTarget;
-                const productId = button.getAttribute('data-product-id');
-                openProductModal(productId);
-            });
+            if (productModal) {
+                productModal.addEventListener('show.bs.modal', function(event) {
+                    const button = event.relatedTarget;
+                    if (button) {
+                        // Check if create button (has data-action="create")
+                        if (button.dataset.action === 'create') {
+                            openProductModal(null);
+                        } else {
+                            // Edit button - get product ID from data-id attribute or onclick parameter
+                            const productId = button.getAttribute('data-id') || button.getAttribute('data-product-id');
+                            if (productId) {
+                                openProductModal(productId);
+                            }
+                        }
+                    }
+                });
+            }
             
             // Reusable image handler
             window.ImagePreviewHandler?.setupFileInput({
@@ -149,6 +164,26 @@
                 fileNameDisplayId: 'fileName',
                 imagePreviewId: 'imagePreview'
             });
+        });
+        
+        // Re-initialize on AJAX page load
+        window.addEventListener('ajaxPageLoaded', function() {
+            const productModal = document.getElementById('productModal');
+            if (productModal) {
+                productModal.addEventListener('show.bs.modal', function(event) {
+                    const button = event.relatedTarget;
+                    if (button) {
+                        if (button.dataset.action === 'create') {
+                            openProductModal(null);
+                        } else {
+                            const productId = button.getAttribute('data-id') || button.getAttribute('data-product-id');
+                            if (productId) {
+                                openProductModal(productId);
+                            }
+                        }
+                    }
+                });
+            }
         });
 
         // DataTable is now initialized globally - no need for individual initialization
@@ -185,21 +220,24 @@
                 })
                 .then(response => response.json())
                 .then(data => {
-                    $('#title').val(data.title);
-                    $('#description').val(data.description);
-                    $('#price').val(data.price);
-                    $('#stock').val(data.stock);
-                    $('#category_id').val(data.category_id);
+                    // Handle both response structures: {product: {...}} or direct product object
+                    const product = data.product || data;
+                    
+                    $('#title').val(product.title || '');
+                    $('#description').val(product.description || '');
+                    $('#price').val(product.price || '');
+                    $('#stock').val(product.stock || '');
+                    $('#category_id').val(product.category_id || '');
                     
                     // Prefill provider dropdown if admin
-                    if (data.provider_id) {
-                        $('#provider_id').val(data.provider_id);
+                    if (product.provider_id) {
+                        $('#provider_id').val(product.provider_id);
                     }
                     
                     // Show current image and file name
-                    if (data.image) {
+                    if (product.image) {
                         window.ImagePreviewHandler?.showExistingImage({
-                            imagePath: data.image,
+                            imagePath: product.image,
                             fileNameDisplayId: 'fileName',
                             imagePreviewId: 'imagePreview',
                             defaultText: 'Product Image',
@@ -257,11 +295,17 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    $('#productModal').modal('hide');
-                    if (window.DataTableInstances['products-table']) {
-                        window.DataTableInstances['products-table'].ajax.reload();
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('productModal'));
+                    if (modal) modal.hide();
+                    
+                    // Reload DataTable using global function
+                    window.reloadDataTable('products-table');
+                    
+                    if (window.Swal) {
+                        Swal.fire('Success', data.message || 'Product saved successfully!', 'success');
+                    } else {
+                        alert(data.message || 'Product saved successfully!');
                     }
-                    Swal.fire('Success', data.message || 'Product saved successfully!', 'success');
                 } else {
                     // Handle validation errors
                     if (data.errors) {
@@ -306,10 +350,14 @@
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            if (window.DataTableInstances['products-table']) {
-                                window.DataTableInstances['products-table'].ajax.reload();
+                            // Reload DataTable using global function
+                            window.reloadDataTable('products-table');
+                            
+                            if (window.Swal) {
+                                Swal.fire('Deleted!', data.message || 'Product deleted successfully!', 'success');
+                            } else {
+                                alert(data.message || 'Product deleted successfully!');
                             }
-                            Swal.fire('Deleted!', data.message || 'Product deleted successfully!', 'success');
                         } else {
                             Swal.fire('Error', data.message || 'Error deleting product.', 'error');
                         }

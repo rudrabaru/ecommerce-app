@@ -555,7 +555,7 @@ class OrdersController extends Controller
                 }
                 
                 // Edit button
-                $btns .= '<button class="btn btn-sm btn-outline-primary edit-order" data-id="'.$row->id.'" data-local-modal="1" title="Edit">';
+                $btns .= '<button class="btn btn-sm btn-outline-primary edit-order" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#orderModal" title="Edit" onclick="openOrderModal('.$row->id.')">';
                 $btns .= '<i class="fas fa-pencil-alt"></i></button>';
                 
                 // Delete button (admin only)
@@ -619,6 +619,47 @@ class OrdersController extends Controller
      * Aggregate item statuses for a set of items according to earliest-active rule.
      */
     
+
+    /**
+     * Return products and discounts for modal (Admin & Provider).
+     */
+    public function modalData(Request $request)
+    {
+        $user = Auth::user();
+        
+        // Load products - filtered by provider if user is provider
+        if ($user->hasRole('provider')) {
+            $products = \Modules\Products\Models\Product::where('provider_id', $user->id)
+                ->select('id', 'title', 'price', 'category_id', 'provider_id')
+                ->get();
+        } else {
+            $products = \Modules\Products\Models\Product::select('id', 'title', 'price', 'category_id', 'provider_id')
+                ->get();
+        }
+        
+        // Load active discounts - admin only
+        $discounts = [];
+        if ($user->hasRole('admin')) {
+            $discounts = DiscountCode::active()->validNow()->notExceededUsage()
+                ->get()
+                ->map(function ($d) {
+                    return [
+                        'id' => $d->id,
+                        'code' => $d->code,
+                        'discount_type' => $d->discount_type,
+                        'discount_value' => (float) $d->discount_value,
+                        'minimum_order_amount' => $d->minimum_order_amount ? (float) $d->minimum_order_amount : null,
+                        'category_ids' => $d->categories()->pluck('categories.id')->all(),
+                    ];
+                });
+        }
+        
+        return response()->json([
+            'success' => true,
+            'products' => $products,
+            'discounts' => $discounts,
+        ]);
+    }
 
     /**
      * Return eligible discount codes for the given products (Admin only).

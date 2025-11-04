@@ -3,8 +3,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="mb-0">Orders</h1>
             <div>
-                <!-- Local-only create trigger: remove bootstrap auto-toggle so page-local JS controls the modal opening -->
-                <button type="button" class="btn btn-primary" data-action="create" data-local-modal="1">
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#orderModal" data-action="create">
                     <i class="fas fa-plus"></i> Create Order
                 </button>
             </div>
@@ -196,55 +195,104 @@
     @push('scripts')
     <script>
         (function(){
-            // Preload products & discounts as JSON for modal population (fetched server-side at render time)
-            @php
-                $__orders_modal_products = auth()->user()->hasRole('provider') ? \Modules\Products\Models\Product::where('provider_id', auth()->id())->get() : \Modules\Products\Models\Product::all();
-                $__orders_modal_discounts = \App\Models\DiscountCode::active()->validNow()->notExceededUsage()->get();
-                // Build light payload with category_ids for provider-side client filtering
-                $__orders_modal_discounts_payload = $__orders_modal_discounts->map(function($d){
-                    return [
-                        'id' => $d->id,
-                        'code' => $d->code,
-                        'discount_type' => $d->discount_type,
-                        'discount_value' => (float) $d->discount_value,
-                        'minimum_order_amount' => $d->minimum_order_amount ? (float) $d->minimum_order_amount : null,
-                        'category_ids' => $d->categories()->pluck('categories.id')->all(),
-                    ];
-                });
-            @endphp
-            var PRODUCTS = {!! $__orders_modal_products->toJson() !!};
-            var DISCOUNTS = {!! $__orders_modal_discounts_payload->toJson() !!};
+            // Ensure function is available on window immediately
+            window.openOrderModal = window.openOrderModal || function() {};
+            
+            // Load products & discounts via AJAX instead of pre-loading
+            var PRODUCTS = [];
+            var DISCOUNTS = [];
             var ELIGIBLE_DISCOUNTS = [];
             var PROVIDER_PREFILL_DISCOUNT = null; // if set, provider modal uses this discount amount from server
 
-            function initDataTable(){
-                if ($('#orders-table').length && !$.fn.DataTable.isDataTable('#orders-table')) {
-                    const ajaxUrl = window.location.pathname.includes('/admin/') ? '/admin/orders/data' : '/provider/orders/data';
-                    window.DataTableInstances = window.DataTableInstances || {};
-                    window.DataTableInstances['orders-table'] = $('#orders-table').DataTable({
-                        processing: true,
-                        serverSide: true,
-                        ajax: ajaxUrl,
-                        columns: [
-                            { data: 'id', name: 'id', width: '60px' },
-                            { data: 'order_number', name: 'order_number' },
-                            { data: 'customer_name', name: 'customer_name' },
-                            { data: 'products', name: 'products', orderable: false },
-                            { data: 'total', name: 'total', width: '100px' },
-                            { data: 'order_status', name: 'order_status', width: '100px' },
-                            { data: 'shipping_address', name: 'shipping_address' },
-                            { data: 'notes', name: 'notes' },
-                            { data: 'discount_code', name: 'discount_code' },
-                            { data: 'discount_amount', name: 'discount_amount' },
-                            { data: 'created_at', name: 'created_at', width: '150px' },
-                            { data: 'actions', name: 'actions', orderable: false, searchable: false, width: '150px' }
-                        ],
-                        order: [[0, 'desc']],
-                        pageLength: 25,
-                        responsive: true
+            // Load products and discounts via AJAX
+            function loadModalData() {
+                return new Promise(function(resolve, reject) {
+                    const prefix = window.location.pathname.includes('/admin/') ? 'admin' : 'provider';
+                    
+                    // Load products
+                    fetch(`/${prefix}/orders/modal-data`, {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            PRODUCTS = data.products || [];
+                            DISCOUNTS = data.discounts || [];
+                            resolve();
+                        } else {
+                            reject(new Error('Failed to load modal data'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading modal data:', error);
+                        // Fallback: load products/discounts directly
+                        loadProductsAndDiscounts().then(resolve).catch(reject);
                     });
-                }
+                });
             }
+
+            // Fallback: Load products and discounts separately (if modal-data fails)
+            function loadProductsAndDiscounts() {
+                return new Promise(function(resolve, reject) {
+                const prefix = window.location.pathname.includes('/admin/') ? 'admin' : 'provider';
+                
+                    // Load products via DataTables endpoint
+                    fetch(`/${prefix}/products/data`, {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        // Extract products from DataTables response
+                        if (data.data && Array.isArray(data.data)) {
+                            PRODUCTS = data.data.map(function(p) {
+                                return {
+                                    id: p.id,
+                                    title: p.title || p.name,
+                                    price: parseFloat(p.price) || 0,
+                                    category_id: p.category_id || null,
+                                    provider_id: p.provider_id || null
+                                };
+                            });
+                        }
+                        
+                        // Load discounts (admin only)
+                        if (window.location.pathname.includes('/admin/')) {
+                            return fetch('/admin/discount-codes/data', {
+                                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                // Extract discounts from DataTables response
+                                if (data.data && Array.isArray(data.data)) {
+                                    DISCOUNTS = data.data
+                                        .filter(function(d) { return d.is_active === 'Active'; })
+                                        .map(function(d) {
+                                            return {
+                                                id: d.id,
+                                                code: d.code,
+                                                discount_type: d.discount_type,
+                                                discount_value: parseFloat(d.discount_value) || 0,
+                                                minimum_order_amount: d.minimum_order_amount ? parseFloat(d.minimum_order_amount) : null,
+                                                category_ids: d.category_ids || []
+                                            };
+                                        });
+                                }
+                            })
+                            .catch(() => {
+                                DISCOUNTS = [];
+                            });
+                        }
+                    })
+                    .then(() => resolve())
+                    .catch(() => {
+                        PRODUCTS = [];
+                        DISCOUNTS = [];
+                        resolve(); // Resolve anyway so modal can still open
+                    });
+                });
+            }
+
+            // DataTable is now initialized globally - no need for custom initialization
 
             function buildProductOptions(selectedId){
                 var html = '<option value="">Select Product</option>';
@@ -278,7 +326,11 @@
             function renderOrderItems(items){
                 var tbody = document.getElementById('orderItemsBody');
                 tbody.innerHTML = '';
-                if (!items || items.length === 0){ addOrderItemRow(); return; }
+                // Always show at least one product dropdown row
+                if (!items || items.length === 0){ 
+                    addOrderItemRow(); 
+                    return; 
+                }
                 items.forEach(function(it){ addOrderItemRow({ product_id: it.product_id, quantity: it.quantity, total: it.total }); });
             }
 
@@ -476,68 +528,135 @@
                 }
             }
 
-            // Open create modal
-            $(document).on('click', '[data-action="create"]', function(){
+            // Open modal function
+            window.openOrderModal = function(orderId = null) {
                 $('#orderForm')[0].reset();
-                $('#orderMethod').val('POST');
-                $('#orderId').val('');
-                $('#orderModalLabel').text('Create Order');
-                renderOrderItems([]);
-                populateDiscounts();
-                loadEligibleDiscounts();
-                PROVIDER_PREFILL_DISCOUNT = null;
+                $('.form-control').removeClass('is-invalid');
                 
-                // Reset status dropdown to show all options for create
-                updateStatusDropdownForCreate();
+                if (orderId) {
+                    // Edit mode
+                    $('#orderModalLabel').text('Edit Order');
+                    $('#orderMethod').val('PUT');
+                    $('#orderId').val(orderId);
+                    
+                    const prefix = window.location.pathname.includes('/admin/') ? 'admin' : 'provider';
+                    fetch(`/${prefix}/orders/${orderId}`, {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    })
+                    .then(response => response.json())
+                    .then(o => {
+                        if (o.user_id) $('#user_id').val(o.user_id);
+                        if (o.order_status) {
+                            $('#order_status').val(o.order_status);
+                            updateStatusDropdownForEdit(o.order_status);
+                        }
+                        if (o.shipping_address) $('#shipping_address').val(o.shipping_address);
+                        if (o.notes) $('#notes').val(o.notes);
+                        
+                        const rawItems = (o.order_items || o.orderItems || []);
+                        let items = rawItems.map(function(it){ 
+                            return { 
+                                product_id: it.product_id, 
+                                quantity: it.quantity, 
+                                total: it.total, 
+                                line_discount: (it.line_discount || 0) 
+                            }; 
+                        });
+                        
+                        if (window.location.pathname.includes('/provider/')) {
+                            items = items.filter(function(it){ 
+                                return PRODUCTS.some(function(p){ return p.id == it.product_id; }); 
+                            });
+                        }
+                        
+                        renderOrderItems(items);
+                        populateDiscounts();
+                        
+                        if (window.location.pathname.includes('/admin/')) {
+                            setTimeout(function(){
+                                loadEligibleDiscounts(o.discount_code || '');
+                            }, 0);
+                        } else {
+                            const providerDiscount = items.reduce(function(s,it){ 
+                                return s + (parseFloat(it.line_discount)||0); 
+                            }, 0);
+                            PROVIDER_PREFILL_DISCOUNT = providerDiscount;
+                            const providerHasDiscount = providerDiscount > 0;
+                            $('#discount_code').val(providerHasDiscount ? (o.discount_code || '') : '');
+                            computeTotals();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading order:', error);
+                        if (window.Swal) Swal.fire('Error', 'Failed to load order data', 'error');
+                    });
+                } else {
+                    // Create mode
+                    $('#orderModalLabel').text('Create Order');
+                    $('#orderMethod').val('POST');
+                    $('#orderId').val('');
+                    
+                    // Ensure products are loaded before rendering items
+                    if (PRODUCTS.length === 0) {
+                        loadModalData().then(function() {
+                            renderOrderItems([]);
+                            populateDiscounts();
+                            loadEligibleDiscounts();
+                            PROVIDER_PREFILL_DISCOUNT = null;
+                            updateStatusDropdownForCreate();
+                        });
+                    } else {
+                        renderOrderItems([]);
+                        populateDiscounts();
+                        loadEligibleDiscounts();
+                        PROVIDER_PREFILL_DISCOUNT = null;
+                        updateStatusDropdownForCreate();
+                    }
+                }
+            };
+
+            // Initialize modal behavior
+            document.addEventListener('DOMContentLoaded', function() {
+                const orderModal = document.getElementById('orderModal');
+                if (orderModal) {
+                    orderModal.addEventListener('show.bs.modal', function(event) {
+                        const button = event.relatedTarget;
+                        if (button) {
+                            // Check if create button (has data-action="create")
+                            if (button.dataset.action === 'create') {
+                                openOrderModal(null);
+                            } else {
+                                // Edit button - get order ID from data-id attribute or onclick
+                                const orderId = button.getAttribute('data-id');
+                                if (orderId) {
+                                    // openOrderModal is already called via onclick, but we ensure it's set
+                                    // The onclick handler will handle the actual opening
+                                }
+                            }
+                        }
+                    });
+                }
                 
-                var modal = new bootstrap.Modal(document.getElementById('orderModal'));
-                modal.show();
+                // Load modal data on page load
+                loadModalData();
             });
 
-            // Edit modal - fetch data via show endpoint
-            $(document).on('click', '.edit-order', function(e){
-                e.preventDefault();
-                var id = $(this).data('id');
-                var prefix = window.location.pathname.includes('/admin/') ? 'admin' : 'provider';
-                $('#orderForm')[0].reset();
-                $('#orderMethod').val('PUT');
-                $('#orderId').val(id);
-                $('#orderModalLabel').text('Edit Order');
-                fetch('/'+prefix+'/orders/'+id, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); }).then(function(o){
-                    if (o.user_id) $('#user_id').val(o.user_id);
-                    if (o.order_status) {
-                        $('#order_status').val(o.order_status);
-                        // Update status dropdown based on role and current status
-                        updateStatusDropdownForEdit(o.order_status);
-                    }
-                    if (o.shipping_address) $('#shipping_address').val(o.shipping_address);
-                    if (o.notes) $('#notes').val(o.notes);
-                    // orderItems may be relation objects
-                    var rawItems = (o.order_items || o.orderItems || []);
-                    var items = rawItems.map(function(it){ return { product_id: it.product_id, quantity: it.quantity, total: it.total, line_discount: (it.line_discount || 0) }; });
-                    if (window.location.pathname.includes('/provider/')){
-                        // Keep only this provider's products in the modal
-                        items = items.filter(function(it){ return PRODUCTS.some(function(p){ return p.id == it.product_id; }); });
-                    }
-                    renderOrderItems(items);
-                    populateDiscounts();
-                    if (window.location.pathname.includes('/admin/')){
-                        setTimeout(function(){
-                            loadEligibleDiscounts(o.discount_code || '');
-                            // computeTotals will be called inside loadEligibleDiscounts after selection
-                        }, 0);
-                    } else {
-                        // Prefill discount amount from server for this provider
-                        var providerDiscount = items.reduce(function(s,it){ return s + (parseFloat(it.line_discount)||0); }, 0);
-                        PROVIDER_PREFILL_DISCOUNT = providerDiscount;
-                        var providerHasDiscount = providerDiscount > 0;
-                        $('#discount_code').val(providerHasDiscount ? (o.discount_code || '') : '');
-                        // Recompute totals using server discount
-                        computeTotals();
-                    }
-                    var modal = new bootstrap.Modal(document.getElementById('orderModal'));
-                    modal.show();
-                }).catch(function(){ var modal = new bootstrap.Modal(document.getElementById('orderModal')); modal.show(); });
+            // Re-initialize on AJAX page load
+            window.addEventListener('ajaxPageLoaded', function() {
+                const orderModal = document.getElementById('orderModal');
+                if (orderModal) {
+                    orderModal.addEventListener('show.bs.modal', function(event) {
+                        const button = event.relatedTarget;
+                        if (button) {
+                            if (button.dataset.action === 'create') {
+                                openOrderModal(null);
+                            }
+                        }
+                    });
+                }
+                
+                // Reload modal data
+                loadModalData();
             });
 
             // Save handler
@@ -560,26 +679,10 @@
                         var modalEl = document.getElementById('orderModal');
                         var modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
                         modal.hide();
-                        // Reload DataTable while preserving pagination and filters
-                        if (window.DataTableInstances && window.DataTableInstances['orders-table']){
-                            const table = window.DataTableInstances['orders-table'];
-                            const currentPage = table.page();
-                            const currentSearch = table.search();
-                            const currentOrder = table.order();
-                            const currentLength = table.page.len();
-                            
-                            table.ajax.reload(function(json) {
-                                if (currentLength) table.page.len(currentLength);
-                                if (json.recordsTotal > 0) {
-                                    const totalPages = Math.ceil(json.recordsTotal / table.page.len());
-                                    const targetPage = currentPage[0] < totalPages ? currentPage[0] : 0;
-                                    table.page(targetPage);
-                                }
-                                if (currentSearch) table.search(currentSearch);
-                                if (currentOrder && currentOrder.length > 0) table.order(currentOrder);
-                                table.draw(false);
-                            }, false);
-                        }
+                        
+                        // Reload DataTable using global function
+                        window.reloadDataTable('orders-table');
+                        
                         Swal.fire('Success', data.message || 'Order saved', 'success');
                     } else {
                         Swal.fire('Error', data.message || 'Validation error', 'error');
@@ -725,32 +828,8 @@
                             $('.view-order-items[data-id="' + orderId + '"]').click();
                         }
                         
-                        // Reload DataTable while preserving current page and filters
-                        if (window.DataTableInstances && window.DataTableInstances['orders-table']) {
-                            const table = window.DataTableInstances['orders-table'];
-                            const currentPage = table.page();
-                            const currentSearch = table.search();
-                            const currentOrder = table.order();
-                            const currentLength = table.page.len();
-                            
-                            table.ajax.reload(function(json) {
-                                if (currentLength) {
-                                    table.page.len(currentLength);
-                                }
-                                if (json.recordsTotal > 0) {
-                                    const totalPages = Math.ceil(json.recordsTotal / table.page.len());
-                                    const targetPage = currentPage[0] < totalPages ? currentPage[0] : 0;
-                                    table.page(targetPage);
-                                }
-                                if (currentSearch) {
-                                    table.search(currentSearch);
-                                }
-                                if (currentOrder && currentOrder.length > 0) {
-                                    table.order(currentOrder);
-                                }
-                                table.draw(false);
-                            }, false);
-                        }
+                        // Reload DataTable using global function
+                        window.reloadDataTable('orders-table');
                         
                         Swal.fire({
                             icon: 'success',
@@ -798,32 +877,8 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        // Reload DataTable while preserving current page and filters
-                        if (window.DataTableInstances && window.DataTableInstances['orders-table']) {
-                            const table = window.DataTableInstances['orders-table'];
-                            const currentPage = table.page();
-                            const currentSearch = table.search();
-                            const currentOrder = table.order();
-                            const currentLength = table.page.len();
-                            
-                            table.ajax.reload(function(json) {
-                                if (currentLength) {
-                                    table.page.len(currentLength);
-                                }
-                                if (json.recordsTotal > 0) {
-                                    const totalPages = Math.ceil(json.recordsTotal / table.page.len());
-                                    const targetPage = currentPage[0] < totalPages ? currentPage[0] : 0;
-                                    table.page(targetPage);
-                                }
-                                if (currentSearch) {
-                                    table.search(currentSearch);
-                                }
-                                if (currentOrder && currentOrder.length > 0) {
-                                    table.order(currentOrder);
-                                }
-                                table.draw(false);
-                            }, false);
-                        }
+                        // Reload DataTable using global function
+                        window.reloadDataTable('orders-table');
                         
                         Swal.fire({
                             icon: 'success',
@@ -844,9 +899,8 @@
                 });
             });
 
-            // initial bootstrap
+            // Initial setup
             $(document).ready(function(){ 
-                initDataTable(); 
                 populateDiscounts(); 
                 updateSaveEnabled(); 
                 computeTotals(); 

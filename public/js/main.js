@@ -25,9 +25,14 @@
             $('.filter__controls li').removeClass('active');
             $(this).addClass('active');
         });
-        if ($('.product__filter').length > 0) {
+        if ($('.product__filter').length > 0 && typeof window.mixitup === 'function') {
             var containerEl = document.querySelector('.product__filter');
-            var mixer = mixitup(containerEl);
+            try {
+                var mixer = window.mixitup(containerEl);
+            } catch (e) {
+                // Fail open on pages without MixItUp assets
+                // console.warn('MixItUp init skipped:', e);
+            }
         }
     });
 
@@ -53,10 +58,12 @@
     /*------------------
 		Navigation
 	--------------------*/
-    $(".mobile-menu").slicknav({
-        prependTo: '#mobile-menu-wrap',
-        allowParentLinks: true
-    });
+    if ($.fn && typeof $.fn.slicknav === 'function') {
+        $(".mobile-menu").slicknav({
+            prependTo: '#mobile-menu-wrap',
+            allowParentLinks: true
+        });
+    }
 
     /*------------------
         Accordin Active

@@ -110,32 +110,10 @@ $(document).ready(function() {
             console.log('Initializing page:', page);
             
             switch(page) {
-                case 'users':
-                    if ($('#users-table').length) {
-                        console.log('Initializing users table...');
-                        if (typeof window.initUsersTable === 'function') {
-                            window.usersTable = window.initUsersTable();
-                            console.log('Users table initialized:', window.usersTable);
-                        } else {
-                            console.error('initUsersTable function not found');
-                        }
-                    }
-                    break;
-                    
-                case 'providers':
-                    if ($('#providers-table').length) {
-                        console.log('Initializing providers table...');
-                        if (typeof window.initProvidersTable === 'function') {
-                            window.providersTable = window.initProvidersTable();
-                            console.log('Providers table initialized:', window.providersTable);
-                        } else {
-                            console.error('initProvidersTable function not found');
-                        }
-                    }
-                    break;
-                    
+                // DataTables are now initialized globally via initializeDataTables() in app.blade.php
+                // No page-specific initialization needed
                 default:
-                    console.log('No specific initialization needed for page:', page);
+                    console.log('Page loaded:', page);
                     break;
             }
         },
@@ -236,20 +214,6 @@ $(document).ready(function() {
     // Initialize admin state management
     AdminState.init();
     
-    // Global table management functions
-    window.initUsersTableGlobal = function() {
-        if ($('#users-table').length && !$.fn.DataTable.isDataTable('#users-table')) {
-            if (typeof window.initUsersTable === 'function') {
-                window.usersTable = window.initUsersTable();
-            }
-        }
-    };
-    
-    window.initProvidersTableGlobal = function() {
-        if ($('#providers-table').length && !$.fn.DataTable.isDataTable('#providers-table')) {
-            if (typeof window.initProvidersTable === 'function') {
-                window.providersTable = window.initProvidersTable();
-            }
-        }
-    };
+    // DataTables are now initialized globally via initializeDataTables() in app.blade.php
+    // No global wrapper functions needed
 });
