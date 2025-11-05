@@ -72,7 +72,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="discountSaveBtn" onclick="saveDiscount()">
+                <button type="button" class="btn btn-primary saveBtn" id="discountSaveBtn" data-module="discounts">
                     <span class="spinner-border spinner-border-sm d-none" id="discountSpinner" role="status" aria-hidden="true"></span>
                     Save
                 </button>

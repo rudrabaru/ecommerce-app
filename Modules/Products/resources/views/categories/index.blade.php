@@ -3,7 +3,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="mb-0">Categories</h1>
             <div>
-                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#categoryModal" onclick="openCategoryModal()">
+                <button type="button" class="btn btn-primary createBtn" data-module="categories">
                     <i class="fas fa-plus"></i> Create Category
                 </button>
             </div>
@@ -82,7 +82,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="saveCategoryBtn" onclick="saveCategory()" disabled>
+                    <button type="button" class="btn btn-primary saveBtn" id="saveCategoryBtn" data-module="categories" disabled>
                         <span class="spinner-border spinner-border-sm d-none" id="categorySaveSpinner" role="status" aria-hidden="true"></span>
                         Save Category
                     </button>

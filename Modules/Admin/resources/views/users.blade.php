@@ -3,7 +3,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="mb-0">Users</h1>
             <div class="d-flex align-items-center gap-2">
-                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#userModal" data-action="create" data-modal="userModal">
+                <button type="button" class="btn btn-primary createBtn" data-module="users">
                     <i class="fas fa-plus"></i> Create User
                 </button>
                 
@@ -86,7 +86,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="saveUserBtn" onclick="saveUser()" disabled>
+                    <button type="button" class="btn btn-primary saveBtn" id="saveUserBtn" data-module="users" disabled>
                         <span class="spinner-border spinner-border-sm d-none" id="userSaveSpinner" role="status" aria-hidden="true"></span>
                         Save User
                     </button>

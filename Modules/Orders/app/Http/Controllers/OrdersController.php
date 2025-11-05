@@ -555,7 +555,7 @@ class OrdersController extends Controller
                 }
                 
                 // Edit button
-                $btns .= '<button class="btn btn-sm btn-outline-primary edit-order" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#orderModal" title="Edit" onclick="openOrderModal('.$row->id.')">';
+                $btns .= '<button class="btn btn-sm btn-outline-primary editBtn" data-module="orders" data-id="'.$row->id.'" title="Edit">';
                 $btns .= '<i class="fas fa-pencil-alt"></i></button>';
                 
                 // Delete button (admin only)
@@ -565,8 +565,6 @@ class OrdersController extends Controller
                 }
                 
                 $btns .= '</div>'; 
-                // 🧩 TEMP DEBUG: check if data-id and HTML are correct
-                dd($row->id, $btns);
                 return $btns;
             })
             ->rawColumns(['actions', 'order_status', 'products'])

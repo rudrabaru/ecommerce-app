@@ -64,9 +64,9 @@ class PaymentsController extends Controller
             })
             ->addColumn('actions', function ($row) {
                 $btns = '<div class="btn-group" role="group">';
-                $btns .= '<button class="btn btn-sm btn-outline-primary js-payment-edit" title="Edit" data-id="'.$row->id.'" data-payment-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#paymentModal" onclick="openPaymentModal('.$row->id.')">';
+                $btns .= '<button class="btn btn-sm btn-outline-primary editBtn" title="Edit" data-module="payments" data-id="'.$row->id.'">';
                 $btns .= '<i class="fas fa-pencil-alt"></i></button>';
-                $btns .= '<button class="btn btn-sm btn-outline-danger js-payment-delete" title="Delete" data-id="'.$row->id.'">';
+                $btns .= '<button class="btn btn-sm btn-outline-danger deleteBtn" data-module="payments" data-id="'.$row->id.'" title="Delete">';
                 $btns .= '<i class="fas fa-trash"></i></button>';
                 $btns .= '</div>';
                 return $btns;

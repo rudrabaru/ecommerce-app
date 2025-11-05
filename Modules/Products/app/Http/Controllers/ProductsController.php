@@ -258,7 +258,7 @@ class ProductsController extends Controller
             ->addColumn('actions', function ($row) {
                 $isAdmin = Auth::user()->hasRole('admin');
                 $btns = '<div class="btn-group" role="group">';
-                $btns .= '<button class="btn btn-sm btn-outline-primary edit-product" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#productModal" onclick="openProductModal('.$row->id.')" title="Edit Product">';
+                $btns .= '<button class="btn btn-sm btn-outline-primary editBtn" data-module="products" data-id="'.$row->id.'" title="Edit Product">';
                 $btns .= '<i class="fas fa-pencil-alt"></i></button>';
                 $btns .= '<button class="btn btn-sm btn-outline-danger delete-product js-delete" data-id="'.$row->id.'" data-delete-url="'.(Auth::user()->hasRole('admin') ? route('admin.products.destroy', $row->id) : route('provider.products.destroy', $row->id)).'" title="Delete Product">';
                 $btns .= '<i class="fas fa-trash"></i></button>';

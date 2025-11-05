@@ -166,6 +166,7 @@
         // DataTable is now initialized globally - no need for custom initialization
         
         // Open payment modal function (reassign to ensure it's available)
+        // Returns a promise for async operations
         window.openPaymentModal = function(paymentId = null) {
             const form = document.getElementById('paymentForm');
             const modalTitle = document.getElementById('paymentModalLabel');
@@ -177,7 +178,7 @@
             });
             
             if (paymentId) {
-                // Edit mode
+                // Edit mode - return promise
                 modalTitle.textContent = 'Edit Payment';
                 document.getElementById('paymentMethod').value = 'PUT';
                 document.getElementById('paymentId').value = paymentId;
@@ -190,9 +191,9 @@
                     currencyField.closest('.mb-3').style.display = 'none';
                 }
                 
-                // Load payment data
+                // Load payment data - return promise
                 const prefix = window.location.pathname.includes('/admin/') ? 'admin' : 'provider';
-                fetch(`/${prefix}/payments/${paymentId}/edit`, {
+                return fetch(`/${prefix}/payments/${paymentId}/edit`, {
                     headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 })
                 .then(response => response.json())
@@ -201,13 +202,15 @@
                     document.getElementById('payment_method_id').value = p.payment_method_id || '';
                     document.getElementById('amount').value = p.amount || '';
                     document.getElementById('status').value = p.status || 'pending';
+                    return true;
                 })
                 .catch(error => {
                     console.error('Error loading payment:', error);
                     if (window.Swal) Swal.fire('Error', 'Failed to load payment data', 'error');
+                    return false;
                 });
             } else {
-                // Create mode
+                // Create mode - return resolved promise
                 modalTitle.textContent = 'Create Payment';
                 document.getElementById('paymentMethod').value = 'POST';
                 document.getElementById('paymentId').value = '';
@@ -218,47 +221,19 @@
                     currencyField.disabled = false;
                     currencyField.closest('.mb-3').style.display = 'block';
                 }
+                return Promise.resolve(true);
             }
         };
 
         // Initialize modal behavior
         document.addEventListener('DOMContentLoaded', function() {
-            const paymentModal = document.getElementById('paymentModal');
-            if (paymentModal) {
-                paymentModal.addEventListener('show.bs.modal', function(event) {
-                    const button = event.relatedTarget;
-                    if (button) {
-                        // Get payment ID from data-payment-id, data-id, or onclick
-                        const paymentId = button.getAttribute('data-payment-id') || button.getAttribute('data-id');
-                        // openPaymentModal is already called via onclick, but ensure it's set
-                        if (paymentId && !button.dataset.action) {
-                            // Edit mode - already handled by onclick
-                        } else if (button.dataset.action === 'create') {
-                            openPaymentModal(null);
-                        }
-                    }
-                });
-            }
-
-            // Delegated handlers for actions
-            $(document).on('click', '.js-payment-delete', function(){
-                const id = $(this).data('id');
-                deletePayment(id);
-            });
-            if (window.bindCrudModal) { window.bindCrudModal('paymentModal', function(){ openPaymentModal(null); }); }
+            // Note: Modal opening and delete actions are now handled by delegated handlers in crud-modals.js
+            // No need for show.bs.modal listener or custom delete handler anymore
         });
 
         // Re-initialize on AJAX page load
         window.addEventListener('ajaxPageLoaded', function() {
-            const paymentModal = document.getElementById('paymentModal');
-            if (paymentModal) {
-                paymentModal.addEventListener('show.bs.modal', function(event) {
-                    const button = event.relatedTarget;
-                    const paymentId = button ? button.getAttribute('data-payment-id') : null;
-                    openPaymentModal(paymentId);
-                });
-            }
-            if (window.bindCrudModal) { window.bindCrudModal('paymentModal', function(){ openPaymentModal(null); }); }
+            // Note: Modal opening is now handled by delegated handlers in crud-modals.js
         });
 
         function savePayment() {
@@ -443,7 +418,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="savePayment()">Save</button>
+                    <button type="button" class="btn btn-primary saveBtn" data-module="payments">Save</button>
                 </div>
             </div>
         </div>

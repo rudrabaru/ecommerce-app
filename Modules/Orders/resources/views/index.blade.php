@@ -3,7 +3,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="mb-0">Orders</h1>
             <div>
-                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#orderModal" data-action="create">
+                <button type="button" class="btn btn-primary createBtn" data-module="orders">
                     <i class="fas fa-plus"></i> Create Order
                 </button>
             </div>
@@ -144,7 +144,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="saveOrderBtn" disabled>
+                    <button type="button" class="btn btn-primary saveBtn" id="saveOrderBtn" data-module="orders" disabled>
                         <span class="spinner-border spinner-border-sm d-none" id="orderSaveSpinner" role="status" aria-hidden="true"></span>
                         Save Order
                     </button>
@@ -528,19 +528,19 @@
                 }
             }
 
-            // Open modal function
+            // Open modal function - returns a promise for async operations
             window.openOrderModal = function(orderId = null) {
                 $('#orderForm')[0].reset();
                 $('.form-control').removeClass('is-invalid');
                 
                 if (orderId) {
-                    // Edit mode
+                    // Edit mode - return promise so caller can wait for data to load
                     $('#orderModalLabel').text('Edit Order');
                     $('#orderMethod').val('PUT');
                     $('#orderId').val(orderId);
                     
                     const prefix = window.location.pathname.includes('/admin/') ? 'admin' : 'provider';
-                    fetch(`/${prefix}/orders/${orderId}`, {
+                    return fetch(`/${prefix}/orders/${orderId}`, {
                         headers: { 'X-Requested-With': 'XMLHttpRequest' }
                     })
                     .then(response => response.json())
@@ -585,20 +585,22 @@
                             $('#discount_code').val(providerHasDiscount ? (o.discount_code || '') : '');
                             computeTotals();
                         }
+                        return true; // Signal success
                     })
                     .catch(error => {
                         console.error('Error loading order:', error);
                         if (window.Swal) Swal.fire('Error', 'Failed to load order data', 'error');
+                        return false;
                     });
                 } else {
-                    // Create mode
+                    // Create mode - return resolved promise immediately
                     $('#orderModalLabel').text('Create Order');
                     $('#orderMethod').val('POST');
                     $('#orderId').val('');
                     
                     // Ensure products are loaded before rendering items
                     if (PRODUCTS.length === 0) {
-                        loadModalData().then(function() {
+                        return loadModalData().then(function() {
                             renderOrderItems([]);
                             populateDiscounts();
                             loadEligibleDiscounts();
@@ -611,58 +613,34 @@
                         loadEligibleDiscounts();
                         PROVIDER_PREFILL_DISCOUNT = null;
                         updateStatusDropdownForCreate();
+                        return Promise.resolve(true);
                     }
                 }
             };
 
             // Initialize modal behavior
             document.addEventListener('DOMContentLoaded', function() {
-                const orderModal = document.getElementById('orderModal');
-                if (orderModal) {
-                    orderModal.addEventListener('show.bs.modal', function(event) {
-                        const button = event.relatedTarget;
-                        if (button) {
-                            // Check if create button (has data-action="create")
-                            if (button.dataset.action === 'create') {
-                                openOrderModal(null);
-                            } else {
-                                // Edit button - get order ID from data-id attribute or onclick
-                                const orderId = button.getAttribute('data-id');
-                                if (orderId) {
-                                    // openOrderModal is already called via onclick, but we ensure it's set
-                                    // The onclick handler will handle the actual opening
-                                }
-                            }
-                        }
-                    });
-                }
-                
                 // Load modal data on page load
                 loadModalData();
-                if (window.bindCrudModal) { window.bindCrudModal('orderModal', function(){ openOrderModal(null); }); }
+                // Note: Modal opening is now handled by delegated handlers in crud-modals.js
+                // No need for show.bs.modal listener anymore
             });
 
             // Re-initialize on AJAX page load
             window.addEventListener('ajaxPageLoaded', function() {
-                const orderModal = document.getElementById('orderModal');
-                if (orderModal) {
-                    orderModal.addEventListener('show.bs.modal', function(event) {
-                        const button = event.relatedTarget;
-                        if (button) {
-                            if (button.dataset.action === 'create') {
-                                openOrderModal(null);
-                            }
-                        }
-                    });
-                }
-                
                 // Reload modal data
                 loadModalData();
-                if (window.bindCrudModal) { window.bindCrudModal('orderModal', function(){ openOrderModal(null); }); }
+                // Note: Modal opening is now handled by delegated handlers in crud-modals.js
             });
 
             // Save handler
             window.saveOrder = function(){
+                // Check if save button is disabled (validation check)
+                if ($('#saveOrderBtn').prop('disabled')){
+                    Swal.fire('Missing information', 'Please select a customer, add items, and fill shipping address.', 'warning');
+                    return;
+                }
+                
                 var form = document.getElementById('orderForm');
                 var formData = new FormData(form);
                 var items = gatherItems();
@@ -672,6 +650,13 @@
                 var url = '/'+prefix+'/orders' + (id ? '/'+id : '');
                 // If updating ensure method override
                 if (id) formData.set('_method','PUT');
+                
+                // Disable button and show spinner during save
+                var $saveBtn = $('#saveOrderBtn');
+                var $spinner = $('#orderSaveSpinner');
+                $saveBtn.prop('disabled', true);
+                $spinner.removeClass('d-none');
+                
                 fetch(url, {
                     method: 'POST',
                     body: formData,
@@ -689,13 +674,18 @@
                     } else {
                         Swal.fire('Error', data.message || 'Validation error', 'error');
                     }
-                }).catch(function(){ Swal.fire('Error','An error occurred','error'); });
+                }).catch(function(){ 
+                    Swal.fire('Error','An error occurred','error'); 
+                }).finally(function(){
+                    // Re-enable button and hide spinner
+                    $saveBtn.prop('disabled', false);
+                    $spinner.addClass('d-none');
+                    // Re-run validation to update button state
+                    updateSaveEnabled();
+                });
             };
 
-            // wire up save button to form submit
-            $('#saveOrderBtn').on('click', function(){ $('#orderForm').submit(); });
-
-            // ensure form submission triggers saveOrder
+            // Ensure form submission triggers saveOrder (for direct form submits)
             $('#orderForm').on('submit', function(e){
                 e.preventDefault();
                 updateSaveEnabled();
@@ -705,6 +695,9 @@
                 }
                 window.saveOrder();
             });
+            
+            // Note: Save button click is now handled by delegated handler in crud-modals.js
+            // The handler will call window.saveOrder() which checks validation and submits
 
             // View order items modal
             $(document).on('click', '.view-order-items', function(e) {

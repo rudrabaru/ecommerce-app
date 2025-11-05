@@ -3,7 +3,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="mb-0">Providers</h1>
             <div>
-                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#providerModal" data-action="create" data-modal="providerModal">
+                <button type="button" class="btn btn-primary createBtn" data-module="providers">
                     <i class="fas fa-plus"></i> Create Provider
                 </button>
             </div>
@@ -83,7 +83,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="saveProviderBtn" onclick="saveProvider()" disabled>
+                    <button type="button" class="btn btn-primary saveBtn" id="saveProviderBtn" data-module="providers" disabled>
                         <span class="spinner-border spinner-border-sm d-none" id="providerSaveSpinner" role="status" aria-hidden="true"></span>
                         Save Provider
                     </button>

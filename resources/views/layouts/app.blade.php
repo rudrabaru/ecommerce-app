@@ -644,5 +644,6 @@
         <!-- Address Management Scripts -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.7.32/sweetalert2.all.min.js"></script>
         <script src="{{ asset('js/address-edit.js') }}"></script>
+        <script src="{{ asset('js/crud-modals.js') }}"></script>
     </body>
 </html>

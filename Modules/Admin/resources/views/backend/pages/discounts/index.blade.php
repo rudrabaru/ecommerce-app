@@ -3,7 +3,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="mb-0">Discount Codes</h1>
             <div>
-                <button type="button" class="btn btn-primary" data-action="create" data-bs-toggle="modal" data-bs-target="#discountModal">
+                <button type="button" class="btn btn-primary createBtn" data-module="discounts">
                     <i class="fas fa-plus"></i> Create Discount Code
                 </button>
             </div>
@@ -122,6 +122,7 @@
         }
 
         // Single modal function for both create and edit (reassign to ensure it's available)
+        // Returns a promise for async operations
         window.openDiscountModal = function(discountId = null) {
             var $form = $('#discountForm');
             var $container = $('#categoriesContainer');
@@ -132,14 +133,14 @@
             $form.find('.invalid-feedback').text('');
             
             if (discountId) {
-                // Edit mode
+                // Edit mode - return promise
                 $('#discountModalLabel').text('Edit Discount');
                 $('#discountMethod').val('PUT');
                 $('#discountId').val(discountId);
                 $form[0].action = '/admin/discount-codes/' + discountId;
                 
-                // Load discount data
-                $.ajax({
+                // Load discount data - return promise
+                return $.ajax({
                     url: '/admin/discount-codes/' + discountId + '/edit',
                     headers: { 'X-Requested-With': 'XMLHttpRequest' },
                     cache: false
@@ -165,12 +166,15 @@
                     }
                     
                     // Populate categories with existing data
-                    populateCategoriesContainer($container, d.categories || []);
+                    return populateCategoriesContainer($container, d.categories || []);
+                }).then(function() {
+                    return true; // Signal success
                 }).catch(function() {
                     if (window.Swal) Swal.fire('Error', 'Failed to load discount data.', 'error');
+                    return false;
                 });
             } else {
-                // Create mode
+                // Create mode - return resolved promise
                 $('#discountModalLabel').text('Create Discount');
                 $('#discountMethod').val('POST');
                 $('#discountId').val('');
@@ -178,49 +182,19 @@
                 
                 // Always show at least one category dropdown
                 populateCategoriesContainer($container, []);
+                return Promise.resolve(true);
             }
         };
 
         // Initialize modal behavior
         document.addEventListener('DOMContentLoaded', function() {
-            const discountModal = document.getElementById('discountModal');
-            if (discountModal) {
-                discountModal.addEventListener('show.bs.modal', function(event) {
-                    const button = event.relatedTarget;
-                    if (button) {
-                        if (button.dataset.action === 'create') {
-                            openDiscountModal(null);
-                        } else {
-                            const discountId = button.getAttribute('data-id');
-                            if (discountId) {
-                                openDiscountModal(discountId);
-                            }
-                        }
-                    }
-                });
-            }
-            if (window.bindCrudModal) { window.bindCrudModal('discountModal', function(){ openDiscountModal(null); }); }
+            // Note: Modal opening is now handled by delegated handlers in crud-modals.js
+            // No need for show.bs.modal listener anymore
         });
 
         // Re-initialize on AJAX page load
         window.addEventListener('ajaxPageLoaded', function() {
-            const discountModal = document.getElementById('discountModal');
-            if (discountModal) {
-                discountModal.addEventListener('show.bs.modal', function(event) {
-                    const button = event.relatedTarget;
-                    if (button) {
-                        if (button.dataset.action === 'create') {
-                            openDiscountModal(null);
-                        } else {
-                            const discountId = button.getAttribute('data-id');
-                            if (discountId) {
-                                openDiscountModal(discountId);
-                            }
-                        }
-                    }
-                });
-            }
-            if (window.bindCrudModal) { window.bindCrudModal('discountModal', function(){ openDiscountModal(null); }); }
+            // Note: Modal opening is now handled by delegated handlers in crud-modals.js
         });
 
         // Add category button handler

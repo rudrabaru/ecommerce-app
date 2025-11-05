@@ -229,10 +229,10 @@ class AdminController extends Controller
             })
             ->addColumn('actions', function ($row) {
                 $btns = '<div class="btn-group" role="group">';
-                $btns .= '<button class="btn btn-sm btn-outline-primary edit-user" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#userModal" onclick="openUserModal('.$row->id.')" title="Edit User">';
+                $btns .= '<button class="btn btn-sm btn-outline-primary editBtn" data-module="users" data-id="'.$row->id.'" title="Edit User">';
                 $btns .= '<i class="fas fa-pencil-alt"></i></button>';
                 if (!$row->hasRole('admin')) {
-                    $btns .= '<button class="btn btn-sm btn-outline-danger delete-user" data-id="'.$row->id.'" onclick="deleteUser('.$row->id.')" title="Delete User">';
+                    $btns .= '<button class="btn btn-sm btn-outline-danger deleteBtn" data-module="users" data-id="'.$row->id.'" title="Delete User">';
                     $btns .= '<i class="fas fa-trash"></i></button>';
                 }
                 $btns .= '</div>';
@@ -449,10 +449,10 @@ class AdminController extends Controller
             })
             ->addColumn('actions', function ($row) {
                 $btns = '<div class="btn-group" role="group">';
-                $btns .= '<button class="btn btn-sm btn-outline-primary edit-provider" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#providerModal" onclick="openProviderModal('.$row->id.')" title="Edit Provider">';
+                $btns .= '<button class="btn btn-sm btn-outline-primary editBtn" data-module="providers" data-id="'.$row->id.'" title="Edit Provider">';
                 $btns .= '<i class="fas fa-pencil-alt"></i></button>';
                 if (!$row->hasRole('admin')) {
-                    $btns .= '<button class="btn btn-sm btn-outline-danger delete-provider" data-id="'.$row->id.'" onclick="deleteProvider('.$row->id.')" title="Delete Provider">';
+                    $btns .= '<button class="btn btn-sm btn-outline-danger deleteBtn" data-module="providers" data-id="'.$row->id.'" title="Delete Provider">';
                     $btns .= '<i class="fas fa-trash"></i></button>';
                 }
                 $btns .= '</div>';

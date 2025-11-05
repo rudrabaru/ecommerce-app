@@ -4,7 +4,7 @@
             <h1 class="mb-0">Products</h1>
             <div>
                 @if(auth()->user()->hasRole('provider') || auth()->user()->hasRole('admin'))
-                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#productModal" data-action="create">
+                    <button type="button" class="btn btn-primary createBtn" data-module="products">
                         <i class="fas fa-plus"></i> Create Product
                     </button>
                 @endif
@@ -123,7 +123,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="saveProduct()">
+                    <button type="button" class="btn btn-primary saveBtn" data-module="products">
                         <span class="spinner-border spinner-border-sm d-none" id="saveSpinner" role="status" aria-hidden="true"></span>
                         Save Product
                     </button>

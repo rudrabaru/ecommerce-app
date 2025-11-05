@@ -40,7 +40,7 @@ class DiscountCodeController extends Controller
             ->addColumn('actions', function ($row) {
                 $del = route('admin.discounts.destroy', $row->id);
                 return '<div class="btn-group" role="group">'
-                    .'<button class="btn btn-sm btn-outline-primary" title="Edit" data-id="'.$row->id.'" data-bs-toggle="modal" data-bs-target="#discountModal" onclick="openDiscountModal('.$row->id.')"><i class="fas fa-pencil-alt"></i></button>'
+                    .'<button class="btn btn-sm btn-outline-primary editBtn" title="Edit" data-module="discounts" data-id="'.$row->id.'"><i class="fas fa-pencil-alt"></i></button>'
                     .'<button class="btn btn-sm btn-outline-danger js-delete" title="Delete" data-delete-url="'.$del.'"><i class="fas fa-trash"></i></button>'
                     .'</div>';
             })
