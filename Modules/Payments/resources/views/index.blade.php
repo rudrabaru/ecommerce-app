@@ -159,14 +159,14 @@
     @endpush
 
     @push('scripts')
-        <script>
-        // Ensure function is available on window immediately
-        window.openPaymentModal = window.openPaymentModal || function() {};
+    <script>
+    // Now define the actual implementations immediately (not wrapped in DOMContentLoaded)
+    (function() {
+        'use strict';
         
-        // DataTable is now initialized globally - no need for custom initialization
+        // IMMEDIATELY overwrite placeholders with actual implementations
         
-        // Open payment modal function (reassign to ensure it's available)
-        // Returns a promise for async operations
+        // Open payment modal function
         window.openPaymentModal = function(paymentId = null) {
             const form = document.getElementById('paymentForm');
             const modalTitle = document.getElementById('paymentModalLabel');
@@ -225,18 +225,8 @@
             }
         };
 
-        // Initialize modal behavior
-        document.addEventListener('DOMContentLoaded', function() {
-            // Note: Modal opening and delete actions are now handled by delegated handlers in crud-modals.js
-            // No need for show.bs.modal listener or custom delete handler anymore
-        });
-
-        // Re-initialize on AJAX page load
-        window.addEventListener('ajaxPageLoaded', function() {
-            // Note: Modal opening is now handled by delegated handlers in crud-modals.js
-        });
-
-        function savePayment() {
+        // Save payment function
+        window.savePayment = function() {
             const form = document.getElementById('paymentForm');
             const formData = new FormData(form);
             const paymentId = document.getElementById('paymentId').value;
@@ -300,9 +290,10 @@
                     alert('An error occurred while saving');
                 }
             });
-        }
+        };
 
-        function deletePayment(id) {
+        // Delete payment function
+        window.deletePayment = function(id) {
             const confirmFn = window.Swal ?
                 () => Swal.fire({
                     title: 'Are you sure?',
@@ -353,12 +344,9 @@
                     }
                 });
             });
-        }
-
-        // Expose helpers for inline onclick handlers
-        window.savePayment = savePayment;
-        window.deletePayment = deletePayment;
-        </script>
+        };
+    })();
+    </script>
     @endpush
 
     <!-- Payment Modal -->

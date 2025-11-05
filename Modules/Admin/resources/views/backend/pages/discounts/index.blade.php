@@ -46,9 +46,6 @@
             console.error('[Discount] jQuery not available');
             return;
         }
-        
-        // Ensure function is available on window immediately
-        window.openDiscountModal = window.openDiscountModal || function() {};
 
         // Helper: fetch categories from server
         function fetchCategories() {
@@ -121,8 +118,7 @@
             });
         }
 
-        // Single modal function for both create and edit (reassign to ensure it's available)
-        // Returns a promise for async operations
+        // IMMEDIATELY reassign with actual implementation (overwrites placeholder)
         window.openDiscountModal = function(discountId = null) {
             var $form = $('#discountForm');
             var $container = $('#categoriesContainer');
@@ -181,24 +177,14 @@
                 $form[0].action = '/admin/discount-codes';
                 
                 // Always show at least one category dropdown
-                populateCategoriesContainer($container, []);
-                return Promise.resolve(true);
+                return populateCategoriesContainer($container, []).then(function() {
+                    return true;
+                });
             }
         };
 
-        // Initialize modal behavior
-        document.addEventListener('DOMContentLoaded', function() {
-            // Note: Modal opening is now handled by delegated handlers in crud-modals.js
-            // No need for show.bs.modal listener anymore
-        });
-
-        // Re-initialize on AJAX page load
-        window.addEventListener('ajaxPageLoaded', function() {
-            // Note: Modal opening is now handled by delegated handlers in crud-modals.js
-        });
-
         // Add category button handler
-        $(document).off('click.addCategory').on('click.addCategory', '#addCategoryBtn', function(e) {
+        $(document).on('click', '#addCategoryBtn', function(e) {
             e.preventDefault();
             var $container = $('#categoriesContainer');
             
@@ -217,7 +203,7 @@
         });
 
         // Remove category button handler
-        $(document).off('click.removeCategory').on('click.removeCategory', '#categoriesContainer .remove-category', function(e) {
+        $(document).on('click', '#categoriesContainer .remove-category', function(e) {
             e.preventDefault();
             var $btn = $(this);
             var $row = $btn.closest('.category-row');
@@ -231,7 +217,7 @@
         });
 
         // Form input validation handler - uppercase code
-        $(document).off('input.discountValidation').on('input.discountValidation', '#discountForm #code', function() {
+        $(document).on('input', '#discountForm #code', function() {
             this.value = this.value.toUpperCase();
             $(this).removeClass('is-invalid');
             $(this).siblings('.invalid-feedback').text('');

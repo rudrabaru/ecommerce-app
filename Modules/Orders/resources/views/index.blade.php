@@ -195,8 +195,6 @@
     @push('scripts')
     <script>
         (function(){
-            // Ensure function is available on window immediately
-            window.openOrderModal = window.openOrderModal || function() {};
             
             // Load products & discounts via AJAX instead of pre-loading
             var PRODUCTS = [];
@@ -759,8 +757,8 @@
                             '<td>' + (item.product ? item.product.title : 'Product') + '</td>' +
                             '<td>' + (item.provider ? item.provider.name : 'N/A') + '</td>' +
                             '<td>' + item.quantity + '</td>' +
-                            '<td> + parseFloat(item.unit_price).toFixed(2) + '</td>' +
-                            '<td> + parseFloat(item.total).toFixed(2) + '</td>' +
+                            '<td>$' + parseFloat(item.unit_price).toFixed(2) + '</td>' +
+                            '<td>$' + parseFloat(item.total).toFixed(2) + '</td>' +
                             '<td>' + statusDropdown + '</td>' +
                             '<td></td>' +
                             '</tr>';

@@ -1,5 +1,29 @@
-// crud-modals.js
 (function(){
+    // IMMEDIATELY initialize ALL placeholder functions before any other code
+    window.openUserModal = window.openUserModal || function() { return Promise.resolve(false); };
+    window.openProviderModal = window.openProviderModal || function() { return Promise.resolve(false); };
+    window.openProductModal = window.openProductModal || function() { return Promise.resolve(false); };
+    window.openCategoryModal = window.openCategoryModal || function() { return Promise.resolve(false); };
+    window.openDiscountModal = window.openDiscountModal || function() { return Promise.resolve(false); };
+    window.openOrderModal = window.openOrderModal || function() { return Promise.resolve(false); };
+    window.openPaymentModal = window.openPaymentModal || function() { return Promise.resolve(false); };
+    
+    window.saveUser = window.saveUser || function() {};
+    window.saveProvider = window.saveProvider || function() {};
+    window.saveProduct = window.saveProduct || function() {};
+    window.saveCategory = window.saveCategory || function() {};
+    window.saveDiscount = window.saveDiscount || function() {};
+    window.saveOrder = window.saveOrder || function() {};
+    window.savePayment = window.savePayment || function() {};
+    
+    window.deleteUser = window.deleteUser || function() {};
+    window.deleteProvider = window.deleteProvider || function() {};
+    window.deleteProduct = window.deleteProduct || function() {};
+    window.deleteCategory = window.deleteCategory || function() {};
+    window.deleteDiscount = window.deleteDiscount || function() {};
+    window.deleteOrder = window.deleteOrder || function() {};
+    window.deletePayment = window.deletePayment || function() {};
+
     // Map modules to modal IDs and open functions
     var MODULES = {
         users:      { modalId: 'userModal',       openFn: 'openUserModal',       tableId: 'users-table' },
@@ -15,7 +39,10 @@
 
     function showModal(mod){
         var el = document.getElementById(mod.modalId);
-        if (!el) return;
+        if (!el) {
+            console.warn('Modal not found:', mod.modalId);
+            return;
+        }
         var modal = bootstrap.Modal.getOrCreateInstance(el);
         modal.show();
     }
@@ -25,9 +52,15 @@
         e.preventDefault();
         var moduleKey = $(this).data('module');
         var mod = MODULES[moduleKey];
-        if (!mod) return;
+        if (!mod) {
+            console.warn('Module not found:', moduleKey);
+            return;
+        }
         var fn = window[mod.openFn];
-        if (typeof fn !== 'function') return;
+        if (typeof fn !== 'function') {
+            console.error('Open function not found:', mod.openFn);
+            return;
+        }
         
         try {
             var result = fn(null);
@@ -57,9 +90,15 @@
         var moduleKey = $(this).data('module');
         var id = $(this).data('id');
         var mod = MODULES[moduleKey];
-        if (!mod || !id) return;
+        if (!mod || !id) {
+            console.warn('Module or ID not found:', moduleKey, id);
+            return;
+        }
         var fn = window[mod.openFn];
-        if (typeof fn !== 'function') return;
+        if (typeof fn !== 'function') {
+            console.error('Open function not found:', mod.openFn);
+            return;
+        }
         
         try {
             var result = fn(id);
@@ -101,7 +140,7 @@
         if (!moduleKey) {
             // Try to infer from modal ID if data-module not set
             var $btn = $(this);
-            var $modal = $btn.closest('.modal').length ? $btn.closest('.modal') : $($btn.closest('.modal-content').closest('.modal'));
+            var $modal = $btn.closest('.modal');
             var modalId = $modal.length ? $modal.attr('id') : null;
             if (modalId) {
                 for (var key in MODULES) {
@@ -112,7 +151,10 @@
                 }
             }
         }
-        if (!moduleKey) return;
+        if (!moduleKey) {
+            console.warn('Module key not found for save button');
+            return;
+        }
         
         var functionSuffix = FUNCTION_NAMES[moduleKey] || capitalize(moduleKey);
         var saveFn = window['save' + functionSuffix];
@@ -133,7 +175,10 @@
         e.preventDefault();
         var moduleKey = $(this).data('module');
         var id = $(this).data('id');
-        if (!moduleKey || !id) return;
+        if (!moduleKey || !id) {
+            console.warn('Module or ID not found for delete:', moduleKey, id);
+            return;
+        }
         
         var functionSuffix = FUNCTION_NAMES[moduleKey] || capitalize(moduleKey);
         var deleteFn = window['delete' + functionSuffix];
