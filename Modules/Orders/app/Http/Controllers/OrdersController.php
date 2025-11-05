@@ -243,13 +243,11 @@ class OrdersController extends Controller
                 abort(403, 'Status transition not allowed');
             }
             
-            // Admin changing order-level status: also cascade to all items
+            // Admin changing order-level status: cascade to all items (force)
             $items = $order->orderItems()->get();
             foreach ($items as $item) {
-                // Respect item-level transition rules; skip if not allowed
-                if ($item->canTransitionTo($newStatus)) {
-                    $item->transitionTo($newStatus);
-                }
+                $item->order_status = $newStatus;
+                $item->save();
             }
 
             // Transition order itself (fires order-level event/email once)
@@ -453,10 +451,18 @@ class OrdersController extends Controller
                         $itemHtml .= '<div>';
                         $itemHtml .= '<div class="small fw-semibold">' . e($item->product->title) . ' (x' . $item->quantity . ')</div>';
                         if (!$isProvider) {
-                            // Admin: show provider name only (tracking disabled)
+                            // Admin: show provider and item-level status badge
                             $itemHtml .= '<div class="small text-muted">Provider: ' . e($item->provider->name ?? 'N/A') . '</div>';
+                            $badge = match($item->order_status) {
+                                Order::STATUS_PENDING => 'bg-warning',
+                                Order::STATUS_SHIPPED => 'bg-primary',
+                                Order::STATUS_DELIVERED => 'bg-success',
+                                Order::STATUS_CANCELLED => 'bg-danger',
+                                default => 'bg-secondary',
+                            };
+                            $itemHtml .= '<div class="mt-1"><span class="badge rounded-pill ' . $badge . '">' . e(ucfirst($item->order_status)) . '</span></div>';
                         }
-                        // Provider: NO status badge in Products column (shown only in Status column)
+                        // Provider: NO status badge in Products column
                         $itemHtml .= '</div>';
                         $itemHtml .= '</div>';
                         $itemHtml .= '</div>';
@@ -485,8 +491,21 @@ class OrdersController extends Controller
                 return '$' . number_format($row->total_amount, 2);
             })
             ->editColumn('order_status', function ($row) {
-                // Tracking disabled: show placeholder
-                return '<span class="badge rounded-pill bg-secondary">N/A</span>';
+                $isProvider = Auth::user()->hasRole('provider');
+                if ($isProvider) {
+                    $providerId = Auth::id();
+                    $providerItems = $row->orderItems->where('provider_id', $providerId);
+                    [$status, $badge] = $this->aggregateStatusForItems($providerItems);
+                    return '<span class="badge rounded-pill ' . $badge . '">' . e(ucfirst($status)) . '</span>';
+                }
+                $badge = match($row->order_status) {
+                    Order::STATUS_PENDING => 'bg-warning',
+                    Order::STATUS_SHIPPED => 'bg-primary',
+                    Order::STATUS_DELIVERED => 'bg-success',
+                    Order::STATUS_CANCELLED => 'bg-danger',
+                    default => 'bg-secondary',
+                };
+                return '<span class="badge rounded-pill ' . $badge . '">' . e(ucfirst($row->order_status)) . '</span>';
             })
             ->addColumn('shipping_address', function($row){
                 return $row->shipping_address ? e($row->shipping_address) : '-';
@@ -519,13 +538,34 @@ class OrdersController extends Controller
                     : null;
             })
             ->addColumn('actions', function ($row) {
-                $prefix = (Auth::user() && Auth::user()->hasRole('admin')) ? 'admin' : 'provider';
-                
-                // Keep only Edit and Delete (delete for admin only)
+                $isAdmin = Auth::user() && Auth::user()->hasRole('admin');
+                $isProvider = Auth::user() && Auth::user()->hasRole('provider');
+                $prefix = $isAdmin ? 'admin' : 'provider';
+
                 $btns = '<div class="btn-group" role="group">';
                 $btns .= '<button class="btn btn-sm btn-outline-primary editBtn" data-module="orders" data-id="'.$row->id.'" title="Edit">';
                 $btns .= '<i class="fas fa-pencil-alt"></i></button>';
-                if (Auth::user() && Auth::user()->hasRole('admin')) {
+
+                if ($isProvider) {
+                    // Provider status control that updates ONLY provider's items
+                    $providerId = Auth::id();
+                    $providerItems = $row->orderItems->where('provider_id', $providerId);
+                    [$aggStatus, ] = $this->aggregateStatusForItems($providerItems);
+                    $allowed = [];
+                    if ($aggStatus === Order::STATUS_PENDING) {
+                        $allowed = [Order::STATUS_SHIPPED, Order::STATUS_DELIVERED, Order::STATUS_CANCELLED];
+                    } elseif ($aggStatus === Order::STATUS_SHIPPED) {
+                        $allowed = [Order::STATUS_DELIVERED];
+                    }
+                    if (!empty($allowed)) {
+                        $btns .= '<button type="button" class="btn btn-sm btn-outline-info provider-status-trigger"'
+                            . ' data-order-id="'.$row->id.'"'
+                            . ' data-statuses="'.e(json_encode(array_values($allowed))).'"'
+                            . ' title="Update my items status">Status</button>';
+                    }
+                }
+
+                if ($isAdmin) {
                     $btns .= '<button class="btn btn-sm btn-outline-danger delete-order" data-id="'.$row->id.'" data-delete-url="/'.$prefix.'/orders/'.$row->id.'" title="Delete">';
                     $btns .= '<i class="fas fa-trash"></i></button>';
                 }
@@ -690,10 +730,28 @@ class OrdersController extends Controller
      */
     public function cancel(Request $request, $id)
     {
-        // Soft-disabled: do nothing
+        $order = Order::with('orderItems')->findOrFail($id);
+        $user = Auth::user();
+        abort_unless($user && $user->hasRole('user') && $order->user_id === $user->id, 403);
+
+        if ($order->order_status !== Order::STATUS_PENDING) {
+            return response()->json([
+                'success' => false,
+                'message' => __('You can cancel only pending orders.')
+            ], 422);
+        }
+
+        // Set all items to cancelled and transition order to cancelled (one email)
+        foreach ($order->orderItems as $item) {
+            $item->order_status = Order::STATUS_CANCELLED;
+            $item->save();
+        }
+        $order->transitionTo(Order::STATUS_CANCELLED);
+        $order->recalculateOrderStatus();
+
         return response()->json([
-            'success' => false,
-            'message' => 'Order tracking is disabled.'
+            'success' => true,
+            'message' => __('Order cancelled successfully')
         ]);
     }
 
@@ -702,10 +760,36 @@ class OrdersController extends Controller
      */
     public function updateStatus(Request $request, $id)
     {
-        // Soft-disabled: do nothing
+        $order = Order::with('orderItems')->findOrFail($id);
+        $this->authorizeUpdate($order);
+
+        $validated = $request->validate([
+            'order_status' => ['required', 'in:pending,shipped,delivered,cancelled'],
+        ]);
+
+        $newStatus = $validated['order_status'];
+        $user = Auth::user();
+
+        if ($user->hasRole('admin')) {
+            foreach ($order->orderItems as $item) {
+                $item->order_status = $newStatus;
+                $item->save();
+            }
+            $order->transitionTo($newStatus);
+            $order->recalculateOrderStatus();
+        } elseif ($user->hasRole('provider')) {
+            $providerId = $user->id;
+            foreach ($order->orderItems->where('provider_id', $providerId) as $item) {
+                $item->transitionTo($newStatus);
+            }
+            $order->recalculateOrderStatus();
+        } else {
+            abort(403);
+        }
+
         return response()->json([
-            'success' => false,
-            'message' => 'Order tracking is disabled.'
+            'success' => true,
+            'message' => __('Status updated successfully')
         ]);
     }
 
@@ -727,10 +811,25 @@ class OrdersController extends Controller
      */
     public function updateItemStatus(Request $request, $orderId, $itemId): JsonResponse
     {
-        // Soft-disabled: do nothing
+        $order = Order::findOrFail($orderId);
+        $this->authorizeUpdate($order);
+
+        $validated = $request->validate([
+            'order_status' => ['required', 'in:pending,shipped,delivered,cancelled'],
+        ]);
+
+        $item = OrderItem::where('order_id', $orderId)->where('id', $itemId)->firstOrFail();
+
+        if (Auth::user()->hasRole('provider')) {
+            abort_unless($item->provider_id === Auth::id(), 403);
+        }
+
+        $item->transitionTo($validated['order_status']);
+        $order->recalculateOrderStatus();
+
         return response()->json([
-            'success' => false,
-            'message' => 'Order tracking is disabled.'
+            'success' => true,
+            'message' => __('Item status updated successfully')
         ]);
     }
 
@@ -757,5 +856,34 @@ class OrdersController extends Controller
             return;
         }
         abort_unless($order->containsProvider($user->id), 403);
+    }
+
+    /**
+     * Return lightweight statuses for user's orders for polling (user side real-time updates)
+     */
+    public function userStatuses(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        abort_unless($user && $user->hasRole('user'), 403);
+
+        $orders = Order::where('user_id', $user->id)
+            ->latest('id')
+            ->get(['id','order_number','order_status','updated_at']);
+
+        $payload = $orders->map(function ($o) {
+            return [
+                'id' => $o->id,
+                'order_number' => $o->order_number,
+                'order_status' => $o->order_status,
+                'progress' => $o->getProgressPercentage(),
+                'can_cancel' => $o->order_status === Order::STATUS_PENDING,
+                'updated_at' => optional($o->updated_at)?->toAtomString(),
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'orders' => $payload,
+        ]);
     }
 }

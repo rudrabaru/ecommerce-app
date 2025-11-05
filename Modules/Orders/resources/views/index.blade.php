@@ -514,15 +514,8 @@
                         });
                     }
                 } else if (isProvider) {
-                    // Provider transitions: pending → shipped/delivered/cancelled, shipped → delivered
-                    if (currentStatus === 'pending') {
-                        statusSelect.append('<option value="shipped">Shipped</option>');
-                        statusSelect.append('<option value="delivered">Delivered</option>');
-                        statusSelect.append('<option value="cancelled">Cancelled</option>');
-                    } else if (currentStatus === 'shipped') {
-                        statusSelect.append('<option value="delivered">Delivered</option>');
-                    }
-                    // No additional options for 'delivered' or 'cancelled' - they are terminal states
+                    // Provider must not update order-level status from this modal. Lock the select.
+                    statusSelect.prop('disabled', true).attr('name', '');
                 }
             }
 
@@ -545,7 +538,7 @@
                     .then(o => {
                         if (o.user_id) $('#user_id').val(o.user_id);
                         if (o.order_status) {
-                            $('#order_status').val(o.order_status);
+                            $('#order_status').val(o.order_status).data('current', o.order_status);
                             updateStatusDropdownForEdit(o.order_status);
                         }
                         if (o.shipping_address) $('#shipping_address').val(o.shipping_address);
@@ -889,6 +882,93 @@
                     console.error('Error:', error);
                     Swal.fire('Error', 'An error occurred while updating status', 'error');
                     btn.text(originalText).prop('disabled', false);
+                });
+            });
+
+            // Provider status trigger (SweetAlert select to avoid dropdown clipping in table)
+            $(document).on('click', '.provider-status-trigger', function(e){
+                e.preventDefault();
+                const orderId = $(this).data('order-id');
+                let statuses = [];
+                try { statuses = JSON.parse($(this).attr('data-statuses') || '[]'); } catch(_){ statuses = []; }
+                if (!Array.isArray(statuses) || statuses.length === 0) { return; }
+                const inputOptions = statuses.reduce(function(acc, s){ acc[s] = s.charAt(0).toUpperCase()+s.slice(1); return acc; }, {});
+                Swal.fire({
+                    title: 'Update Status',
+                    input: 'select',
+                    inputOptions: inputOptions,
+                    inputPlaceholder: 'Select status',
+                    showCancelButton: true,
+                }).then(function(result){
+                    if (!result.isConfirmed || !result.value) return;
+                    const newStatus = result.value;
+                    const url = '/provider/orders/' + orderId + '/update-status';
+                    fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ order_status: newStatus })
+                    })
+                    .then(function(r){ return r.json(); })
+                    .then(function(data){
+                        if (data && data.success) {
+                            window.reloadDataTable('orders-table');
+                            Swal.fire({ icon: 'success', title: 'Status Updated', timer: 1500, showConfirmButton: false });
+                        } else {
+                            Swal.fire('Error', (data && data.message) || 'Failed to update status', 'error');
+                        }
+                    })
+                    .catch(function(){ Swal.fire('Error', 'An error occurred', 'error'); });
+                });
+            });
+
+            // Admin modal: confirm & post order-level status change via SweetAlert
+            $(document).on('change', '#order_status', function(){
+                if (!window.location.pathname.includes('/admin/')) return;
+                var $sel = $(this);
+                var newStatus = $sel.val();
+                var prev = $sel.data('current') || newStatus;
+                var orderId = $('#orderId').val();
+                if (!orderId) return; // only in edit
+
+                Swal.fire({
+                    title: 'Update order status?',
+                    text: 'Set full order status to ' + newStatus.charAt(0).toUpperCase()+newStatus.slice(1) + '?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, update',
+                }).then(function(res){
+                    if (!res.isConfirmed) {
+                        $sel.val(prev);
+                        return;
+                    }
+                    fetch('/admin/orders/' + orderId + '/update-status', {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ order_status: newStatus })
+                    }).then(function(r){ return r.json(); })
+                    .then(function(data){
+                        if (data && data.success) {
+                            // set new current
+                            $sel.data('current', newStatus);
+                            window.reloadDataTable('orders-table');
+                            Swal.fire({ icon: 'success', title: 'Status Updated', timer: 1500, showConfirmButton: false });
+                        } else {
+                            $sel.val(prev);
+                            Swal.fire('Error', (data && data.message) || 'Failed to update status', 'error');
+                        }
+                    })
+                    .catch(function(){
+                        $sel.val(prev);
+                        Swal.fire('Error', 'An error occurred', 'error');
+                    });
                 });
             });
 

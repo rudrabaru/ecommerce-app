@@ -19,13 +19,34 @@
                                     <small class="text-muted">Placed on {{ $order->created_at->format('F j, Y \a\t g:i A') }}</small>
                                 </div>
                                 <div class="text-end">
-                                    <span class="badge rounded-pill bg-secondary fs-6 px-3 py-2">N/A</span>
+                                    <span class="badge rounded-pill fs-6 px-3 py-2 js-order-badge" data-order-id="{{ $order->id }}">
+                                        {{ ucfirst($order->order_status) }}
+                                    </span>
                                     <div class="mt-2"><strong>Total: ${{ number_format((float)$order->total_amount, 2) }}</strong></div>
                                 </div>
                             </div>
                         </div>
                         <div class="card-body">
-                            <!-- Order tracking removed -->
+                            <!-- Progress steps -->
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center gap-3 js-order-progress" data-order-id="{{ $order->id }}">
+                                    <div class="step">
+                                        <span class="badge rounded-pill px-3 py-2 step-badge" data-step="pending">Pending</span>
+                                    </div>
+                                    <div class="flex-grow-1 border-top" style="opacity:.3"></div>
+                                    <div class="step">
+                                        <span class="badge rounded-pill px-3 py-2 step-badge" data-step="shipped">Shipped</span>
+                                    </div>
+                                    <div class="flex-grow-1 border-top" style="opacity:.3"></div>
+                                    <div class="step">
+                                        <span class="badge rounded-pill px-3 py-2 step-badge" data-step="delivered">Delivered</span>
+                                    </div>
+                                    <div class="flex-grow-1 border-top" style="opacity:.3"></div>
+                                    <div class="step">
+                                        <span class="badge rounded-pill px-3 py-2 step-badge" data-step="cancelled">Cancelled</span>
+                                    </div>
+                                </div>
+                            </div>
                             
                             <hr>
                             
@@ -79,6 +100,11 @@
                                         <small class="text-muted">Payment: {{ $order->paymentMethod->display_name ?? $order->paymentMethod->name }}</small>
                                     @endif
                                 </div>
+                                <div>
+                                    @if($order->order_status === 'pending')
+                                        <button class="btn btn-outline-danger btn-sm js-cancel-order" data-order-id="{{ $order->id }}">Cancel Order</button>
+                                    @endif
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -98,5 +124,83 @@
 <x-footer />
 
 <script>
-// Order tracking removed on user side
+    (function(){
+        const BADGE_CLASSES = {
+            pending: 'bg-warning',
+            shipped: 'bg-primary',
+            delivered: 'bg-success',
+            cancelled: 'bg-danger',
+            default: 'bg-secondary'
+        };
+
+        function setBadge(el, status){
+            const s = (status||'').toLowerCase();
+            const cls = BADGE_CLASSES[s] || BADGE_CLASSES.default;
+            el.className = 'badge rounded-pill fs-6 px-3 py-2 js-order-badge ' + cls;
+            el.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+        }
+
+        function updateProgress(container, status){
+            const s = (status||'').toLowerCase();
+            const steps = container.querySelectorAll('.step-badge');
+            steps.forEach(function(b){ b.className = 'badge rounded-pill px-3 py-2 step-badge bg-light text-muted'; });
+            const order = ['pending','shipped','delivered'];
+            if (s === 'cancelled') {
+                steps.forEach(function(b){ if (b.dataset.step==='cancelled'){ b.className = 'badge rounded-pill px-3 py-2 step-badge '+BADGE_CLASSES.cancelled; }});
+                return;
+            }
+            order.forEach(function(name){
+                const badge = Array.from(steps).find(function(b){ return b.dataset.step===name; });
+                if (!badge) return;
+                badge.className = 'badge rounded-pill px-3 py-2 step-badge ' + (order.indexOf(name) <= order.indexOf(s) ? (BADGE_CLASSES[name]||BADGE_CLASSES.default) : 'bg-light text-muted');
+            });
+        }
+
+        function poll(){
+            fetch('/user/orders/status', { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                    if (!data || !data.success) return;
+                    (data.orders||[]).forEach(function(o){
+                        var badge = document.querySelector('.js-order-badge[data-order-id="'+o.id+'"]');
+                        if (badge) setBadge(badge, o.order_status);
+                        var prog = document.querySelector('.js-order-progress[data-order-id="'+o.id+'"]');
+                        if (prog) updateProgress(prog, o.order_status);
+                        var cancelBtn = document.querySelector('.js-cancel-order[data-order-id="'+o.id+'"]');
+                        if (cancelBtn) { cancelBtn.style.display = o.can_cancel ? '' : 'none'; }
+                    });
+                })
+                .catch(function(){ /* ignore */ })
+                .finally(function(){ setTimeout(poll, 8000); });
+        }
+
+        document.addEventListener('click', function(e){
+            var btn = e.target.closest('.js-cancel-order');
+            if (!btn) return;
+            var orderId = btn.getAttribute('data-order-id');
+            btn.disabled = true;
+            fetch('/user/orders/'+orderId+'/cancel', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({})
+            }).then(function(r){ return r.json(); })
+              .then(function(){ poll(); })
+              .catch(function(){})
+              .finally(function(){ btn.disabled = false; });
+        });
+
+        // Initialize current badges and progress
+        document.querySelectorAll('.js-order-badge').forEach(function(b){ setBadge(b, b.textContent.trim()); });
+        document.querySelectorAll('.js-order-progress').forEach(function(p){
+            var orderId = p.getAttribute('data-order-id');
+            var badge = document.querySelector('.js-order-badge[data-order-id="'+orderId+'"]');
+            if (badge) updateProgress(p, badge.textContent.trim());
+        });
+
+        poll();
+    })();
 </script>

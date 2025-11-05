@@ -10,6 +10,10 @@ use Illuminate\Support\Facades\DB;
 
 class Order extends Model
 {
+    /**
+     * In-process guard to prevent duplicate status emails per (order_id, status) in a single request lifecycle
+     */
+    protected static array $statusEmailDispatched = [];
     const STATUS_PENDING = 'pending';
     const STATUS_SHIPPED = 'shipped';
     const STATUS_DELIVERED = 'delivered';
@@ -138,8 +142,12 @@ class Order extends Model
      */
     public function getAllowedTransitions(): array
     {
-        // Tracking removed: no transitions available
-        return [];
+        return [
+            self::STATUS_PENDING,
+            self::STATUS_SHIPPED,
+            self::STATUS_DELIVERED,
+            self::STATUS_CANCELLED,
+        ];
     }
 
     /**
@@ -147,8 +155,7 @@ class Order extends Model
      */
     public function canTransitionTo(string $newStatus): bool
     {
-        // Tracking removed
-        return false;
+        return in_array($newStatus, $this->getAllowedTransitions(), true);
     }
 
     /**
@@ -156,8 +163,31 @@ class Order extends Model
      */
     public function transitionTo(string $newStatus): bool
     {
-        // Tracking removed: do nothing
-        return false;
+        if ($this->order_status === $newStatus) {
+            return true;
+        }
+        if (!$this->canTransitionTo($newStatus)) {
+            return false;
+        }
+
+        $oldStatus = $this->order_status;
+        $this->order_status = $newStatus;
+        $saved = $this->save();
+
+        // Send one email only when full order-level status changes
+        if ($saved && $oldStatus !== $newStatus) {
+            $guardKey = $this->id . ':' . $newStatus;
+            if (!isset(self::$statusEmailDispatched[$guardKey])) {
+                self::$statusEmailDispatched[$guardKey] = true;
+            try {
+                dispatch(new \App\Jobs\SendOrderStatusUpdateEmail($this));
+            } catch (\Throwable $_) {
+                // swallow email errors
+            }
+            }
+        }
+
+        return $saved;
     }
 
     /**
@@ -192,13 +222,27 @@ class Order extends Model
     /**
      * Returns item status if all items share the same status; otherwise null.
      */
-    public function getUniformItemStatus(): ?string { return null; }
+    public function getUniformItemStatus(): ?string
+    {
+        $statuses = $this->orderItems()->pluck('order_status')->unique();
+        if ($statuses->count() === 0) {
+            return null;
+        }
+        return $statuses->count() === 1 ? $statuses->first() : null;
+    }
 
     /**
      * Recalculate order status based on item statuses
      * This only updates the aggregate order status, never removes provider_ids
      */
-    public function recalculateOrderStatus(): void { /* tracking removed */ }
+    public function recalculateOrderStatus(): void
+    {
+        $uniform = $this->getUniformItemStatus();
+        if ($uniform && $uniform !== $this->order_status) {
+            // Use transitionTo so that email is sent once here when aggregate changes
+            $this->transitionTo($uniform);
+        }
+    }
 
     protected static function boot()
     {

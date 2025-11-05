@@ -66,8 +66,12 @@ class OrderItem extends Model
      */
     public function getAllowedTransitions(): array
     {
-        // Tracking removed: no transitions
-        return [];
+        return [
+            self::STATUS_PENDING,
+            self::STATUS_SHIPPED,
+            self::STATUS_DELIVERED,
+            self::STATUS_CANCELLED,
+        ];
     }
 
     /**
@@ -75,8 +79,8 @@ class OrderItem extends Model
      */
     public function canTransitionTo(string $newStatus): bool
     {
-        // Tracking removed
-        return false;
+        // Basic validation only; business rules can be added later
+        return in_array($newStatus, $this->getAllowedTransitions(), true);
     }
 
     /**
@@ -85,8 +89,23 @@ class OrderItem extends Model
      */
     public function transitionTo(string $newStatus): bool
     {
-        // Tracking removed: do nothing
-        return false;
+        if ($this->order_status === $newStatus) {
+            return true;
+        }
+        if (!$this->canTransitionTo($newStatus)) {
+            return false;
+        }
+
+        $this->order_status = $newStatus;
+        $saved = $this->save();
+
+        // IMPORTANT: Item updates should NOT send emails directly.
+        // Recalculate aggregate order status afterwards (which may send one email if it changes)
+        if ($saved && $this->order) {
+            $this->order->recalculateOrderStatus();
+        }
+
+        return $saved;
     }
 
     /**
