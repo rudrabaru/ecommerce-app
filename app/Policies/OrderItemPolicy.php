@@ -27,33 +27,15 @@ class OrderItemPolicy
         return false;
     }
 
-    /**
-     * Determine if the user can update the order item status.
-     */
+    // Tracking removed: no item status updates
     public function updateStatus(User $user, OrderItem $orderItem, string $newStatus): bool
     {
-        return $orderItem->canTransitionTo($newStatus);
+        return false;
     }
 
-    /**
-     * Determine if the user can cancel the order item.
-     */
+    // Tracking removed: no item cancellation
     public function cancel(User $user, OrderItem $orderItem): bool
     {
-        if ($user->hasRole('admin')) {
-            return true;
-        }
-
-        if ($user->hasRole('provider')) {
-            return $orderItem->provider_id === $user->id && 
-                   $orderItem->order_status === OrderItem::STATUS_PENDING;
-        }
-
-        if ($user->hasRole('user')) {
-            return $orderItem->order->user_id === $user->id && 
-                   $orderItem->order_status === OrderItem::STATUS_PENDING;
-        }
-
         return false;
     }
 }

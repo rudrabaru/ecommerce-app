@@ -26,7 +26,7 @@ class PaymentsController extends Controller
      */
     public function data(DataTables $dataTables)
     {
-        $query = Payment::query()->with(['order', 'paymentMethod']);
+        $query = Payment::query()->with(['order.orderItems', 'paymentMethod']);
 
         // Provider should see only payments for their orders
         if (Auth::user()->hasRole('provider')) {
@@ -43,9 +43,27 @@ class PaymentsController extends Controller
             ->addColumn('payment_method', function ($row) {
                 return optional($row->paymentMethod)->name ?: '-';
             })
-            ->editColumn('amount', fn ($row) => '$' . number_format($row->amount, 2))
+            ->editColumn('amount', function ($row) {
+                // For providers: show only their items' total from the order
+                if (Auth::user()->hasRole('provider') && $row->order) {
+                    $providerId = Auth::id();
+                    $items = $row->order->orderItems->where('provider_id', $providerId);
+                    $subtotal = $items->sum(function ($item) { return (float) ($item->line_total ?? $item->total); });
+                    $discount = $items->sum(function ($item) { return (float) ($item->line_discount ?? 0); });
+                    $final = max(0, (float)$subtotal - (float)$discount);
+                    return '$' . number_format($final, 2);
+                }
+                // Admin or fallback: show recorded payment amount
+                return '$' . number_format((float) $row->amount, 2);
+            })
             ->editColumn('status', function ($row) {
-                $status = $row->status;
+                // For providers: derive status from payment method
+                if (Auth::user()->hasRole('provider')) {
+                    $method = strtolower(optional($row->paymentMethod)->name ?? '');
+                    $status = in_array($method, ['stripe', 'razorpay'], true) ? 'paid' : 'pending';
+                } else {
+                    $status = $row->status;
+                }
                 $map = [
                     'pending' => 'bg-warning',
                     'processing' => 'bg-info',

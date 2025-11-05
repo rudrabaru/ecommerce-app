@@ -222,6 +222,17 @@ class OrdersController extends Controller
         // Use transition method for status changes
         $newStatus = $validated['order_status'];
         if ($order->order_status !== $newStatus) {
+            // Only admins can change order-level status; providers must use item-scoped endpoints
+            if (!Auth::user()->hasRole('admin')) {
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Only admins can change order status at order level.'
+                    ], 403);
+                }
+                abort(403, 'Only admins can change order status at order level.');
+            }
+
             if (!$order->canTransitionTo($newStatus)) {
                 if ($request->wantsJson() || $request->ajax()) {
                     return response()->json([
@@ -232,8 +243,22 @@ class OrdersController extends Controller
                 abort(403, 'Status transition not allowed');
             }
             
+            // Admin changing order-level status: also cascade to all items
+            $items = $order->orderItems()->get();
+            foreach ($items as $item) {
+                // Respect item-level transition rules; skip if not allowed
+                if ($item->canTransitionTo($newStatus)) {
+                    $item->transitionTo($newStatus);
+                }
+            }
+
+            // Transition order itself (fires order-level event/email once)
             $oldStatus = $order->order_status;
             $order->transitionTo($newStatus);
+
+            // Recalculate to ensure aggregate reflects items (and refresh instance)
+            $order->recalculateOrderStatus();
+            $order->refresh();
         } else {
             // Status unchanged, just update other fields
             $order->update([
@@ -250,7 +275,15 @@ class OrdersController extends Controller
             if (is_array($decoded)) { $items = $decoded; }
         }
         if (!empty($items)) {
-            // Rebuild items for simplicity
+            // Only admins can rebuild order items. Providers must never alter other providers' items.
+            if (!Auth::user()->hasRole('admin')) {
+                // Silently ignore items payload for non-admins to avoid destructive deletes
+                $items = [];
+            }
+        }
+
+        if (!empty($items)) {
+            // Rebuild items for simplicity (admin only)
             $order->orderItems()->delete();
             $products = \Modules\Products\Models\Product::whereIn('id', collect($items)->pluck('product_id')->all())->get()->keyBy('id');
             $providerIds = [];
@@ -420,10 +453,8 @@ class OrdersController extends Controller
                         $itemHtml .= '<div>';
                         $itemHtml .= '<div class="small fw-semibold">' . e($item->product->title) . ' (x' . $item->quantity . ')</div>';
                         if (!$isProvider) {
-                            // Admin: show provider name and individual item status badge
+                            // Admin: show provider name only (tracking disabled)
                             $itemHtml .= '<div class="small text-muted">Provider: ' . e($item->provider->name ?? 'N/A') . '</div>';
-                            $statusBadge = '<span class="badge badge-sm ' . $item->getStatusBadgeClass() . '">' . $item->getStatusDisplayName() . '</span>';
-                            $itemHtml .= '<div class="mt-1">' . $statusBadge . '</div>';
                         }
                         // Provider: NO status badge in Products column (shown only in Status column)
                         $itemHtml .= '</div>';
@@ -454,24 +485,8 @@ class OrdersController extends Controller
                 return '$' . number_format($row->total_amount, 2);
             })
             ->editColumn('order_status', function ($row) {
-                // Get fresh order instance to ensure we have latest status
-                $order = Order::find($row->id);
-                if (!$order) {
-                    $status = $row->order_status ?? 'pending';
-                    return '<span class="badge rounded-pill bg-secondary">' . ucfirst($status) . '</span>';
-                }
-
-                if (Auth::user() && Auth::user()->hasRole('provider')) {
-                    // Provider: calculate aggregated status based ONLY on their items
-                    $providerId = Auth::id();
-                    $items = $order->orderItems->where('provider_id', $providerId);
-                    [$status, $cls] = $this->aggregateStatusForItems($items);
-                    return '<span class="badge rounded-pill ' . $cls . '">' . ucfirst($status) . '</span>';
-                }
-
-                // Admin: show aggregate order-level status (updates only when all items match)
-                $cls = $order->getStatusBadgeClass();
-                return '<span class="badge rounded-pill ' . $cls . '">' . $order->getStatusDisplayName() . '</span>';
+                // Tracking disabled: show placeholder
+                return '<span class="badge rounded-pill bg-secondary">N/A</span>';
             })
             ->addColumn('shipping_address', function($row){
                 return $row->shipping_address ? e($row->shipping_address) : '-';
@@ -505,66 +520,16 @@ class OrdersController extends Controller
             })
             ->addColumn('actions', function ($row) {
                 $prefix = (Auth::user() && Auth::user()->hasRole('admin')) ? 'admin' : 'provider';
-                $isProvider = Auth::user()->hasRole('provider');
-                $allowedStatuses = [];
                 
-                // Calculate allowed status transitions based on role
-                if ($isProvider) {
-                    // Provider: calculate allowed transitions based on their items' aggregated status
-                    $providerId = Auth::id();
-                    $providerItems = $row->orderItems->where('provider_id', $providerId);
-                    
-                    if ($providerItems->isNotEmpty()) {
-                        // Get the current effective status for provider's items
-                        [$currentStatus, $cls] = $this->aggregateStatusForItems($providerItems);
-                        
-                        // Provider transitions: pending → shipped/delivered/cancelled, shipped → delivered
-                        if ($currentStatus === OrderItem::STATUS_PENDING) {
-                            $allowedStatuses = [OrderItem::STATUS_SHIPPED, OrderItem::STATUS_DELIVERED, OrderItem::STATUS_CANCELLED];
-                        } elseif ($currentStatus === OrderItem::STATUS_SHIPPED) {
-                            $allowedStatuses = [OrderItem::STATUS_DELIVERED];
-                        }
-                    }
-                } else {
-                    // Admin: use order-level status transitions
-                    $order = Order::find($row->id);
-                    if ($order) {
-                        $allowedStatuses = $order->getAllowedTransitions();
-                    }
-                }
-                
+                // Keep only Edit and Delete (delete for admin only)
                 $btns = '<div class="btn-group" role="group">';
-                
-                // View items/details button (opens modal with item-level controls)
-                $btns .= '<button class="btn btn-sm btn-outline-secondary view-order-items" data-id="'.$row->id.'" title="View Items">';
-                $btns .= '<i class="fas fa-list"></i></button>';
-                
-                // Status update dropdown for order (if allowed transitions exist)
-                if (!empty($allowedStatuses)) {
-                    $btns .= '<div class="btn-group" role="group">';
-                    $btns .= '<button type="button" class="btn btn-sm btn-outline-info dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">';
-                    $btns .= '<i class="fas fa-sync-alt"></i> ' . ($isProvider ? 'My Items' : 'Order') . '</button>';
-                    $btns .= '<ul class="dropdown-menu">';
-                    foreach ($allowedStatuses as $status) {
-                        $statusLabel = ucfirst($status);
-                        $btns .= '<li><a class="dropdown-item update-status-btn" href="#" data-order-id="'.$row->id.'" data-status="'.$status.'">';
-                        $btns .= $statusLabel . '</a></li>';
-                    }
-                    $btns .= '</ul>';
-                    $btns .= '</div>';
-                }
-                
-                // Edit button
                 $btns .= '<button class="btn btn-sm btn-outline-primary editBtn" data-module="orders" data-id="'.$row->id.'" title="Edit">';
                 $btns .= '<i class="fas fa-pencil-alt"></i></button>';
-                
-                // Delete button (admin only)
                 if (Auth::user() && Auth::user()->hasRole('admin')) {
                     $btns .= '<button class="btn btn-sm btn-outline-danger delete-order" data-id="'.$row->id.'" data-delete-url="/'.$prefix.'/orders/'.$row->id.'" title="Delete">';
                     $btns .= '<i class="fas fa-trash"></i></button>';
                 }
-                
-                $btns .= '</div>'; 
+                $btns .= '</div>';
                 return $btns;
             })
             ->rawColumns(['actions', 'order_status', 'products'])
@@ -725,31 +690,10 @@ class OrdersController extends Controller
      */
     public function cancel(Request $request, $id)
     {
-        $order = Order::findOrFail($id);
-        
-        // Use policy for authorization
-        $this->authorize('cancel', $order);
-
-        if ($order->order_status !== Order::STATUS_PENDING) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only pending orders can be cancelled'
-            ], 403);
-        }
-
-        $success = $order->transitionTo(Order::STATUS_CANCELLED);
-
-        if (!$success) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to cancel order'
-            ], 500);
-        }
-
+        // Soft-disabled: do nothing
         return response()->json([
-            'success' => true,
-            'message' => 'Order cancelled successfully',
-            'order' => $order->fresh()->load(['user', 'orderItems.product'])
+            'success' => false,
+            'message' => 'Order tracking is disabled.'
         ]);
     }
 
@@ -758,115 +702,11 @@ class OrdersController extends Controller
      */
     public function updateStatus(Request $request, $id)
     {
-        $order = Order::findOrFail($id);
-        
-        // Use policy for authorization
-        $this->authorize('update', $order);
-
-        try {
-            $validated = $request->validate([
-                'order_status' => ['required', 'in:pending,shipped,delivered,cancelled'],
-                'notes' => ['nullable', 'string']
-            ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $e->errors()
-            ], 422);
-        }
-
-        $newStatus = $validated['order_status'];
-
-        // Provider: update only their own items in this order (group action)
-        if (Auth::user()->hasRole('provider')) {
-            $providerId = Auth::id();
-            $items = $order->orderItems()->where('provider_id', $providerId)->get();
-
-            if ($items->isEmpty()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No items for this provider in the order.'
-                ], 404);
-            }
-
-            // Validate transitions for all items first
-            foreach ($items as $item) {
-                if (!$item->canTransitionTo($newStatus)) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Status transition not allowed for one or more items.'
-                    ], 403);
-                }
-            }
-
-            // Perform transitions
-            foreach ($items as $item) {
-                $item->transitionTo($newStatus);
-            }
-
-            // Optional notes update on order
-            if (isset($validated['notes'])) {
-                $order->update(['notes' => $validated['notes']]);
-            }
-
-            // Recalculate parent order status and, if uniform, transition order (fires single email)
-            $order->recalculateOrderStatus();
-            $order->refresh();
-            if ($uniform = $order->getUniformItemStatus()) {
-                if ($uniform !== $order->order_status) {
-                    $order->transitionTo($uniform);
-                }
-            }
-            return response()->json([
-                'success' => true,
-                'message' => 'Provider items updated successfully',
-                'order' => $order->load(['user','orderItems.product','orderItems.provider'])
-            ]);
-        }
-
-        // Admin: update all items to the requested status (cannot revert delivered)
-        if (Auth::user()->hasRole('admin')) {
-            $items = $order->orderItems()->get();
-
-            foreach ($items as $item) {
-                if (!$item->canTransitionTo($newStatus)) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Status transition not allowed for at least one item (e.g., cannot revert from Delivered).'
-                    ], 403);
-                }
-            }
-
-            foreach ($items as $item) {
-                $item->transitionTo($newStatus);
-            }
-
-            if (isset($validated['notes'])) {
-                $order->update(['notes' => $validated['notes']]);
-            }
-
-            // After bulk change, recalc and transition order once (single email)
-            $order->recalculateOrderStatus();
-            $order->refresh();
-            if ($order->order_status !== $newStatus) {
-                // If recalculated status differs and matches newStatus, transition
-                if ($order->getUniformItemStatus() === $newStatus) {
-                    $order->transitionTo($newStatus);
-                }
-            }
-            return response()->json([
-                'success' => true,
-                'message' => 'Order items updated successfully',
-                'order' => $order->load(['user','orderItems.product','orderItems.provider'])
-            ]);
-        }
-
-        // Fallback: role not supported here
+        // Soft-disabled: do nothing
         return response()->json([
             'success' => false,
-            'message' => 'Operation not permitted for this role.'
-        ], 403);
+            'message' => 'Order tracking is disabled.'
+        ]);
     }
 
     private function authorizeView(Order $order): void
@@ -887,70 +727,10 @@ class OrdersController extends Controller
      */
     public function updateItemStatus(Request $request, $orderId, $itemId): JsonResponse
     {
-        $order = Order::findOrFail($orderId);
-        $orderItem = OrderItem::where('id', $itemId)
-                              ->where('order_id', $orderId)
-                              ->firstOrFail();
-
-        // Check authorization via policy
-        $user = Auth::user();
-        if (!$orderItem->canTransitionTo($request->input('order_status'))) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized to update this order item'
-            ], 403);
-        }
-
-        try {
-            $validated = $request->validate([
-                'order_status' => ['required', 'in:pending,shipped,delivered,cancelled'],
-            ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $e->errors()
-            ], 422);
-        }
-
-        $newStatus = $validated['order_status'];
-        
-        if ($orderItem->order_status === $newStatus) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Order item status unchanged',
-                'orderItem' => $orderItem->fresh(),
-                'order' => $order->fresh()
-            ]);
-        }
-
-        if (!$orderItem->canTransitionTo($newStatus)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Status transition not allowed. Current status: ' . $orderItem->order_status
-            ], 403);
-        }
-
-        $oldStatus = $orderItem->order_status;
-        $success = $orderItem->transitionTo($newStatus);
-
-        if (!$success) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update order item status'
-            ], 500);
-        }
-
-        // Order status is auto-recalculated via OrderItem boot event
-        $order->refresh();
-        $orderItem->refresh();
-
+        // Soft-disabled: do nothing
         return response()->json([
-            'success' => true,
-            'message' => 'Order item status updated successfully',
-            'orderItem' => $orderItem->load(['product', 'provider']),
-            'order' => $order->load(['user', 'orderItems.product', 'orderItems.provider']),
-            'orderItemTransitions' => $orderItem->getAllowedTransitions()
+            'success' => false,
+            'message' => 'Order tracking is disabled.'
         ]);
     }
 
@@ -959,46 +739,10 @@ class OrdersController extends Controller
      */
     public function cancelItem(Request $request, $orderId, $itemId): JsonResponse
     {
-        $order = Order::findOrFail($orderId);
-        $orderItem = OrderItem::where('id', $itemId)
-                              ->where('order_id', $orderId)
-                              ->firstOrFail();
-
-        // Use policy for authorization
-        try {
-            $this->authorize('cancel', $orderItem);
-        } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized to cancel this order item'
-            ], 403);
-        }
-
-        if ($orderItem->order_status !== OrderItem::STATUS_PENDING) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only pending items can be cancelled'
-            ], 403);
-        }
-
-        $success = $orderItem->transitionTo(OrderItem::STATUS_CANCELLED);
-
-        if (!$success) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to cancel order item'
-            ], 500);
-        }
-
-        // Order status is auto-recalculated via OrderItem boot event
-        $order->refresh();
-        $orderItem->refresh();
-
+        // Soft-disabled: do nothing
         return response()->json([
-            'success' => true,
-            'message' => 'Order item cancelled successfully',
-            'orderItem' => $orderItem->load(['product', 'provider']),
-            'order' => $order->load(['user', 'orderItems.product', 'orderItems.provider'])
+            'success' => false,
+            'message' => 'Order tracking is disabled.'
         ]);
     }
 

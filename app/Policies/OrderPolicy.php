@@ -48,20 +48,10 @@ class OrderPolicy
      */
     public function update(User $user, Order $order): bool
     {
-        if ($user->hasRole('admin')) {
-            return true;
-        }
-
-        if ($user->hasRole('provider')) {
-            return $order->containsProvider($user->id);
-        }
-
-        if ($user->hasRole('user')) {
-            // Users can only update (cancel) their own pending orders
-            return $order->user_id === $user->id && 
-                   $order->order_status === Order::STATUS_PENDING;
-        }
-
+        // Tracking removed: restrict updates to admin and providers owning items
+        if ($user->hasRole('admin')) { return true; }
+        if ($user->hasRole('provider')) { return $order->containsProvider($user->id); }
+        if ($user->hasRole('user')) { return $order->user_id === $user->id; }
         return false;
     }
 
@@ -73,33 +63,5 @@ class OrderPolicy
         return $user->hasRole('admin');
     }
 
-    /**
-     * Determine if the user can update the order status.
-     */
-    public function updateStatus(User $user, Order $order, string $newStatus): bool
-    {
-        return $order->canTransitionTo($newStatus);
-    }
-
-    /**
-     * Determine if the user can cancel the order.
-     */
-    public function cancel(User $user, Order $order): bool
-    {
-        if ($user->hasRole('admin')) {
-            return true;
-        }
-
-        if ($user->hasRole('provider')) {
-            return $order->containsProvider($user->id) && 
-                   $order->order_status === Order::STATUS_PENDING;
-        }
-
-        if ($user->hasRole('user')) {
-            return $order->user_id === $user->id && 
-                   $order->order_status === Order::STATUS_PENDING;
-        }
-
-        return false;
-    }
+    // Tracking removed: updateStatus and cancel capabilities removed
 }

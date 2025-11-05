@@ -138,43 +138,7 @@ class Order extends Model
      */
     public function getAllowedTransitions(): array
     {
-        $user = Auth::user();
-        
-        if (!$user) {
-            return [];
-        }
-
-        $currentStatus = $this->order_status ?? self::STATUS_PENDING;
-
-        if ($user->hasRole('admin')) {
-            // Admin can transition order-level status to any status except revert from delivered
-            $allStatuses = [self::STATUS_PENDING, self::STATUS_SHIPPED, self::STATUS_DELIVERED, self::STATUS_CANCELLED];
-            if ($currentStatus === self::STATUS_DELIVERED) {
-                // Cannot revert from delivered
-                return [];
-            }
-            return array_diff($allStatuses, [$currentStatus]);
-        }
-
-        if ($user->hasRole('provider')) {
-            // Provider: these transitions will be applied to their items, not the order
-            // pending → shipped/delivered/cancelled, shipped → delivered
-            $transitions = [];
-            if ($currentStatus === self::STATUS_PENDING) {
-                $transitions = [self::STATUS_SHIPPED, self::STATUS_DELIVERED, self::STATUS_CANCELLED];
-            } elseif ($currentStatus === self::STATUS_SHIPPED) {
-                $transitions = [self::STATUS_DELIVERED];
-            }
-            return $transitions;
-        }
-
-        if ($user->hasRole('user')) {
-            // User: can only cancel pending orders
-            if ($currentStatus === self::STATUS_PENDING && $this->user_id === $user->id) {
-                return [self::STATUS_CANCELLED];
-            }
-        }
-
+        // Tracking removed: no transitions available
         return [];
     }
 
@@ -183,8 +147,8 @@ class Order extends Model
      */
     public function canTransitionTo(string $newStatus): bool
     {
-        $allowed = $this->getAllowedTransitions();
-        return in_array($newStatus, $allowed);
+        // Tracking removed
+        return false;
     }
 
     /**
@@ -192,57 +156,24 @@ class Order extends Model
      */
     public function transitionTo(string $newStatus): bool
     {
-        if (!$this->canTransitionTo($newStatus)) {
-            return false;
-        }
-
-        $oldStatus = $this->order_status;
-        $this->order_status = $newStatus;
-        $this->save();
-
-        // Fire appropriate event
-        $eventClass = $this->getStatusEventClass($newStatus);
-        if ($eventClass) {
-            event(new $eventClass($this, $oldStatus));
-        }
-
-        return true;
+        // Tracking removed: do nothing
+        return false;
     }
 
     /**
      * Get the event class for a status change
      */
-    protected function getStatusEventClass(string $status): ?string
-    {
-        return match($status) {
-            self::STATUS_SHIPPED => \App\Events\OrderShipped::class,
-            self::STATUS_DELIVERED => \App\Events\OrderDelivered::class,
-            self::STATUS_CANCELLED => \App\Events\OrderCancelled::class,
-            default => null,
-        };
-    }
+    protected function getStatusEventClass(string $status): ?string { return null; }
 
     /**
      * Get status badge class for UI
      */
-    public function getStatusBadgeClass(): string
-    {
-        return match($this->order_status) {
-            self::STATUS_PENDING => 'bg-warning',
-            self::STATUS_SHIPPED => 'bg-primary',
-            self::STATUS_DELIVERED => 'bg-success',
-            self::STATUS_CANCELLED => 'bg-danger',
-            default => 'bg-secondary',
-        };
-    }
+    public function getStatusBadgeClass(): string { return 'bg-secondary'; }
 
     /**
      * Get status display name
      */
-    public function getStatusDisplayName(): string
-    {
-        return ucfirst($this->order_status ?? self::STATUS_PENDING);
-    }
+    public function getStatusDisplayName(): string { return 'N/A'; }
 
     /**
      * Get order progress percentage (for timeline)
@@ -261,94 +192,13 @@ class Order extends Model
     /**
      * Returns item status if all items share the same status; otherwise null.
      */
-    public function getUniformItemStatus(): ?string
-    {
-        $statuses = $this->orderItems()->pluck('order_status');
-        if ($statuses->isEmpty()) {
-            return null;
-        }
-        return $statuses->unique()->count() === 1 ? $statuses->first() : null;
-    }
+    public function getUniformItemStatus(): ?string { return null; }
 
     /**
      * Recalculate order status based on item statuses
      * This only updates the aggregate order status, never removes provider_ids
      */
-    public function recalculateOrderStatus(): void
-    {
-        // Use fresh query to avoid stale data
-        $items = OrderItem::where('order_id', $this->id)->get();
-        
-        if ($items->isEmpty()) {
-            return;
-        }
-
-        $statusCounts = [
-            self::STATUS_PENDING => 0,
-            self::STATUS_SHIPPED => 0,
-            self::STATUS_DELIVERED => 0,
-            self::STATUS_CANCELLED => 0,
-        ];
-
-        foreach ($items as $item) {
-            $status = $item->order_status ?? self::STATUS_PENDING;
-            if (isset($statusCounts[$status])) {
-                $statusCounts[$status]++;
-            }
-        }
-
-        $totalItems = $items->count();
-        
-        // Get current status from database directly to avoid stale data
-        $currentStatus = DB::table('orders')->where('id', $this->id)->value('order_status');
-        $newStatus = $currentStatus;
-
-        // Logic: Calculate aggregate status (earliest active state when mixed)
-        // Priority: pending < shipped < delivered, cancelled only if all cancelled
-        if ($statusCounts[self::STATUS_CANCELLED] === $totalItems) {
-            // All items cancelled
-            $newStatus = self::STATUS_CANCELLED;
-        } elseif ($statusCounts[self::STATUS_DELIVERED] === $totalItems) {
-            // All items delivered
-            $newStatus = self::STATUS_DELIVERED;
-        } elseif ($statusCounts[self::STATUS_PENDING] > 0) {
-            // Any pending keeps the order at Pending (earliest active stage)
-            $newStatus = self::STATUS_PENDING;
-        } elseif ($statusCounts[self::STATUS_SHIPPED] > 0) {
-            // No pending, at least one shipped (others may be delivered/cancelled) => Shipped
-            $newStatus = self::STATUS_SHIPPED;
-        } elseif ($statusCounts[self::STATUS_DELIVERED] > 0) {
-            // Mixed delivered/cancelled with no shipped/pending => Delivered
-            $newStatus = self::STATUS_DELIVERED;
-        } else {
-            // Fallback
-            $newStatus = $currentStatus ?? self::STATUS_PENDING;
-        }
-
-        // Only update if status changed
-        $currentStatus = DB::table('orders')->where('id', $this->id)->value('order_status');
-
-        if ($newStatus !== $currentStatus) {
-            $oldStatus = $currentStatus;
-
-            // Use direct DB update to avoid policy checks during recalculation
-            // CRITICAL: Only update order_status, never touch provider_ids
-            DB::table('orders')->where('id', $this->id)->update([
-                'order_status' => $newStatus,
-                'updated_at' => now(),
-            ]);
-
-            // Refresh the model
-            $this->refresh();
-
-            // Fire order-level events for significant changes
-            if ($newStatus === self::STATUS_DELIVERED && $oldStatus !== self::STATUS_DELIVERED) {
-                event(new \App\Events\OrderDelivered($this, $oldStatus));
-            } elseif ($newStatus === self::STATUS_CANCELLED && $oldStatus !== self::STATUS_CANCELLED) {
-                event(new \App\Events\OrderCancelled($this, $oldStatus));
-            }
-        }
-    }
+    public function recalculateOrderStatus(): void { /* tracking removed */ }
 
     protected static function boot()
     {

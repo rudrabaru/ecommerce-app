@@ -19,30 +19,19 @@
                                     <small class="text-muted">Placed on {{ $order->created_at->format('F j, Y \a\t g:i A') }}</small>
                                 </div>
                                 <div class="text-end">
-                                    <span class="badge rounded-pill {{ $order->getStatusBadgeClass() }} fs-6 px-3 py-2">
-                                        {{ $order->getStatusDisplayName() }}
-                                    </span>
+                                    <span class="badge rounded-pill bg-secondary fs-6 px-3 py-2">N/A</span>
                                     <div class="mt-2"><strong>Total: ${{ number_format((float)$order->total_amount, 2) }}</strong></div>
                                 </div>
                             </div>
                         </div>
                         <div class="card-body">
-                            <!-- Order Timeline -->
-                            <x-order-timeline :order="$order" />
+                            <!-- Order tracking removed -->
                             
                             <hr>
                             
                             <!-- Order Items -->
                             <div class="d-flex justify-content-between align-items-center mb-3">
                                 <h6 class="mb-0">Order Items:</h6>
-                                @if($order->order_status === 'pending')
-                                    <button type="button" 
-                                            class="btn btn-danger btn-sm" 
-                                            onclick="cancelOrder({{ $order->id }})"
-                                            id="cancelBtn{{ $order->id }}">
-                                        <i class="fas fa-times"></i> Cancel Order
-                                    </button>
-                                @endif
                             </div>
                             @foreach($order->orderItems as $item)
                                 <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
@@ -60,13 +49,7 @@
                                         <div class="flex-grow-1">
                                             <div class="fw-semibold">{{ optional($item->product)->title ?? 'Product' }}</div>
                                             <small class="text-muted">Qty: {{ $item->quantity }} × ${{ number_format((float)$item->unit_price, 2) }}</small>
-                                            @if(auth()->user()->hasRole('user'))
-                                                <div class="mt-1">
-                                                    <span class="badge {{ $item->getStatusBadgeClass() }} badge-sm">
-                                                        {{ $item->getStatusDisplayName() }}
-                                                    </span>
-                                                </div>
-                                            @endif
+                                            
                                         </div>
                                     </div>
                                     <div class="text-end">
@@ -115,86 +98,5 @@
 <x-footer />
 
 <script>
-function cancelOrder(orderId) {
-    const btn = document.getElementById('cancelBtn' + orderId);
-    const originalText = btn.innerHTML;
-    
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            title: 'Cancel Order?',
-            text: 'Are you sure you want to cancel this order? This action cannot be undone.',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            confirmButtonText: 'Yes, cancel it!',
-            cancelButtonText: 'No, keep it'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                btn.disabled = true;
-                btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Cancelling...';
-                
-                fetch('/user/orders/' + orderId + '/cancel', {
-                    method: 'POST',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                        'Content-Type': 'application/json'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Order Cancelled',
-                            text: data.message || 'Your order has been cancelled successfully.',
-                            timer: 2000,
-                            showConfirmButton: false
-                        }).then(() => {
-                            location.reload();
-                        });
-                    } else {
-                        Swal.fire('Error', data.message || 'Failed to cancel order', 'error');
-                        btn.disabled = false;
-                        btn.innerHTML = originalText;
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    Swal.fire('Error', 'An error occurred while cancelling the order', 'error');
-                    btn.disabled = false;
-                    btn.innerHTML = originalText;
-                });
-            }
-        });
-    } else {
-        if (confirm('Are you sure you want to cancel this order?')) {
-            btn.disabled = true;
-            fetch('/user/orders/' + orderId + '/cancel', {
-                method: 'POST',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Order cancelled successfully');
-                    location.reload();
-                } else {
-                    alert(data.message || 'Failed to cancel order');
-                    btn.disabled = false;
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred');
-                btn.disabled = false;
-            });
-        }
-    }
-}
-
-window.cancelOrder = cancelOrder;
+// Order tracking removed on user side
 </script>

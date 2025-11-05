@@ -66,46 +66,7 @@ class OrderItem extends Model
      */
     public function getAllowedTransitions(): array
     {
-        $user = Auth::user();
-        
-        if (!$user) {
-            return [];
-        }
-
-        $currentStatus = $this->order_status ?? self::STATUS_PENDING;
-
-        if ($user->hasRole('admin')) {
-            // Admin can transition to any status except revert from delivered
-            $allStatuses = [self::STATUS_PENDING, self::STATUS_SHIPPED, self::STATUS_DELIVERED, self::STATUS_CANCELLED];
-            if ($currentStatus === self::STATUS_DELIVERED) {
-                return [];
-            }
-            return array_diff($allStatuses, [$currentStatus]);
-        }
-
-        if ($user->hasRole('provider')) {
-            // Provider can only update their own items
-            if ($this->provider_id !== $user->id) {
-                return [];
-            }
-            
-            // Provider: pending → shipped/delivered/cancelled, shipped → delivered
-            $transitions = [];
-            if ($currentStatus === self::STATUS_PENDING) {
-                $transitions = [self::STATUS_SHIPPED, self::STATUS_DELIVERED, self::STATUS_CANCELLED];
-            } elseif ($currentStatus === self::STATUS_SHIPPED) {
-                $transitions = [self::STATUS_DELIVERED];
-            }
-            return $transitions;
-        }
-
-        if ($user->hasRole('user')) {
-            // User: can only cancel pending items in their own orders
-            if ($this->order->user_id === $user->id && $currentStatus === self::STATUS_PENDING) {
-                return [self::STATUS_CANCELLED];
-            }
-        }
-
+        // Tracking removed: no transitions
         return [];
     }
 
@@ -114,8 +75,8 @@ class OrderItem extends Model
      */
     public function canTransitionTo(string $newStatus): bool
     {
-        $allowed = $this->getAllowedTransitions();
-        return in_array($newStatus, $allowed);
+        // Tracking removed
+        return false;
     }
 
     /**
@@ -124,68 +85,22 @@ class OrderItem extends Model
      */
     public function transitionTo(string $newStatus): bool
     {
-        if (!$this->canTransitionTo($newStatus)) {
-            return false;
-        }
-
-        $oldStatus = $this->order_status;
-        // Use Eloquent save so relations/attributes are kept consistent and timestamps are updated
-        $this->order_status = $newStatus;
-        $this->save();
-
-        // Refresh model to reflect latest state
-        $this->refresh();
-
-        // Manually trigger order recalculation (ensure fresh instance is used)
-        // This will update the aggregate order status but NEVER remove provider_ids
-        if ($this->order_id) {
-            $order = Order::find($this->order_id);
-            if ($order) {
-                $order->recalculateOrderStatus();
-            }
-        }
-
-        // Fire appropriate event
-        $eventClass = $this->getStatusEventClass($newStatus);
-        if ($eventClass) {
-            event(new $eventClass($this, $oldStatus));
-        }
-
-        return true;
+        // Tracking removed: do nothing
+        return false;
     }
 
     /**
      * Get the event class for a status change
      */
-    protected function getStatusEventClass(string $status): ?string
-    {
-        return match($status) {
-            self::STATUS_SHIPPED => \App\Events\OrderItemShipped::class,
-            self::STATUS_DELIVERED => \App\Events\OrderItemDelivered::class,
-            self::STATUS_CANCELLED => \App\Events\OrderItemCancelled::class,
-            default => null,
-        };
-    }
+    protected function getStatusEventClass(string $status): ?string { return null; }
 
     /**
      * Get status badge class for UI
      */
-    public function getStatusBadgeClass(): string
-    {
-        return match($this->order_status) {
-            self::STATUS_PENDING => 'bg-warning',
-            self::STATUS_SHIPPED => 'bg-primary',
-            self::STATUS_DELIVERED => 'bg-success',
-            self::STATUS_CANCELLED => 'bg-danger',
-            default => 'bg-secondary',
-        };
-    }
+    public function getStatusBadgeClass(): string { return 'bg-secondary'; }
 
     /**
      * Get status display name
      */
-    public function getStatusDisplayName(): string
-    {
-        return ucfirst($this->order_status ?? self::STATUS_PENDING);
-    }
+    public function getStatusDisplayName(): string { return 'N/A'; }
 }
