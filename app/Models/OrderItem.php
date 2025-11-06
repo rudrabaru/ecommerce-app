@@ -93,7 +93,7 @@ class OrderItem extends Model
             return true;
         }
         if (!$this->canTransitionTo($newStatus)) {
-            return false;
+        return false;
         }
 
         $this->order_status = $newStatus;

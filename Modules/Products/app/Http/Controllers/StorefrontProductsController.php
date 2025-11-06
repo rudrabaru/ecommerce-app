@@ -82,7 +82,7 @@ class StorefrontProductsController extends Controller
         if (empty($query->getQuery()->columns)) {
             $query->select('products.*');
         }
-        $products = $query->paginate(12)->withQueryString();
+        $products = $query->with('ratings')->paginate(12)->withQueryString();
 
         // Build category tree for sidebar
         $categories = Category::with('children')->whereNull('parent_id')->orderBy('name')->get();
@@ -114,18 +114,28 @@ class StorefrontProductsController extends Controller
             ? Product::where('is_approved', true)->findOrFail($idOrSlug)
             : Product::where('is_approved', true)->where('slug', $idOrSlug)->firstOrFail();
 
-        $product->load(['category', 'provider']);
+        $product->load(['category', 'provider', 'ratings.user']);
+
+        // Load reviews with user info, ordered by most recent
+        $reviews = \App\Models\ProductRating::where('product_id', $product->id)
+            ->where(function($q) {
+                $q->whereNotNull('rating')->orWhereNotNull('review');
+            })
+            ->with('user')
+            ->latest('created_at')
+            ->get();
 
         $relatedProducts = Product::where(function($q){ $q->where('is_approved', true)->orWhereNull('is_approved'); })
             ->where('category_id', $product->category_id)
             ->where('id', '!=', $product->id)
+            ->with('ratings')
             ->take(4)
             ->get();
 
         // Get available discount codes for this product's category
         $discountCodes = $this->getAvailableDiscountCodes($product->category_id);
 
-        return view('shop-details', compact('product', 'relatedProducts', 'discountCodes'));
+        return view('shop-details', compact('product', 'relatedProducts', 'discountCodes', 'reviews'));
     }
 
     /**

@@ -42,6 +42,36 @@ class Product extends Model
         return $this->belongsTo(\App\Models\User::class, 'provider_id');
     }
 
+    public function ratings(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\App\Models\ProductRating::class);
+    }
+
+    /**
+     * Get average rating (1-5) for this product
+     */
+    public function getAverageRatingAttribute(): ?float
+    {
+        $avg = $this->ratings()->whereNotNull('rating')->avg('rating');
+        return $avg ? round((float)$avg, 1) : null;
+    }
+
+    /**
+     * Get total review count
+     */
+    public function getReviewCountAttribute(): int
+    {
+        return $this->ratings()->count();
+    }
+
+    /**
+     * Get ratings count with stars
+     */
+    public function getRatingsWithStarsCountAttribute(): int
+    {
+        return $this->ratings()->whereNotNull('rating')->count();
+    }
+
     public function getImageUrlAttribute(): string
     {
         $image = trim((string)($this->image ?? ''), " \t\n\r\0\x0B\"'{}");

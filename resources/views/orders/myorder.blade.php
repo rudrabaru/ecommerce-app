@@ -1,3 +1,4 @@
+myorder.blade.php :
 <x-header />
 
 <x-breadcrumbs :items="[
@@ -75,6 +76,14 @@
                                     </div>
                                     <div class="text-end">
                                         <div class="fw-bold">${{ number_format((float)$item->total, 2) }}</div>
+                                        @if($order->order_status === 'delivered' && $item->order_status !== 'cancelled')
+                                            <div class="mt-2 js-rating-control"
+                                                 data-order-id="{{ $order->id }}"
+                                                 data-order-item-id="{{ $item->id }}"
+                                                 data-product-id="{{ $item->product_id }}">
+                                                <!-- Rating status or Rate button injected by JS -->
+                                            </div>
+                                        @endif
                                     </div>
                                 </div>
                             @endforeach
@@ -103,6 +112,8 @@
                                 <div>
                                     @if($order->order_status === 'pending')
                                         <button class="btn btn-outline-danger btn-sm js-cancel-order" data-order-id="{{ $order->id }}">Cancel Order</button>
+                                    @elseif($order->order_status === 'delivered')
+                                        <button class="btn btn-primary btn-sm js-rate-order-btn" data-order-id="{{ $order->id }}">Rate Now</button>
                                     @endif
                                 </div>
                             </div>
@@ -120,6 +131,28 @@
         </div>
     </div>
 </section>
+
+<!-- Rating Modal -->
+<div class="modal fade" id="ratingModal" tabindex="-1" aria-labelledby="ratingModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="ratingModalLabel">Rate Your Products</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="ratingModalBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <x-footer />
 
@@ -202,5 +235,190 @@
         });
 
         poll();
+
+        // Rating functionality
+        function renderStars(container, currentRating, readOnly, productId, orderItemId) {
+            const stars = [];
+            for (let i = 1; i <= 5; i++) {
+                const star = document.createElement('span');
+                star.className = 'star-rating-star' + (readOnly ? ' readonly' : ' clickable');
+                star.innerHTML = i <= currentRating ? '⭐' : '☆';
+                star.dataset.rating = i;
+                if (!readOnly) {
+                    star.addEventListener('click', function() {
+                        const rating = parseInt(this.dataset.rating);
+                        container.dataset.rating = rating;
+                        renderStars(container, rating, false, productId, orderItemId);
+                    });
+                }
+                stars.push(star);
+            }
+            container.innerHTML = '';
+            stars.forEach(s => container.appendChild(s));
+        }
+
+        function loadRatingControls() {
+            document.querySelectorAll('.js-rating-control').forEach(function(ctrl) {
+                const orderId = ctrl.dataset.orderId;
+                const productId = ctrl.dataset.productId;
+                fetch(`/ratings/orders/${orderId}/products/${productId}`, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.rating) {
+                        const rating = data.rating;
+                        let html = '<div class="small"><strong>Your Rating:</strong><br>';
+                        if (rating.rating) {
+                            html += '<span class="star-display">';
+                            for (let i = 1; i <= 5; i++) {
+                                html += i <= rating.rating ? '⭐' : '☆';
+                            }
+                            html += '</span>';
+                        }
+                        if (rating.review) {
+                            html += '<div class="mt-1"><em>"' + (rating.review.length > 50 ? rating.review.substring(0, 50) + '...' : rating.review) + '"</em></div>';
+                        }
+                        html += '</div>';
+                        ctrl.innerHTML = html;
+                    } else {
+                        ctrl.innerHTML = '<button class="btn btn-sm btn-outline-primary js-rate-item-btn" data-order-id="' + orderId + '" data-product-id="' + productId + '" data-order-item-id="' + ctrl.dataset.orderItemId + '">Rate</button>';
+                    }
+                })
+                .catch(() => {
+                    ctrl.innerHTML = '<button class="btn btn-sm btn-outline-primary js-rate-item-btn" data-order-id="' + orderId + '" data-product-id="' + productId + '" data-order-item-id="' + ctrl.dataset.orderItemId + '">Rate</button>';
+                });
+            });
+        }
+
+        // Rate Order button (opens modal)
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('.js-rate-order-btn');
+            if (btn) {
+                const orderId = btn.dataset.orderId;
+                const modal = new bootstrap.Modal(document.getElementById('ratingModal'));
+                const body = document.getElementById('ratingModalBody');
+                body.innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div></div>';
+                modal.show();
+
+                fetch(`/ratings/orders/${orderId}/eligible-products`, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(async function(r){
+                    try { return await r.json(); } catch(e) { return { success: r.ok }; }
+                })
+                .then(function(data){
+                    if (!data.success) {
+                        body.innerHTML = '<div class="alert alert-danger">' + (data.message || 'Failed to load products') + '</div>';
+                        return;
+                    }
+
+                    let html = '';
+                    data.products.forEach(function(p) {
+                        html += '<div class="border rounded p-3 mb-3" data-product-id="' + p.product_id + '" data-order-item-id="' + p.order_item_id + '">';
+                        html += '<div class="d-flex align-items-center mb-3">';
+                        html += '<img src="' + (p.product_image || 'https://placehold.co/60x60') + '" style="width:60px;height:60px;object-fit:cover;border-radius:6px;" class="me-3">';
+                        html += '<div><strong>' + p.product_title + '</strong><br><small>Qty: ' + p.quantity + '</small></div>';
+                        html += '</div>';
+
+                        if (p.rating) {
+                            html += '<div class="alert alert-info"><strong>Your Rating:</strong><br>';
+                            if (p.rating.rating) {
+                                html += '<span class="star-display">';
+                                for (let i = 1; i <= 5; i++) {
+                                    html += i <= p.rating.rating ? '⭐' : '☆';
+                                }
+                                html += '</span>';
+                            }
+                            if (p.rating.review) {
+                                html += '<div class="mt-2"><em>"' + p.rating.review + '"</em></div>';
+                            }
+                            html += '</div>';
+                        } else {
+                            html += '<div><label class="form-label">Star Rating (Optional)</label>';
+                            html += '<div class="star-rating-container mb-2" data-rating="0"></div>';
+                            html += '<label class="form-label">Review (Optional)</label>';
+                            html += '<textarea class="form-control review-text" rows="3" placeholder="Write your review..."></textarea>';
+                            html += '</div>';
+                        }
+                        html += '</div>';
+                    });
+
+                    // Add single submit button for all
+                    html += '<div class="d-flex justify-content-end"><button class="btn btn-primary js-submit-all-ratings" data-order-id="' + orderId + '">Submit</button></div>';
+                    body.innerHTML = html;
+
+                    // Initialize star ratings for products that can be rated
+                    body.querySelectorAll('.star-rating-container').forEach(function(container) {
+                        renderStars(container, 0, false, container.closest('[data-product-id]').dataset.productId, container.closest('[data-order-item-id]').dataset.orderItemId);
+                    });
+                })
+                .catch(function(){
+                    body.innerHTML = '<div class="alert alert-danger">Error loading products</div>';
+                });
+            }
+
+            // Rate individual item button
+            const rateItemBtn = e.target.closest('.js-rate-item-btn');
+            if (rateItemBtn) {
+                const orderId = rateItemBtn.dataset.orderId;
+                const btn = document.querySelector('.js-rate-order-btn[data-order-id="' + orderId + '"]');
+                if (btn) btn.click();
+            }
+
+            // Submit all ratings (batch)
+            const submitAny = e.target.closest('.js-submit-all-ratings');
+            if (submitAny) {
+                const bodyEl = document.getElementById('ratingModalBody');
+                const blocks = bodyEl.querySelectorAll('[data-product-id][data-order-item-id]');
+                const orderId = submitAny.dataset.orderId;
+                const items = [];
+                blocks.forEach(function(b){
+                    const star = b.querySelector('.star-rating-container');
+                    const review = b.querySelector('.review-text');
+                    const rating = star ? parseInt(star.dataset.rating || '0') : 0;
+                    const text = review ? (review.value || '').trim() : '';
+                    items.push({
+                        product_id: b.getAttribute('data-product-id'),
+                        order_item_id: b.getAttribute('data-order-item-id'),
+                        rating: rating > 0 ? rating : null,
+                        review: text !== '' ? text : null,
+                    });
+                });
+                submitAny.disabled = true;
+                submitAny.textContent = 'Submitting...';
+                fetch('/ratings/submit-batch', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ order_id: orderId, items })
+                })
+                .then(async function(r){
+                    try { return await r.json(); } catch(e) { return { success: r.ok }; }
+                })
+                .then(function(data){
+                    if (data && data.success) {
+                        Swal.fire('Success', data.message || 'Ratings submitted successfully', 'success');
+                        bootstrap.Modal.getInstance(document.getElementById('ratingModal')).hide();
+                        setTimeout(() => window.location.reload(), 1200);
+                    } else {
+                        Swal.fire('Error', (data && data.message) || 'Failed to submit ratings', 'error');
+                        submitAny.disabled = false;
+                        submitAny.textContent = 'Submit';
+                    }
+                })
+                .catch(() => {
+                    Swal.fire('Error', 'An error occurred', 'error');
+                    submitAny.disabled = false;
+                    submitAny.textContent = 'Submit';
+                });
+            }
+        });
+
+        // Load rating controls on page load
+        loadRatingControls();
     })();
 </script>

@@ -14,11 +14,14 @@
                 <h6>{{ $p->title }}</h6>
                 <a href="{{ route('shop.details', $p->id) }}" class="add-cart">View Details</a>
                 <div class="rating">
-                    <i class="fa fa-star-o"></i>
-                    <i class="fa fa-star-o"></i>
-                    <i class="fa fa-star-o"></i>
-                    <i class="fa fa-star-o"></i>
-                    <i class="fa fa-star-o"></i>
+                    @if($p->average_rating)
+                        @for($i = 1; $i <= 5; $i++)
+                            <i class="fa {{ $i <= round($p->average_rating) ? 'fa-star text-warning' : 'fa-star-o' }}"></i>
+                        @endfor
+                        <span class="ms-1">{{ number_format($p->average_rating, 1) }} ({{ $p->review_count }} {{ $p->review_count == 1 ? 'review' : 'reviews' }})</span>
+                    @else
+                        <span class="text-muted">No ratings yet</span>
+                    @endif
                 </div>
                 <h5>${{ number_format((float)$p->price, 2) }}</h5>
                 <form method="post" action="{{ route('cart.add') }}" class="add-to-cart-form">

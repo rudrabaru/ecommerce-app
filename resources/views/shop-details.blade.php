@@ -51,12 +51,14 @@
                             <div class="product__details__text">
                                 <h4>{{ $product->title }}</h4>
                                 <div class="rating">
-                                    <i class="fa fa-star"></i>
-                                    <i class="fa fa-star"></i>
-                                    <i class="fa fa-star"></i>
-                                    <i class="fa fa-star"></i>
-                                    <i class="fa fa-star-o"></i>
-                                    <span> - 5 Reviews</span>
+                                    @if($product->average_rating)
+                                        @for($i = 1; $i <= 5; $i++)
+                                            <i class="fa {{ $i <= round($product->average_rating) ? 'fa-star' : 'fa-star-o' }}"></i>
+                                        @endfor
+                                        <span> - {{ $product->review_count }} {{ $product->review_count == 1 ? 'Review' : 'Reviews' }}</span>
+                                    @else
+                                        <span class="text-muted">No ratings yet</span>
+                                    @endif
                                 </div>
                                 <h3>${{ number_format((float)$product->price, 2) }}</h3>
                                 <p>{{ $product->description }}</p>
@@ -149,8 +151,8 @@
                                     role="tab">Description</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" data-toggle="tab" href="#tabs-6" role="tab">Customer
-                                    Previews(5)</a>
+                                    <a class="nav-link" data-toggle="tab" href="#tabs-6" role="tab">Customer Reviews
+                                    ({{ $reviews->count() }})</a>
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link" data-toggle="tab" href="#tabs-7" role="tab">Additional
@@ -194,32 +196,50 @@
                                 </div>
                                 <div class="tab-pane" id="tabs-6" role="tabpanel">
                                     <div class="product__details__tab__content">
-                                        <div class="product__details__tab__content__item">
-                                            <h5>Products Infomation</h5>
-                                            <p>A Pocket PC is a handheld computer, which features many of the same
-                                                capabilities as a modern PC. These handy little devices allow
-                                                individuals to retrieve and store e-mail messages, create a contact
-                                                file, coordinate appointments, surf the internet, exchange text messages
-                                                and more. Every product that is labeled as a Pocket PC must be
-                                                accompanied with specific software to operate the unit and must feature
-                                            a touchscreen and touchpad.</p>
-                                            <p>As is the case with any new technology product, the cost of a Pocket PC
-                                                was substantial during it’s early release. For approximately $700.00,
-                                                consumers could purchase one of top-of-the-line Pocket PCs in 2003.
-                                                These days, customers are finding that prices have become much more
-                                                reasonable now that the newness is wearing off. For approximately
-                                            $350.00, a new Pocket PC can now be purchased.</p>
+                                        <div class="mb-4">
+                                            <h5>Product Ratings</h5>
+                                            @if($product->average_rating)
+                                                <div class="mb-3">
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <span class="display-6 me-3">{{ number_format($product->average_rating, 1) }}</span>
+                                                        <div>
+                                                            @for($i = 1; $i <= 5; $i++)
+                                                                <i class="fa {{ $i <= round($product->average_rating) ? 'fa-star text-warning' : 'fa-star-o' }}"></i>
+                                                            @endfor
+                                                        </div>
+                                                    </div>
+                                                    <p class="text-muted mb-0">Based on {{ $product->review_count }} {{ $product->review_count == 1 ? 'review' : 'reviews' }}</p>
+                                                </div>
+                                            @else
+                                                <p class="text-muted">No ratings yet for this product.</p>
+                                            @endif
                                         </div>
-                                        <div class="product__details__tab__content__item">
-                                            <h5>Material used</h5>
-                                            <p>Polyester is deemed lower quality due to its none natural quality’s. Made
-                                                from synthetic materials, not natural like wool. Polyester suits become
-                                                creased easily and are known for not being breathable. Polyester suits
-                                                tend to have a shine to them compared to wool and cotton suits, this can
-                                                make the suit look cheap. The texture of velvet is luxurious and
-                                                breathable. Velvet is a great choice for dinner party jacket and can be
-                                            worn all year round.</p>
-                                        </div>
+                                        
+                                        @if($reviews->count() > 0)
+                                            <h5 class="mb-3">Customer Reviews</h5>
+                                            @foreach($reviews as $review)
+                                                <div class="product__details__tab__content__item border-bottom pb-3 mb-3">
+                                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                                        <div>
+                                                            <strong>{{ $review->user->name ?? 'Anonymous' }}</strong>
+                                                            @if($review->rating)
+                                                                <div class="mt-1">
+                                                                    @for($i = 1; $i <= 5; $i++)
+                                                                        <i class="fa {{ $i <= $review->rating ? 'fa-star text-warning' : 'fa-star-o' }}"></i>
+                                                                    @endfor
+                                                                </div>
+                                                            @endif
+                                                        </div>
+                                                        <small class="text-muted">{{ $review->created_at->format('M d, Y') }}</small>
+                                                    </div>
+                                                    @if($review->review)
+                                                        <p class="mb-0">{{ $review->review }}</p>
+                                                    @endif
+                                                </div>
+                                            @endforeach
+                                        @else
+                                            <p class="text-muted">No reviews yet. Be the first to review this product!</p>
+                                        @endif
                                     </div>
                                 </div>
                                 <div class="tab-pane" id="tabs-7" role="tabpanel">
@@ -288,11 +308,14 @@
                             <h6>{{ $related->title }}</h6>
                             <a href="{{ route('shop.details', $related->id) }}" class="add-cart">View Details</a>
                             <div class="rating">
-                                <i class="fa fa-star-o"></i>
-                                <i class="fa fa-star-o"></i>
-                                <i class="fa fa-star-o"></i>
-                                <i class="fa fa-star-o"></i>
-                                <i class="fa fa-star-o"></i>
+                                @if($related->average_rating)
+                                    @for($i = 1; $i <= 5; $i++)
+                                        <i class="fa {{ $i <= round($related->average_rating) ? 'fa-star text-warning' : 'fa-star-o' }}"></i>
+                                    @endfor
+                                    <span class="ms-1">{{ number_format($related->average_rating, 1) }} ({{ $related->review_count }})</span>
+                                @else
+                                    <span class="text-muted">No ratings yet</span>
+                                @endif
                             </div>
                             <h5>${{ number_format((float)$related->price, 1) }}</h5>
                             <form method="post" action="{{ route('cart.add') }}" class="add-to-cart-form">

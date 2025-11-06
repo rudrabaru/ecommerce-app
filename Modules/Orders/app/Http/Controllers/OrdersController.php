@@ -541,7 +541,7 @@ class OrdersController extends Controller
                 $isAdmin = Auth::user() && Auth::user()->hasRole('admin');
                 $isProvider = Auth::user() && Auth::user()->hasRole('provider');
                 $prefix = $isAdmin ? 'admin' : 'provider';
-
+                
                 $btns = '<div class="btn-group" role="group">';
                 $btns .= '<button class="btn btn-sm btn-outline-primary editBtn" data-module="orders" data-id="'.$row->id.'" title="Edit">';
                 $btns .= '<i class="fas fa-pencil-alt"></i></button>';

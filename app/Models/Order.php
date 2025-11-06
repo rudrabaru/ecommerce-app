@@ -167,7 +167,7 @@ class Order extends Model
             return true;
         }
         if (!$this->canTransitionTo($newStatus)) {
-            return false;
+        return false;
         }
 
         $oldStatus = $this->order_status;

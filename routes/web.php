@@ -46,6 +46,14 @@ Route::middleware('auth')->group(function () {
             ->get();
         return view('orders.myorder', compact('orders'));
     })->name('orders.myorder');
+
+    // Product Rating routes (user only)
+    Route::prefix('ratings')->as('ratings.')->group(function () {
+        Route::get('/orders/{order}/eligible-products', [\App\Http\Controllers\ProductRatingController::class, 'getEligibleProducts'])->name('eligible-products');
+        Route::post('/submit', [\App\Http\Controllers\ProductRatingController::class, 'submit'])->name('submit');
+        Route::post('/submit-batch', [\App\Http\Controllers\ProductRatingController::class, 'submitBatch'])->name('submit-batch');
+        Route::get('/orders/{order}/products/{product}', [\App\Http\Controllers\ProductRatingController::class, 'getUserRating'])->name('user-rating');
+    });
 });
 
 // Provide a common dashboard route for auth flows/tests; redirect by role
