@@ -50,9 +50,15 @@ class ProductRatingController extends Controller
             ], 422);
         }
 
+        // Optional filter by a single product_id (for per-item modal)
+        $filterProductId = $request->query('product_id');
+
         // Get eligible items (delivered, not cancelled)
         $eligibleItems = $order->orderItems()
             ->where('order_status', '!=', OrderItem::STATUS_CANCELLED)
+            ->when($filterProductId, function($q) use ($filterProductId) {
+                $q->where('product_id', (int)$filterProductId);
+            })
             ->with('product')
             ->get();
 
@@ -292,10 +298,11 @@ class ProductRatingController extends Controller
             ->first();
 
         if (!$rating) {
+            // Return 200 with success=false to avoid triggering frontend error handlers
             return response()->json([
                 'success' => false,
                 'message' => 'No rating found'
-            ], 404);
+            ]);
         }
 
         return response()->json([
@@ -307,5 +314,41 @@ class ProductRatingController extends Controller
                 'created_at' => $rating->created_at->toAtomString(),
             ],
         ]);
+    }
+
+    /**
+     * Update an existing rating (user-owned)
+     */
+    public function update(Request $request, $id)
+    {
+        $user = Auth::user();
+        abort_unless($user && $user->hasRole('user'), 403);
+
+        $validated = $request->validate([
+            'rating' => ['nullable', 'integer', 'min:1', 'max:5'],
+            'review' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        $rating = ProductRating::where('id', $id)->where('user_id', $user->id)->firstOrFail();
+
+        // Allow clearing rating or review by sending null/empty
+        $rating->rating = array_key_exists('rating', $validated) ? ($validated['rating'] ?? null) : $rating->rating;
+        $rating->review = array_key_exists('review', $validated) ? ($validated['review'] ?? null) : $rating->review;
+        $rating->save();
+
+        return response()->json(['success' => true, 'message' => 'Rating updated']);
+    }
+
+    /**
+     * Delete rating (user-owned)
+     */
+    public function destroy($id)
+    {
+        $user = Auth::user();
+        abort_unless($user && $user->hasRole('user'), 403);
+
+        $rating = ProductRating::where('id', $id)->where('user_id', $user->id)->firstOrFail();
+        $rating->delete();
+        return response()->json(['success' => true, 'message' => 'Rating deleted']);
     }
 }

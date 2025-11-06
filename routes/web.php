@@ -53,6 +53,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/submit', [\App\Http\Controllers\ProductRatingController::class, 'submit'])->name('submit');
         Route::post('/submit-batch', [\App\Http\Controllers\ProductRatingController::class, 'submitBatch'])->name('submit-batch');
         Route::get('/orders/{order}/products/{product}', [\App\Http\Controllers\ProductRatingController::class, 'getUserRating'])->name('user-rating');
+        Route::post('/{id}/update', [\App\Http\Controllers\ProductRatingController::class, 'update'])->name('update');
+        Route::delete('/{id}', [\App\Http\Controllers\ProductRatingController::class, 'destroy'])->name('destroy');
     });
 });
 
