@@ -15,16 +15,21 @@ use Modules\Products\Http\Controllers\CategoryController;
 |
 */
 
+// Public route for product stock (user-side dynamic updates)
+Route::get('products/{product}/stock', [ProductsController::class, 'getStock'])->name('products.stock');
+
 Route::middleware(['web', 'auth'])->group(function () {
     // Provider routes - only providers can access
     Route::middleware(['ensure_role:provider'])->prefix('provider')->as('provider.')->group(function () {
         Route::get('products/data', [ProductsController::class, 'data'])->name('products.data');
+        Route::get('products/{product}/stock', [ProductsController::class, 'getStock'])->name('products.stock');
         Route::resource('products', ProductsController::class)->names('products');
     });
 
     // Admin routes - only admins can access
     Route::middleware(['ensure_role:admin'])->prefix('admin')->as('admin.')->group(function () {
         Route::get('products/data', [ProductsController::class, 'data'])->name('products.data');
+        Route::get('products/{product}/stock', [ProductsController::class, 'getStock'])->name('products.stock');
         Route::resource('products', ProductsController::class)->names('products');
         Route::get('products/{product}/approve', [ProductsController::class, 'approve'])->name('products.approve');
         Route::get('products/{product}/block', [ProductsController::class, 'block'])->name('products.block');

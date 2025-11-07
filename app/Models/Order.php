@@ -5,8 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 class Order extends Model
 {
@@ -42,11 +40,6 @@ class Order extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
-    }
-
-    public function product(): BelongsTo
-    {
-        return $this->belongsTo(\Modules\Products\Models\Product::class);
     }
 
     public function orderItems(): HasMany
@@ -254,6 +247,23 @@ class Order extends Model
             }
             if (empty($order->order_status)) {
                 $order->order_status = self::STATUS_PENDING;
+            }
+        });
+
+        static::updated(function (Order $order) {
+            $originalStatus = $order->getOriginal('order_status');
+            if ($originalStatus === self::STATUS_CANCELLED) {
+                return;
+            }
+
+            if ($order->order_status === self::STATUS_CANCELLED) {
+                $order->loadMissing('orderItems.product');
+                foreach ($order->orderItems as $item) {
+                    if ($item->order_status !== OrderItem::STATUS_CANCELLED) {
+                        $item->order_status = OrderItem::STATUS_CANCELLED;
+                        $item->save();
+                    }
+                }
             }
         });
     }

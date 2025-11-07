@@ -72,6 +72,33 @@ class Product extends Model
         return $this->ratings()->whereNotNull('rating')->count();
     }
 
+    /**
+     * Decrease product stock by given quantity
+     * Ensures stock doesn't go below 0
+     */
+    public function decreaseStock(int $quantity): bool
+    {
+        if ($quantity <= 0) {
+            return false;
+        }
+        
+        $this->stock = max(0, $this->stock - $quantity);
+        return $this->save();
+    }
+
+    /**
+     * Increase product stock by given quantity
+     */
+    public function increaseStock(int $quantity): bool
+    {
+        if ($quantity <= 0) {
+            return false;
+        }
+        
+        $this->stock += $quantity;
+        return $this->save();
+    }
+
     public function getImageUrlAttribute(): string
     {
         $image = trim((string)($this->image ?? ''), " \t\n\r\0\x0B\"'{}");

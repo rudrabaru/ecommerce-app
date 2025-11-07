@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Auth;
 
 class OrderItem extends Model
 {
@@ -40,6 +39,54 @@ class OrderItem extends Model
         static::creating(function (OrderItem $item) {
             if (empty($item->order_status)) {
                 $item->order_status = self::STATUS_PENDING;
+            }
+        });
+
+        // Decrease product stock when order item is created
+        static::created(function (OrderItem $item) {
+            // Load product relationship if not already loaded
+            if (!$item->relationLoaded('product')) {
+                $item->load('product');
+            }
+            if ($item->product) {
+                $item->product->decreaseStock($item->quantity);
+            }
+        });
+
+        // Restore stock if order item is cancelled
+        static::updating(function (OrderItem $item) {
+            if ($item->isDirty('order_status')) {
+                // Load product relationship if not already loaded
+                if (!$item->relationLoaded('product')) {
+                    $item->load('product');
+                }
+                $oldStatus = $item->getOriginal('order_status');
+                $newStatus = $item->order_status;
+                
+                // If changing from non-cancelled to cancelled, restore stock
+                if ($oldStatus !== self::STATUS_CANCELLED && $newStatus === self::STATUS_CANCELLED) {
+                    if ($item->product) {
+                        $item->product->increaseStock($item->quantity);
+                    }
+                }
+                // If changing from cancelled to non-cancelled, decrease stock again
+                elseif ($oldStatus === self::STATUS_CANCELLED && $newStatus !== self::STATUS_CANCELLED) {
+                    if ($item->product) {
+                        $item->product->decreaseStock($item->quantity);
+                    }
+                }
+            }
+        });
+
+        // Restore stock if order item is deleted (soft delete or hard delete)
+        static::deleting(function (OrderItem $item) {
+            // Load product relationship if not already loaded
+            if (!$item->relationLoaded('product')) {
+                $item->load('product');
+            }
+            // Only restore stock if item wasn't cancelled (cancelled items already had stock restored)
+            if ($item->order_status !== self::STATUS_CANCELLED && $item->product) {
+                $item->product->increaseStock($item->quantity);
             }
         });
 

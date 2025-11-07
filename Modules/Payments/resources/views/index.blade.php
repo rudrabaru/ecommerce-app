@@ -262,7 +262,7 @@
                     } else {
                         // Fallback: reload payments table
                         if (window.reloadDataTable) {
-                            window.reloadDataTable('payments-table');
+                    window.reloadDataTable('payments-table');
                         }
                     }
                     

@@ -78,7 +78,8 @@ class ProductsController extends Controller
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
-                'message' => __('Product created successfully')
+                'message' => __('Product created successfully'),
+                'refresh_tables' => ['products-table'] // Trigger refresh for products datatable
             ]);
         }
 
@@ -167,7 +168,8 @@ class ProductsController extends Controller
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
-                'message' => __('Product updated successfully')
+                'message' => __('Product updated successfully'),
+                'refresh_tables' => ['products-table'] // Trigger refresh for products datatable
             ]);
         }
 
@@ -250,6 +252,11 @@ class ProductsController extends Controller
                 return '<img src="'.$src.'" alt="'.$alt.'" style="height:50px;width:50px;object-fit:cover;border-radius:4px;" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.onerror=null;this.src=\''.$fallback.'\';" />';
             })
             ->addColumn('category', fn ($row) => optional($row->category)->name)
+            ->editColumn('stock', function ($row) {
+                $stock = (int)$row->stock;
+                $badgeClass = $stock > 0 ? 'bg-success' : 'bg-danger';
+                return '<span class="badge '.$badgeClass.'" data-product-id="'.$row->id.'" data-stock="'.$stock.'">'.$stock.'</span>';
+            })
             ->addColumn('status', function ($row) {
                 return $row->is_approved
                     ? '<span class="badge bg-success">Approved</span>'
@@ -276,7 +283,31 @@ class ProductsController extends Controller
                 $btns .= '</div>';
                 return $btns;
             })
-            ->rawColumns(['actions','status','image'])
+            ->rawColumns(['actions','status','image','stock'])
             ->toJson();
+    }
+
+    /**
+     * Get product stock (for dynamic updates)
+     */
+    public function getStock($id)
+    {
+        $product = Product::findOrFail($id);
+        
+        // Allow public access for user-side stock checking
+        // Admin/Provider can check any product, users can check approved products
+        if (!Auth::check() || (!Auth::user()->hasRole('admin') && !Auth::user()->hasRole('provider'))) {
+            abort_unless($product->is_approved, 404);
+        } elseif (Auth::user()->hasRole('provider')) {
+            // Provider can only check their own products
+            abort_unless($product->provider_id === Auth::id(), 403);
+        }
+        
+        return response()->json([
+            'success' => true,
+            'product_id' => $product->id,
+            'stock' => (int)$product->stock,
+            'is_available' => $product->stock > 0
+        ]);
     }
 }

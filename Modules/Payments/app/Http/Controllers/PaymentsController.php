@@ -99,11 +99,11 @@ class PaymentsController extends Controller
                     $order = Order::with('orderItems')->find($row->order_id);
                     if ($order) {
                         $items = $order->orderItems->where('provider_id', $providerId);
-                        $subtotal = $items->sum(function ($item) { return (float) ($item->line_total ?? $item->total); });
-                        $discount = $items->sum(function ($item) { return (float) ($item->line_discount ?? 0); });
-                        $final = max(0, (float)$subtotal - (float)$discount);
-                        return '$' . number_format($final, 2);
-                    }
+                    $subtotal = $items->sum(function ($item) { return (float) ($item->line_total ?? $item->total); });
+                    $discount = $items->sum(function ($item) { return (float) ($item->line_discount ?? 0); });
+                    $final = max(0, (float)$subtotal - (float)$discount);
+                    return '$' . number_format($final, 2);
+                }
                 }
                 // Admin: show aggregated total
                 return '$' . number_format((float) $row->amount, 2);

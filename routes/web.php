@@ -50,7 +50,6 @@ Route::middleware('auth')->group(function () {
     // Product Rating routes (user only)
     Route::prefix('ratings')->as('ratings.')->group(function () {
         Route::get('/orders/{order}/eligible-products', [\App\Http\Controllers\ProductRatingController::class, 'getEligibleProducts'])->name('eligible-products');
-        Route::post('/submit', [\App\Http\Controllers\ProductRatingController::class, 'submit'])->name('submit');
         Route::post('/submit-batch', [\App\Http\Controllers\ProductRatingController::class, 'submitBatch'])->name('submit-batch');
         Route::get('/orders/{order}/products/{product}', [\App\Http\Controllers\ProductRatingController::class, 'getUserRating'])->name('user-rating');
         Route::post('/{id}/update', [\App\Http\Controllers\ProductRatingController::class, 'update'])->name('update');
@@ -73,8 +72,6 @@ Route::get('/dashboard', function () {
     return redirect()->route('home');
 })->name('dashboard');
 
-// Remove default Breeze dashboard in favor of role-based dashboards
-
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -94,10 +91,6 @@ Route::middleware('guest')->group(function () {
     Route::get('/admin/login', [PortalLoginController::class, 'showAdminLogin'])->name('admin.login');
     Route::post('/admin/login', [PortalLoginController::class, 'adminLogin'])->name('admin.login.submit');
 });
-
-// Location routes are handled by the Location module
-
-// Note: Module routes are loaded by their own service providers; no manual glob include here
 
 // OTP verification routes (guest flow using session 'pending_user_id')
 Route::get('/verify-otp', [EmailOtpController::class, 'show'])->name('verification.otp.notice');

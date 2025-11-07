@@ -300,8 +300,19 @@
                     const modal = bootstrap.Modal.getInstance(document.getElementById('productModal'));
                     if (modal) modal.hide();
                     
-                    // Reload DataTable using global function
+                    // Reload DataTable(s) using global function
+                    if (data.refresh_tables && Array.isArray(data.refresh_tables)) {
+                        data.refresh_tables.forEach(tableId => {
+                            if (window.reloadDataTable) {
+                                window.reloadDataTable(tableId);
+                            }
+                        });
+                    } else {
+                        // Fallback: reload products table
+                        if (window.reloadDataTable) {
                     window.reloadDataTable('products-table');
+                        }
+                    }
                     
                     if (window.Swal) {
                         Swal.fire('Success', data.message || 'Product saved successfully!', 'success');

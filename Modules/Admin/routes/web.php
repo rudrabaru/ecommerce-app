@@ -18,9 +18,6 @@ use Modules\Admin\app\Http\Controllers\DiscountCodeController;
 
 Route::middleware(['web','auth','ensure_role:admin'])->group(function () {
     Route::get('/admin/dashboard', function () {
-        if (request()->ajax()) {
-            return view('admin::dashboard');
-        }
         return view('admin::dashboard');
     })->name('admin.dashboard');
     Route::get('/admin/profile', [AdminProfileController::class, 'edit'])->name('admin.profile');
