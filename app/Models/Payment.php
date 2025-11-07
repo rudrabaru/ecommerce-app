@@ -28,7 +28,7 @@ class Payment extends Model
     // Validation rules for status field
     public static function getStatusValidationRules()
     {
-        return 'in:pending,paid';
+        return 'in:unpaid,paid,refunded';
     }
 
     public function order(): BelongsTo

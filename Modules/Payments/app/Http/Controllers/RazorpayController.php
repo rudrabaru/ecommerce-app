@@ -10,6 +10,7 @@ use App\Services\Payments\RazorpayPaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class RazorpayController extends Controller
 {
@@ -37,7 +38,7 @@ class RazorpayController extends Controller
             ], [
                 'amount' => $order->total_amount,
                 'currency' => 'INR',
-                'status' => 'pending',
+                'status' => 'unpaid',
             ]);
 
             $r = $service->createOrder($order);
@@ -53,8 +54,14 @@ class RazorpayController extends Controller
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
+            Log::error('Razorpay initiate failed', [
+                'order_id' => $order->id ?? null,
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
-                'message' => 'Unable to initiate Razorpay payment',
+                'message' => 'Unable to initiate Razorpay payment: ' . $e->getMessage(),
             ], 422);
         }
     }

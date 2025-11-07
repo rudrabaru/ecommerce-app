@@ -26,61 +26,125 @@ class PaymentsController extends Controller
      */
     public function data(DataTables $dataTables)
     {
-        $query = Payment::query()->with(['order.orderItems', 'paymentMethod']);
+        $isProvider = Auth::user()->hasRole('provider');
+        $providerId = $isProvider ? Auth::id() : null;
 
-        // Provider should see only payments for their orders
-        if (Auth::user()->hasRole('provider')) {
-            // Orders track multiple providers in JSON column provider_ids
-            $query->whereHas('order', function ($q) {
-                $q->whereJsonContains('provider_ids', Auth::id());
-            });
+        // Build aggregated query: group payments by order_id
+        if ($isProvider) {
+            // For providers: show payments for orders where they're involved
+            // Handle both cases:
+            // 1. Manual orders: per-provider payment records (match by amount)
+            // 2. User-placed orders: single payment record (calculate provider's portion from order items)
+            $providerTotalSubquery = DB::table('order_items')
+                ->select('order_id', DB::raw('SUM(line_total - COALESCE(line_discount, 0)) as provider_total'))
+                ->where('provider_id', $providerId)
+                ->groupBy('order_id');
+            
+            $query = DB::table('payments')
+                ->join('orders', 'payments.order_id', '=', 'orders.id')
+                ->leftJoin('payment_methods', 'payments.payment_method_id', '=', 'payment_methods.id')
+                ->joinSub($providerTotalSubquery, 'provider_totals', function($join) {
+                    $join->on('provider_totals.order_id', '=', 'payments.order_id');
+                })
+                ->whereRaw('JSON_CONTAINS(orders.provider_ids, ?)', [json_encode($providerId)])
+                // Include all payments for orders where provider has items
+                // (works for both per-provider payments and single payment records)
+                ->select(
+                    DB::raw('MIN(payments.id) as id'),
+                    'payments.order_id',
+                    DB::raw('SUM(payments.amount) as amount'),
+                    DB::raw('MIN(payments.payment_method_id) as payment_method_id'),
+                    DB::raw('MIN(payments.created_at) as created_at'),
+                    DB::raw('GROUP_CONCAT(DISTINCT payments.status) as statuses'),
+                    'orders.order_number',
+                    DB::raw('provider_totals.provider_total as provider_portion')
+                )
+                ->groupBy('payments.order_id', 'orders.order_number', 'provider_totals.provider_total');
+        } else {
+            // For admin: aggregate all payments per order
+            $query = DB::table('payments')
+                ->join('orders', 'payments.order_id', '=', 'orders.id')
+                ->leftJoin('payment_methods', 'payments.payment_method_id', '=', 'payment_methods.id')
+                ->select(
+                    DB::raw('MIN(payments.id) as id'),
+                    'payments.order_id',
+                    DB::raw('SUM(payments.amount) as amount'),
+                    DB::raw('MIN(payments.payment_method_id) as payment_method_id'),
+                    DB::raw('MIN(payments.created_at) as created_at'),
+                    DB::raw('GROUP_CONCAT(DISTINCT payments.status) as statuses'),
+                    'orders.order_number'
+                )
+                ->groupBy('payments.order_id', 'orders.order_number');
         }
 
-        return $dataTables->eloquent($query)
+        return $dataTables->query($query)
             ->addColumn('order_number', function ($row) {
-                return optional($row->order)->order_number ?: optional($row->order)->id;
+                return $row->order_number ?: $row->order_id;
             })
             ->addColumn('payment_method', function ($row) {
-                return optional($row->paymentMethod)->name ?: '-';
-            })
-            ->editColumn('amount', function ($row) {
-                // For providers: show only their items' total from the order
-                if (Auth::user()->hasRole('provider') && $row->order) {
-                    $providerId = Auth::id();
-                    $items = $row->order->orderItems->where('provider_id', $providerId);
-                    $subtotal = $items->sum(function ($item) { return (float) ($item->line_total ?? $item->total); });
-                    $discount = $items->sum(function ($item) { return (float) ($item->line_discount ?? 0); });
-                    $final = max(0, (float)$subtotal - (float)$discount);
-                    return '$' . number_format($final, 2);
+                if ($row->payment_method_id) {
+                    $pm = PaymentMethod::find($row->payment_method_id);
+                    return $pm ? ($pm->display_name ?? $pm->name) : '-';
                 }
-                // Admin or fallback: show recorded payment amount
+                return '-';
+            })
+            ->editColumn('amount', function ($row) use ($isProvider, $providerId) {
+                // For providers: show their portion (from subquery or calculated)
+                if ($isProvider) {
+                    // Use provider_portion from query if available, otherwise calculate
+                    if (isset($row->provider_portion)) {
+                        return '$' . number_format((float) $row->provider_portion, 2);
+                    }
+                    // Fallback: calculate from order items
+                    $order = Order::with('orderItems')->find($row->order_id);
+                    if ($order) {
+                        $items = $order->orderItems->where('provider_id', $providerId);
+                        $subtotal = $items->sum(function ($item) { return (float) ($item->line_total ?? $item->total); });
+                        $discount = $items->sum(function ($item) { return (float) ($item->line_discount ?? 0); });
+                        $final = max(0, (float)$subtotal - (float)$discount);
+                        return '$' . number_format($final, 2);
+                    }
+                }
+                // Admin: show aggregated total
                 return '$' . number_format((float) $row->amount, 2);
             })
-            ->editColumn('status', function ($row) {
-                // For providers: derive status from payment method
-                if (Auth::user()->hasRole('provider')) {
-                    $method = strtolower(optional($row->paymentMethod)->name ?? '');
-                    $status = in_array($method, ['stripe', 'razorpay'], true) ? 'paid' : 'pending';
-                } else {
-                    $status = $row->status;
+            ->addColumn('status', function ($row) {
+                // Aggregate statuses: if all paid = paid, if any refunded = refunded, else unpaid
+                $statuses = explode(',', $row->statuses ?? '');
+                $statuses = array_map(function($s) {
+                    $s = trim($s);
+                    if (in_array($s, ['pending', 'processing', 'failed', 'cancelled'], true)) {
+                        return 'unpaid';
+                    }
+                    return $s;
+                }, $statuses);
+                
+                $final = 'unpaid';
+                if (in_array('refunded', $statuses)) {
+                    $final = 'refunded';
+                } elseif (count($statuses) > 0 && count(array_unique($statuses)) === 1 && $statuses[0] === 'paid') {
+                    $final = 'paid';
                 }
+                
                 $map = [
-                    'pending' => 'bg-warning',
-                    'processing' => 'bg-info',
+                    'unpaid' => 'bg-warning',
                     'paid' => 'bg-success',
-                    'failed' => 'bg-danger',
                     'refunded' => 'bg-secondary',
-                    'cancelled' => 'bg-danger',
                 ];
-                $cls = $map[$status] ?? 'bg-secondary';
-                return '<span class="badge rounded-pill ' . $cls . '">' . ucfirst($status) . '</span>';
+                $cls = $map[$final] ?? 'bg-secondary';
+                return '<span class="badge rounded-pill ' . $cls . '">' . ucfirst($final) . '</span>';
             })
             ->editColumn('created_at', function ($row) {
-                return optional($row->created_at)
-                    ? $row->created_at->copy()->setTimezone('Asia/Kolkata')->format('d-m-Y H:i:s')
-                    : null;
+                if ($row->created_at) {
+                    return \Carbon\Carbon::parse($row->created_at)
+                        ->setTimezone('Asia/Kolkata')
+                        ->format('d-m-Y H:i:s');
+                }
+                return null;
             })
             ->addColumn('actions', function ($row) {
+                // For aggregated records, we need to handle multiple payments
+                // Show edit/delete for the first payment ID, or we could show a special action
                 $btns = '<div class="btn-group" role="group">';
                 $btns .= '<button class="btn btn-sm btn-outline-primary editBtn" title="Edit" data-module="payments" data-id="'.$row->id.'">';
                 $btns .= '<i class="fas fa-pencil-alt"></i></button>';
@@ -168,13 +232,20 @@ class PaymentsController extends Controller
             'order_id' => ['sometimes', 'exists:orders,id'],
             'payment_method_id' => ['sometimes', 'exists:payment_methods,id'],
             'amount' => ['sometimes', 'numeric', 'min:0'],
-            'status' => ['required', 'in:pending,paid'],
+            'status' => ['required', 'in:unpaid,paid,refunded'],
         ]);
 
         $payment->update($validated);
 
+        // Optional: if refunded, prevent rating by keeping payment unpaid/refunded aggregation
+        // No destructive changes to order or items
+
         return $request->wantsJson() || $request->ajax()
-            ? response()->json(['success' => true, 'message' => __('Payment updated successfully')])
+            ? response()->json([
+                'success' => true, 
+                'message' => __('Payment updated successfully'),
+                'refresh_tables' => ['payments-table', 'orders-table'] // Trigger refresh for both tables
+            ])
             : back()->with('status', __('Payment updated'));
     }
 

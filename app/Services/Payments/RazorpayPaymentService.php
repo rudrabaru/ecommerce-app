@@ -53,7 +53,7 @@ class RazorpayPaymentService
             'gateway_order_id' => $rOrder['id'],
             'amount' => $amountMinor,
             'currency' => strtoupper($currency),
-            'status' => 'pending',
+            'status' => 'unpaid',
             'payload' => ['order' => $rOrder->toArray()],
         ]);
 

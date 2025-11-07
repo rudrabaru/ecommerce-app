@@ -20,10 +20,11 @@
                             <tr>
                                 <th data-column="id" data-width="60px">ID</th>
                                 <th data-column="order_number">Order Number</th>
-                                <th data-column="customer_name">Customer</th>
+                                <th data-column="customer_name">Customer Details</th>
                                 <th data-column="products" data-orderable="false">Products</th>
-                                <th data-column="total" data-width="100px">Total</th>
-                                <th data-column="order_status" data-width="100px">Status</th>
+                                <th data-column="total" data-width="100px">Total Amount</th>
+                                <th data-column="payment_status" data-width="100px">Payment Status</th>
+                                <th data-column="order_status" data-width="100px">Order Status</th>
                                 <th data-column="shipping_address">Shipping Address</th>
                                 <th data-column="notes">Notes</th>
                                 <th data-column="discount_code">Discount Code</th>
@@ -483,40 +484,20 @@
             // Update status dropdown options for CREATE modal (all statuses available)
             function updateStatusDropdownForCreate() {
                 var statusSelect = $('#order_status');
+                // Admin and Provider: order status is controlled from Actions column
                 statusSelect.empty();
-                statusSelect.append('<option value="pending">Pending</option>');
-                statusSelect.append('<option value="shipped">Shipped</option>');
-                statusSelect.append('<option value="delivered">Delivered</option>');
-                statusSelect.append('<option value="cancelled">Cancelled</option>');
+                statusSelect.append('<option value="pending" selected>Pending</option>');
+                statusSelect.prop('disabled', true).attr('name','');
             }
             
             // Update status dropdown options for EDIT modal based on role and current status
             function updateStatusDropdownForEdit(currentStatus) {
                 var statusSelect = $('#order_status');
-                var isAdmin = window.location.pathname.includes('/admin/');
-                var isProvider = window.location.pathname.includes('/provider/');
-                
+                // Order status is now controlled strictly from Actions column for both roles
                 statusSelect.empty();
-                
-                // Always show current status first
                 var statusLabel = currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1);
                 statusSelect.append('<option value="' + currentStatus + '" selected>' + statusLabel + '</option>');
-                
-                if (isAdmin) {
-                    // Admin can transition to any status (but not revert from delivered)
-                    var allStatuses = ['pending', 'shipped', 'delivered', 'cancelled'];
-                    if (currentStatus !== 'delivered') {
-                        allStatuses.forEach(function(status) {
-                            if (status !== currentStatus) {
-                                var label = status.charAt(0).toUpperCase() + status.slice(1);
-                                statusSelect.append('<option value="' + status + '">' + label + '</option>');
-                            }
-                        });
-                    }
-                } else if (isProvider) {
-                    // Provider must not update order-level status from this modal. Lock the select.
-                    statusSelect.prop('disabled', true).attr('name', '');
-                }
+                statusSelect.prop('disabled', true).attr('name','');
             }
 
             // Open modal function - returns a promise for async operations
@@ -925,27 +906,25 @@
                 });
             });
 
-            // Admin modal: confirm & post order-level status change via SweetAlert
-            $(document).on('change', '#order_status', function(){
-                if (!window.location.pathname.includes('/admin/')) return;
-                var $sel = $(this);
-                var newStatus = $sel.val();
-                var prev = $sel.data('current') || newStatus;
-                var orderId = $('#orderId').val();
-                if (!orderId) return; // only in edit
-
+            // Admin status trigger (SweetAlert select like provider)
+            $(document).on('click', '.admin-status-trigger', function(e){
+                e.preventDefault();
+                const orderId = $(this).data('order-id');
+                let statuses = [];
+                try { statuses = JSON.parse($(this).attr('data-statuses') || '[]'); } catch(_){ statuses = []; }
+                if (!Array.isArray(statuses) || statuses.length === 0) { return; }
+                const inputOptions = statuses.reduce(function(acc, s){ acc[s] = s.charAt(0).toUpperCase()+s.slice(1); return acc; }, {});
                 Swal.fire({
-                    title: 'Update order status?',
-                    text: 'Set full order status to ' + newStatus.charAt(0).toUpperCase()+newStatus.slice(1) + '?',
-                    icon: 'question',
+                    title: 'Update Order Status',
+                    input: 'select',
+                    inputOptions: inputOptions,
+                    inputPlaceholder: 'Select status',
                     showCancelButton: true,
-                    confirmButtonText: 'Yes, update',
-                }).then(function(res){
-                    if (!res.isConfirmed) {
-                        $sel.val(prev);
-                        return;
-                    }
-                    fetch('/admin/orders/' + orderId + '/update-status', {
+                }).then(function(result){
+                    if (!result.isConfirmed || !result.value) return;
+                    const newStatus = result.value;
+                    const url = '/admin/orders/' + orderId + '/update-status';
+                    fetch(url, {
                         method: 'POST',
                         headers: {
                             'X-Requested-With': 'XMLHttpRequest',
@@ -953,22 +932,17 @@
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({ order_status: newStatus })
-                    }).then(function(r){ return r.json(); })
+                    })
+                    .then(function(r){ return r.json(); })
                     .then(function(data){
                         if (data && data.success) {
-                            // set new current
-                            $sel.data('current', newStatus);
                             window.reloadDataTable('orders-table');
                             Swal.fire({ icon: 'success', title: 'Status Updated', timer: 1500, showConfirmButton: false });
                         } else {
-                            $sel.val(prev);
                             Swal.fire('Error', (data && data.message) || 'Failed to update status', 'error');
                         }
                     })
-                    .catch(function(){
-                        $sel.val(prev);
-                        Swal.fire('Error', 'An error occurred', 'error');
-                    });
+                    .catch(function(){ Swal.fire('Error', 'An error occurred', 'error'); });
                 });
             });
 

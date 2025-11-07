@@ -45,7 +45,7 @@ class StripePaymentService
             'gateway_payment_id' => $intent->id,
             'amount' => $amountMinor,
             'currency' => strtoupper($currency),
-            'status' => 'pending',
+            'status' => 'unpaid',
             'payload' => ['intent' => $intent->toArray()],
         ]);
 
@@ -99,7 +99,7 @@ class StripePaymentService
                         'gateway_payment_id' => $intentId,
                         'amount' => (int) $data->amount_received,
                         'currency' => strtoupper((string) $data->currency),
-                        'status' => 'pending',
+                        'status' => 'unpaid',
                     ]);
                 }
 
@@ -131,18 +131,19 @@ class StripePaymentService
                     dispatch(new \App\Jobs\SendOrderConfirmationEmail($order));
                 } else {
                     $txn->update([
-                        'status' => 'failed',
+                        'status' => 'unpaid', // Keep as unpaid on failure, not 'failed'
                         'processed_via' => 'webhook',
                         'error_code' => $data->last_payment_error->code ?? null,
                         'error_message' => $data->last_payment_error->message ?? null,
                         'payload' => array_merge($txn->payload ?? [], ['event' => $type, 'data' => $data->toArray()]),
                     ]);
-                    $order->update(['status' => 'failed']);
+                    // Don't update order status to 'failed' - keep it as is
+                    // Payment remains unpaid
 
-                    // Mark payment as failed via method name
+                    // Keep payment as unpaid on failure
                     Payment::where('order_id', $order->id)
                         ->whereHas('paymentMethod', function ($q) { $q->where('name', 'stripe'); })
-                        ->update(['status' => 'failed']);
+                        ->update(['status' => 'unpaid']);
 
                     Log::error('Stripe webhook: Payment failed for order', [
                         'order_id' => $orderId,
@@ -185,7 +186,7 @@ class StripePaymentService
                     'gateway_payment_id' => $intent->id,
                     'amount' => (int) $intent->amount_received,
                     'currency' => strtoupper($intent->currency ?? 'USD'),
-                    'status' => 'pending',
+                    'status' => 'unpaid',
                     'payload' => ['intent' => $intent->toArray()],
                 ]);
             }

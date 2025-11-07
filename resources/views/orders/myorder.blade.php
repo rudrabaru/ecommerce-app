@@ -175,7 +175,7 @@
                             
                             <!-- Your Reviews section -->
                             <div id="yourReviews-{{ $order->id }}" class="your-reviews-section" style="display:none;"></div>
-
+                            
                             @if($order->shipping_address)
                                 <div class="mt-3">
                                     <strong>Shipping Address:</strong>

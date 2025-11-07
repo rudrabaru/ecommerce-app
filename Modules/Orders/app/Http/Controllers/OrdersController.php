@@ -156,6 +156,26 @@ class OrdersController extends Controller
             'discount_amount' => $totalDiscount,
         ]);
 
+        // Create payment records (COD / unpaid) per provider for manual orders
+        try {
+            $cod = \App\Models\PaymentMethod::where('name', 'cod')->first();
+        } catch (\Throwable $e) { $cod = null; }
+        $paymentMethodId = $cod ? $cod->id : null;
+        $itemsByProvider = $order->orderItems()->get()->groupBy('provider_id');
+        foreach ($itemsByProvider as $provId => $provItems) {
+            $provSubtotal = $provItems->sum(function($it){ return (float) ($it->line_total ?? $it->total); });
+            $provDiscount = $provItems->sum(function($it){ return (float) ($it->line_discount ?? 0); });
+            $provTotal = max(0, (float)$provSubtotal - (float)$provDiscount);
+            \App\Models\Payment::create([
+                'payment_id' => null,
+                'order_id' => $order->id,
+                'payment_method_id' => $paymentMethodId,
+                'amount' => $provTotal,
+                'currency' => 'USD',
+                'status' => 'unpaid',
+            ]);
+        }
+
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'success' => true,
@@ -490,6 +510,27 @@ class OrdersController extends Controller
                 }
                 return '$' . number_format($row->total_amount, 2);
             })
+            ->addColumn('payment_status', function ($row) {
+                // Aggregate payment statuses for the order
+                $payments = $row->payment()->get();
+                if ($payments->isEmpty()) {
+                return '<span class="badge rounded-pill bg-secondary">N/A</span>';
+                }
+                $statuses = $payments->pluck('status')->map(function($s){
+                    if (in_array($s, ['pending','processing','failed','cancelled'], true)) return 'unpaid';
+                    return $s;
+                })->values();
+                $final = 'unpaid';
+                if ($statuses->contains('refunded')) { $final = 'refunded'; }
+                elseif ($statuses->every(fn($s) => $s === 'paid')) { $final = 'paid'; }
+                $cls = match($final){
+                    'paid' => 'bg-success',
+                    'unpaid' => 'bg-warning',
+                    'refunded' => 'bg-secondary',
+                    default => 'bg-secondary',
+                };
+                return '<span class="badge rounded-pill '.$cls.'">'.ucfirst($final).'</span>';
+            })
             ->editColumn('order_status', function ($row) {
                 $isProvider = Auth::user()->hasRole('provider');
                 if ($isProvider) {
@@ -563,16 +604,29 @@ class OrdersController extends Controller
                             . ' data-statuses="'.e(json_encode(array_values($allowed))).'"'
                             . ' title="Update my items status">Status</button>';
                     }
+                    // Provider delete button like admin
+                    $btns .= '<button class="btn btn-sm btn-outline-danger delete-order" data-id="'.$row->id.'" data-delete-url="/'.$prefix.'/orders/'.$row->id.'" title="Delete">';
+                    $btns .= '<i class="fas fa-trash"></i></button>';
                 }
 
                 if ($isAdmin) {
+                    // Admin full order status control (order-level)
+                    $all = [Order::STATUS_PENDING, Order::STATUS_SHIPPED, Order::STATUS_DELIVERED, Order::STATUS_CANCELLED];
+                    $allowedAdmin = array_values(array_filter($all, function($st) use ($row){ return $st !== $row->order_status; }));
+                    if (!empty($allowedAdmin)) {
+                        $btns .= '<button type="button" class="btn btn-sm btn-outline-info admin-status-trigger"'
+                            . ' data-order-id="'.$row->id.'"'
+                            . ' data-statuses="'.e(json_encode($allowedAdmin)).'"'
+                            . ' title="Update order status">Status</button>';
+                    }
+
                     $btns .= '<button class="btn btn-sm btn-outline-danger delete-order" data-id="'.$row->id.'" data-delete-url="/'.$prefix.'/orders/'.$row->id.'" title="Delete">';
                     $btns .= '<i class="fas fa-trash"></i></button>';
                 }
                 $btns .= '</div>';
                 return $btns;
             })
-            ->rawColumns(['actions', 'order_status', 'products'])
+            ->rawColumns(['actions', 'order_status', 'products', 'payment_status'])
             ->toJson();
     }
 
@@ -735,8 +789,8 @@ class OrdersController extends Controller
         abort_unless($user && $user->hasRole('user') && $order->user_id === $user->id, 403);
 
         if ($order->order_status !== Order::STATUS_PENDING) {
-            return response()->json([
-                'success' => false,
+        return response()->json([
+            'success' => false,
                 'message' => __('You can cancel only pending orders.')
             ], 422);
         }

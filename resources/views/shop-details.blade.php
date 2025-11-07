@@ -235,7 +235,7 @@
                                                     @if($review->review)
                                                         <p class="mb-0">{{ $review->review }}</p>
                                                     @endif
-                                                </div>
+                                        </div>
                                             @endforeach
                                         @else
                                             <p class="text-muted">No reviews yet. Be the first to review this product!</p>

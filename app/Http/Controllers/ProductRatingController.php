@@ -31,17 +31,9 @@ class ProductRatingController extends Controller
             ], 422);
         }
 
-        // Check if payment is paid
-        $isPaid = false;
-        if ($order->paymentMethod && $order->paymentMethod->name === 'cod') {
-            // COD is considered paid if order is delivered
-            $isPaid = true;
-        } else {
-            $payment = Payment::where('order_id', $order->id)
-                ->where('status', 'paid')
-                ->first();
-            $isPaid = (bool)$payment;
-        }
+        // Check if order has all payments marked paid
+        $payments = Payment::where('order_id', $order->id)->get();
+        $isPaid = $payments->isNotEmpty() && $payments->every(function($p){ return $p->status === 'paid'; });
 
         if (!$isPaid) {
             return response()->json([
@@ -152,16 +144,9 @@ class ProductRatingController extends Controller
             ], 422);
         }
 
-        // Check payment is paid
-        $isPaid = false;
-        if ($order->paymentMethod && $order->paymentMethod->name === 'cod') {
-            $isPaid = true;
-        } else {
-            $payment = Payment::where('order_id', $order->id)
-                ->where('status', 'paid')
-                ->first();
-            $isPaid = (bool)$payment;
-        }
+        // Check payments paid (all)
+        $payments = Payment::where('order_id', $order->id)->get();
+        $isPaid = $payments->isNotEmpty() && $payments->every(function($p){ return $p->status === 'paid'; });
 
         if (!$isPaid) {
             return response()->json([

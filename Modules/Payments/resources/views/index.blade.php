@@ -17,7 +17,7 @@
                             <th data-column="order_number">Order Number</th>
                             <th data-column="payment_method">Payment Method</th>
                             <th data-column="amount">Amount</th>
-                            <th data-column="status">Status</th>
+                            <th data-column="status">Payment Status</th>
                             <th data-column="created_at">Created At</th>
                             <th data-column="actions" data-orderable="false" data-searchable="false">Actions</th>
                         </tr>
@@ -201,7 +201,7 @@
                     document.getElementById('order_id').value = p.order_id || '';
                     document.getElementById('payment_method_id').value = p.payment_method_id || '';
                     document.getElementById('amount').value = p.amount || '';
-                    document.getElementById('status').value = p.status || 'pending';
+                    document.getElementById('status').value = (p.status && p.status !== 'pending' ? p.status : 'unpaid');
                     return true;
                 })
                 .catch(error => {
@@ -252,8 +252,19 @@
                     const modal = bootstrap.Modal.getInstance(document.getElementById('paymentModal'));
                     if (modal) modal.hide();
                     
-                    // Reload DataTable using global function
-                    window.reloadDataTable('payments-table');
+                    // Reload DataTable(s) using global function
+                    if (data.refresh_tables && Array.isArray(data.refresh_tables)) {
+                        data.refresh_tables.forEach(tableId => {
+                            if (window.reloadDataTable) {
+                                window.reloadDataTable(tableId);
+                            }
+                        });
+                    } else {
+                        // Fallback: reload payments table
+                        if (window.reloadDataTable) {
+                            window.reloadDataTable('payments-table');
+                        }
+                    }
                     
                     if (window.Swal) {
                         Swal.fire('Success', data.message || 'Payment saved successfully', 'success');
@@ -394,11 +405,10 @@
                             </div>
                         </div>
                         <div class="mb-3">
-                            <label for="status" class="form-label">Status</label>
+                            <label for="status" class="form-label">Payment Status</label>
                             <select id="status" name="status" class="form-select">
-                                <option value="pending">Pending</option>
+                                <option value="unpaid">Unpaid</option>
                                 <option value="paid">Paid</option>
-                                <option value="failed">Failed</option>
                                 <option value="refunded">Refunded</option>
                             </select>
                         </div>

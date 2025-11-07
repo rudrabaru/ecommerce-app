@@ -280,13 +280,13 @@ class CheckoutController extends Controller
             // Recalculate order status after all items are created (ensures aggregate status is correct)
             $order->recalculateOrderStatus();
 
-            // Create payment record (pending initially; confirm will mark paid)
+            // Create payment record (unpaid initially; confirm will mark paid)
             Payment::create([
                 'order_id' => $order->id,
                 'payment_method_id' => $paymentMethod->id,
                 'amount' => $totalOrderAmount,
                 'currency' => $paymentMethod->name === 'razorpay' ? 'INR' : 'USD',
-                'status' => 'pending',
+                'status' => 'unpaid',
             ]);
 
             $created[] = $order->order_number;

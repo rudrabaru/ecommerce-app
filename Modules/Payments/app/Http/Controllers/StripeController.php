@@ -40,7 +40,7 @@ class StripeController extends Controller
             ], [
                 'amount' => $order->total_amount,
                 'currency' => 'USD',
-                'status' => 'pending',
+                'status' => 'unpaid',
             ]);
 
             $pi = $service->createPaymentIntent($order);
@@ -54,8 +54,14 @@ class StripeController extends Controller
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
+            Log::error('Stripe initiate failed', [
+                'order_id' => $order->id ?? null,
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
-                'message' => 'Unable to initiate Stripe payment',
+                'message' => 'Unable to initiate Stripe payment: ' . $e->getMessage(),
             ], 422);
         }
     }
