@@ -26,6 +26,7 @@ Route::middleware(['web','auth'])->group(function () {
     // Admin routes - only admins can access
     Route::middleware(['ensure_role:admin'])->prefix('admin')->as('admin.')->group(function () {
         Route::get('payments/data', [PaymentsController::class, 'data'])->name('payments.data');
+        Route::post('payments/refunds/{refundRequest}/approve', [PaymentsController::class, 'approveRefund'])->name('payments.refunds.approve');
         Route::resource('payments', PaymentsController::class)->names('payments');
     });
 

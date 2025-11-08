@@ -68,6 +68,11 @@ class Order extends Model
         return $this->hasMany(Transaction::class);
     }
 
+    public function refundRequests(): HasMany
+    {
+        return $this->hasMany(RefundRequest::class);
+    }
+
     /**
      * Get all providers for this order (from provider_ids array)
      */

@@ -6,9 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\PaymentMethod;
+use App\Models\RefundRequest;
+use App\Services\RefundService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Yajra\DataTables\DataTables;
 
 class PaymentsController extends Controller
@@ -134,6 +137,107 @@ class PaymentsController extends Controller
                 $cls = $map[$final] ?? 'bg-secondary';
                 return '<span class="badge rounded-pill ' . $cls . '">' . ucfirst($final) . '</span>';
             })
+            ->addColumn('refund_action', function ($row) use ($isProvider, $providerId) {
+                $refunds = RefundRequest::where('order_id', $row->order_id)
+                    ->when($isProvider, function ($query) use ($providerId) {
+                        $query->where(function ($q) use ($providerId) {
+                            $q->whereNull('provider_id');
+                            if ($providerId) {
+                                $q->orWhere('provider_id', $providerId);
+                            }
+                        });
+                    })
+                    ->get();
+
+                if ($refunds->isEmpty()) {
+                    return '-';
+                }
+
+                // Separate full order refunds (order_item_id is null) from item-level refunds
+                $fullOrderRefunds = $refunds->whereNull('order_item_id');
+                $itemLevelRefunds = $refunds->whereNotNull('order_item_id');
+
+                // For full order returns, aggregate into a single refund request display
+                if ($fullOrderRefunds->isNotEmpty()) {
+                    $fullOrderRefund = $fullOrderRefunds->first(); // Should only be one for full order
+                    
+                    if ($fullOrderRefund->status === RefundRequest::STATUS_FAILED) {
+                        $amount = number_format((float) $fullOrderRefund->amount, 2);
+                        $label = strtoupper($fullOrderRefund->payment_method);
+                        $route = route('admin.payments.refunds.approve', $fullOrderRefund->id);
+                        $isCod = strtolower($fullOrderRefund->payment_method) === 'cod';
+                        $hasBankDetails = !empty($fullOrderRefund->account_holder_name) || !empty($fullOrderRefund->bank_name);
+                        $button = '<button type="button" class="btn btn-sm btn-outline-danger js-approve-refund"'
+                            . ' data-refund-id="' . e((string) $fullOrderRefund->id) . '"'
+                            . ' data-url="' . e($route) . '"'
+                            . ' data-amount="' . e($amount) . '"'
+                            . ' data-method="' . e($label) . '"'
+                            . ' data-is-cod="' . ($isCod ? '1' : '0') . '"'
+                            . ' data-has-bank-details="' . ($hasBankDetails ? '1' : '0') . '"'
+                            . ($hasBankDetails ? ' data-account-holder="' . e($fullOrderRefund->account_holder_name ?? '') . '"'
+                                . ' data-bank-name="' . e($fullOrderRefund->bank_name ?? '') . '"'
+                                . ' data-account-number="' . e($fullOrderRefund->account_number ?? '') . '"'
+                                . ' data-ifsc="' . e($fullOrderRefund->ifsc ?? '') . '"' : '')
+                            . '>Retry $' . e($amount) . ' (' . e($label) . ')</button>';
+                        
+                        // If there are item-level refunds too, show them below
+                        if ($itemLevelRefunds->isNotEmpty()) {
+                            $itemButtons = $this->formatItemRefundButtons($itemLevelRefunds, $isProvider);
+                            return $button . '<br><small class="text-muted">Item Returns:</small><br>' . $itemButtons;
+                        }
+                        return $button;
+                    }
+
+                    if (in_array($fullOrderRefund->status, [RefundRequest::STATUS_PENDING, RefundRequest::STATUS_PROCESSING])) {
+                        if ($isProvider) {
+                            return '<span class="badge bg-warning text-dark">Pending Admin</span>';
+                        }
+
+                        $amount = number_format((float) $fullOrderRefund->amount, 2);
+                        $label = strtoupper($fullOrderRefund->payment_method);
+                        $route = route('admin.payments.refunds.approve', $fullOrderRefund->id);
+                        $isCod = strtolower($fullOrderRefund->payment_method) === 'cod';
+                        $hasBankDetails = !empty($fullOrderRefund->account_holder_name) || !empty($fullOrderRefund->bank_name);
+                        $button = '<button type="button" class="btn btn-sm btn-outline-success js-approve-refund"'
+                            . ' data-refund-id="' . e((string) $fullOrderRefund->id) . '"'
+                            . ' data-url="' . e($route) . '"'
+                            . ' data-amount="' . e($amount) . '"'
+                            . ' data-method="' . e($label) . '"'
+                            . ' data-is-cod="' . ($isCod ? '1' : '0') . '"'
+                            . ' data-has-bank-details="' . ($hasBankDetails ? '1' : '0') . '"'
+                            . ($hasBankDetails ? ' data-account-holder="' . e($fullOrderRefund->account_holder_name ?? '') . '"'
+                                . ' data-bank-name="' . e($fullOrderRefund->bank_name ?? '') . '"'
+                                . ' data-account-number="' . e($fullOrderRefund->account_number ?? '') . '"'
+                                . ' data-ifsc="' . e($fullOrderRefund->ifsc ?? '') . '"' : '')
+                            . '>Approve $' . e($amount) . ' (' . e($label) . ')</button>';
+                        
+                        // If there are item-level refunds too, show them below
+                        if ($itemLevelRefunds->isNotEmpty()) {
+                            $itemButtons = $this->formatItemRefundButtons($itemLevelRefunds, $isProvider);
+                            return $button . '<br><small class="text-muted">Item Returns:</small><br>' . $itemButtons;
+                        }
+                        return $button;
+                    }
+
+                    if ($fullOrderRefund->status === RefundRequest::STATUS_COMPLETED) {
+                        // Check if all refunds (full order + items) are completed
+                        $allCompleted = $refunds->every(function ($r) {
+                            return $r->status === RefundRequest::STATUS_COMPLETED;
+                        });
+                        if ($allCompleted) {
+                            return '<span class="badge bg-success">Refunded</span>';
+                        }
+                    }
+                }
+
+                // Handle item-level refunds only (no full order refund)
+                if ($itemLevelRefunds->isNotEmpty()) {
+                    return $this->formatItemRefundButtons($itemLevelRefunds, $isProvider);
+                }
+
+                // All refunds completed
+                return '<span class="badge bg-success">Refunded</span>';
+            })
             ->editColumn('created_at', function ($row) {
                 if ($row->created_at) {
                     return \Carbon\Carbon::parse($row->created_at)
@@ -153,7 +257,7 @@ class PaymentsController extends Controller
                 $btns .= '</div>';
                 return $btns;
             })
-            ->rawColumns(['actions', 'status'])
+            ->rawColumns(['actions', 'status', 'refund_action'])
             ->toJson();
     }
 
@@ -185,6 +289,113 @@ class PaymentsController extends Controller
         return $request->wantsJson() || $request->ajax()
             ? response()->json(['success' => true, 'message' => __('Payment created successfully')])
             : back()->with('status', __('Payment created'));
+    }
+
+    /**
+     * Format item-level refund buttons for display
+     */
+    private function formatItemRefundButtons($itemLevelRefunds, bool $isProvider): string
+    {
+        $failed = $itemLevelRefunds->where('status', RefundRequest::STATUS_FAILED);
+        if ($failed->isNotEmpty()) {
+            return $failed->map(function (RefundRequest $request) {
+                $amount = number_format((float) $request->amount, 2);
+                $label = strtoupper($request->payment_method);
+                $route = route('admin.payments.refunds.approve', $request->id);
+                $isCod = strtolower($request->payment_method) === 'cod';
+                $hasBankDetails = !empty($request->account_holder_name) || !empty($request->bank_name);
+                return '<button type="button" class="btn btn-sm btn-outline-danger js-approve-refund"'
+                    . ' data-refund-id="' . e((string) $request->id) . '"'
+                    . ' data-url="' . e($route) . '"'
+                    . ' data-amount="' . e($amount) . '"'
+                    . ' data-method="' . e($label) . '"'
+                    . ' data-is-cod="' . ($isCod ? '1' : '0') . '"'
+                    . ' data-has-bank-details="' . ($hasBankDetails ? '1' : '0') . '"'
+                    . ($hasBankDetails ? ' data-account-holder="' . e($request->account_holder_name ?? '') . '"'
+                        . ' data-bank-name="' . e($request->bank_name ?? '') . '"'
+                        . ' data-account-number="' . e($request->account_number ?? '') . '"'
+                        . ' data-ifsc="' . e($request->ifsc ?? '') . '"' : '')
+                    . '>Retry $' . e($amount) . ' (' . e($label) . ')</button>';
+            })->implode('<br>');
+        }
+
+        $pending = $itemLevelRefunds->whereIn('status', [RefundRequest::STATUS_PENDING, RefundRequest::STATUS_PROCESSING]);
+        if ($pending->isEmpty()) {
+            return '<span class="badge bg-success">Refunded</span>';
+        }
+
+        if ($isProvider) {
+            return '<span class="badge bg-warning text-dark">Pending Admin</span>';
+        }
+
+        return $pending->map(function (RefundRequest $request) {
+            $amount = number_format((float) $request->amount, 2);
+            $label = strtoupper($request->payment_method);
+            $route = route('admin.payments.refunds.approve', $request->id);
+            $isCod = strtolower($request->payment_method) === 'cod';
+            $hasBankDetails = !empty($request->account_holder_name) || !empty($request->bank_name);
+            return '<button type="button" class="btn btn-sm btn-outline-success js-approve-refund"'
+                . ' data-refund-id="' . e((string) $request->id) . '"'
+                . ' data-url="' . e($route) . '"'
+                . ' data-amount="' . e($amount) . '"'
+                . ' data-method="' . e($label) . '"'
+                . ' data-is-cod="' . ($isCod ? '1' : '0') . '"'
+                . ' data-has-bank-details="' . ($hasBankDetails ? '1' : '0') . '"'
+                . ($hasBankDetails ? ' data-account-holder="' . e($request->account_holder_name ?? '') . '"'
+                    . ' data-bank-name="' . e($request->bank_name ?? '') . '"'
+                    . ' data-account-number="' . e($request->account_number ?? '') . '"'
+                    . ' data-ifsc="' . e($request->ifsc ?? '') . '"' : '')
+                . '>Approve $' . e($amount) . ' (' . e($label) . ')</button>';
+        })->implode('<br>');
+    }
+
+    public function approveRefund(Request $request, RefundRequest $refundRequest)
+    {
+        abort_unless(Auth::user()->hasRole('admin'), 403);
+
+        if ($refundRequest->status === RefundRequest::STATUS_COMPLETED) {
+            return response()->json([
+                'success' => true,
+                'message' => __('Refund already processed'),
+            ]);
+        }
+
+        try {
+            DB::transaction(function () use ($refundRequest) {
+                // Reload refund request with relationships
+                $refundRequest->refresh();
+                $refundRequest->loadMissing(['order', 'payment']);
+                
+                // Ensure order and payment are loaded
+                if (!$refundRequest->order) {
+                    throw new \RuntimeException('Order not found for refund request.');
+                }
+                
+                $result = RefundService::processRefundRequest($refundRequest);
+                
+                // Check if refund failed
+                if ($result->status === RefundRequest::STATUS_FAILED) {
+                    throw new \RuntimeException('Refund processing failed. Please check the refund request notes for details.');
+                }
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => __('Refund processed successfully'),
+                'refresh_tables' => ['payments-table'],
+            ]);
+        } catch (\Throwable $throwable) {
+            Log::error('Refund approval failed', [
+                'refund_request_id' => $refundRequest->id,
+                'error' => $throwable->getMessage(),
+                'trace' => $throwable->getTraceAsString(),
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => __('Refund processing failed: :message', ['message' => $throwable->getMessage()]),
+            ], 500);
+        }
     }
 
     /**

@@ -161,13 +161,39 @@
                                     </div>
                                     <div class="text-end">
                                         <div class="fw-bold">${{ number_format((float)$item->total, 2) }}</div>
-                                        @if($order->order_status === 'delivered' && $item->order_status !== 'cancelled')
-                                            <div class="mt-2 js-rating-control"
-                                                 data-order-id="{{ $order->id }}"
-                                                 data-order-item-id="{{ $item->id }}"
-                                                 data-product-id="{{ $item->product_id }}">
-                                                <!-- Rating status or Rate button injected by JS -->
-                                            </div>
+                                        @if($order->order_status === 'delivered')
+                                            @php
+                                                $payments = $order->payment ?? collect();
+                                                $primaryPayment = $payments->first();
+                                                $isPaid = $primaryPayment ? ($primaryPayment->status === 'paid') : false;
+                                                $itemRefundRequest = ($order->refundRequests ?? collect())->where('order_item_id', $item->id)->first();
+                                                $itemHasRefund = $itemRefundRequest !== null;
+                                                $itemRefundCompleted = $itemHasRefund && $itemRefundRequest->status === \App\Models\RefundRequest::STATUS_COMPLETED;
+                                                $itemRefundPending = $itemHasRefund && in_array($itemRefundRequest->status, [
+                                                    \App\Models\RefundRequest::STATUS_PENDING,
+                                                    \App\Models\RefundRequest::STATUS_PROCESSING
+                                                ]);
+                                            @endphp
+                                            @if($itemRefundCompleted)
+                                                <small class="text-success d-block mt-1">Return Accepted</small>
+                                            @elseif($itemRefundPending)
+                                                <small class="text-warning d-block mt-1">Return Pending</small>
+                                            @elseif($item->order_status === 'cancelled')
+                                                <small class="text-muted d-block mt-1">Cancelled</small>
+                                            @elseif($isPaid)
+                                                <button class="btn btn-outline-warning btn-sm mt-2 js-return-item" 
+                                                        data-order-id="{{ $order->id }}"
+                                                        data-item-id="{{ $item->id }}"
+                                                        title="Return this item">Return Item</button>
+                                            @endif
+                                            @if($item->order_status !== 'cancelled')
+                                                <div class="mt-2 js-rating-control"
+                                                     data-order-id="{{ $order->id }}"
+                                                     data-order-item-id="{{ $item->id }}"
+                                                     data-product-id="{{ $item->product_id }}">
+                                                    <!-- Rating status or Rate button injected by JS -->
+                                                </div>
+                                            @endif
                                         @endif
                                     </div>
                                 </div>
@@ -201,7 +227,36 @@
                                     @if($order->order_status === 'pending')
                                         <button class="btn btn-outline-danger btn-sm js-cancel-order" data-order-id="{{ $order->id }}">Cancel Order</button>
                                     @elseif($order->order_status === 'delivered')
+                                        @php
+                                            $payments = $order->payment ?? collect();
+                                            $primaryPayment = $payments->first();
+                                            $isPaid = $primaryPayment ? ($primaryPayment->status === 'paid') : false;
+                                            $refundRequests = $order->refundRequests ?? collect();
+                                            $hasRefundRequest = $refundRequests->isNotEmpty();
+                                            $allRefundsCompleted = $hasRefundRequest && $refundRequests->every(function($rr) {
+                                                return $rr->status === \App\Models\RefundRequest::STATUS_COMPLETED;
+                                            });
+                                            $hasPendingRefunds = $hasRefundRequest && $refundRequests->whereIn('status', [
+                                                \App\Models\RefundRequest::STATUS_PENDING,
+                                                \App\Models\RefundRequest::STATUS_PROCESSING
+                                            ])->isNotEmpty();
+                                        @endphp
+                                        @if($allRefundsCompleted)
+                                            <div class="d-flex flex-column gap-1">
+                                                <span class="badge bg-success">Return Accepted</span>
+                                                <small class="text-success">The whole amount will be refunded to your bank account safely.</small>
+                                            </div>
+                                        @elseif($hasPendingRefunds)
+                                            <div class="d-flex flex-column gap-1">
+                                                <span class="badge bg-warning text-dark">Return Request Sent</span>
+                                                <small class="text-muted">Order return sent successfully and currently is being processed.</small>
+                                            </div>
+                                        @elseif($isPaid)
+                                            <button class="btn btn-outline-warning btn-sm js-return-order" data-order-id="{{ $order->id }}">Return Order</button>
+                                        @endif
                                         <button class="btn btn-primary btn-sm js-rate-order-btn" data-order-id="{{ $order->id }}" style="display:none;">Rate Your Products</button>
+                                    @elseif($order->order_status === 'cancelled')
+                                        <span class="badge bg-secondary">Cancelled</span>
                                     @endif
                                 </div>
                             </div>
@@ -293,22 +348,336 @@
         }
 
         document.addEventListener('click', function(e){
-            var btn = e.target.closest('.js-cancel-order');
+            const btn = e.target.closest('.js-cancel-order');
             if (!btn) return;
-            var orderId = btn.getAttribute('data-order-id');
+            e.preventDefault();
+
+            const orderId = btn.getAttribute('data-order-id');
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+            const postJson = (payload) => {
+                return fetch('/user/orders/' + orderId + '/cancel', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload || {})
+                }).then(r => r.json());
+            };
+
+            const showError = (message) => {
+                if (window.Swal) {
+                    Swal.fire('Error', message || 'Unable to cancel the order.', 'error');
+                } else {
+                    alert(message || 'Unable to cancel the order.');
+                }
+            };
+
             btn.disabled = true;
-            fetch('/user/orders/'+orderId+'/cancel', {
-                method: 'POST',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({})
-            }).then(function(r){ return r.json(); })
-              .then(function(){ poll(); })
-              .catch(function(){})
-              .finally(function(){ btn.disabled = false; });
+
+            postJson({}).then(function(preview){
+                if (!preview || preview.success !== true) {
+                    showError(preview && preview.message ? preview.message : 'Unable to cancel the order.');
+                    return;
+                }
+
+                const method = (preview.payment_method || '').toUpperCase();
+                const amountValue = preview.amount != null ? Number(preview.amount).toFixed(2) : null;
+                const amountText = amountValue ? `$${amountValue}` : 'the full order amount';
+                const isUnpaidCod = preview.is_unpaid_cod === true;
+
+                const confirmCancellation = function(extraPayload) {
+                    if (window.Swal) {
+                        Swal.fire({
+                            title: 'Cancelling...',
+                            allowOutsideClick: false,
+                            didOpen: () => Swal.showLoading()
+                        });
+                    }
+
+                    return postJson(Object.assign({ confirm: true }, extraPayload || {}))
+                        .then(function(response){
+                            if (window.Swal) { Swal.close(); }
+
+                            if (!response || !response.success) {
+                                showError(response && response.message ? response.message : 'Cancellation failed.');
+                                return;
+                            }
+
+                            if (window.Swal) {
+                                const title = isUnpaidCod ? 'Order Cancelled' : 'Refund Initiated';
+                                const message = response.refund_notice || response.message || (isUnpaidCod ? 'Order cancelled successfully.' : 'The full order amount will be refunded within 7 working days.');
+                                Swal.fire(title, message, 'success');
+                            } else {
+                                alert(response.refund_notice || response.message || (isUnpaidCod ? 'Order cancelled successfully.' : 'The full order amount will be refunded within 7 working days.'));
+                            }
+
+                            poll();
+                        })
+                        .catch(function(){
+                            if (window.Swal) { Swal.fire('Error', 'Cancellation failed. Please try again.', 'error'); }
+                            else { alert('Cancellation failed. Please try again.'); }
+                        });
+                };
+
+                if (preview.requires_bank_details && !isUnpaidCod) {
+                    if (!window.Swal) {
+                        const holder = prompt('Account Holder Name:');
+                        const bank = prompt('Bank Name:');
+                        const number = prompt('Account Number:');
+                        const ifsc = prompt('IFSC Code:');
+                        if (!holder || !bank || !number || !ifsc) {
+                            showError('Bank details are required to cancel COD orders.');
+                            return;
+                        }
+                        confirmCancellation({
+                            account_holder_name: holder,
+                            bank_name: bank,
+                            account_number: number,
+                            ifsc: ifsc
+                        });
+                        return;
+                    }
+
+                    Swal.fire({
+                        title: 'Bank details required',
+                        html: '<div class="text-start">' +
+                            '<label class="form-label fw-semibold">Account Holder Name</label>' +
+                            '<input type="text" id="swal_account_holder" class="form-control" placeholder="e.g. John Doe" />' +
+                            '<label class="form-label fw-semibold mt-3">Bank Name</label>' +
+                            '<input type="text" id="swal_bank_name" class="form-control" placeholder="e.g. Bank of America" />' +
+                            '<label class="form-label fw-semibold mt-3">Account Number</label>' +
+                            '<input type="text" id="swal_account_number" class="form-control" placeholder="Account Number" />' +
+                            '<label class="form-label fw-semibold mt-3">IFSC Code</label>' +
+                            '<input type="text" id="swal_ifsc" class="form-control" placeholder="IFSC / Routing Code" />' +
+                            '<div class="mt-3 small text-muted">We will use these details to issue a manual refund for your COD order.</div>' +
+                            '</div>',
+                        showCancelButton: true,
+                        confirmButtonText: 'Submit & Cancel Order',
+                        cancelButtonText: 'Close',
+                        focusConfirm: false,
+                        width: 600,
+                        preConfirm: () => {
+                            const holder = document.getElementById('swal_account_holder').value.trim();
+                            const bank = document.getElementById('swal_bank_name').value.trim();
+                            const number = document.getElementById('swal_account_number').value.trim();
+                            const ifsc = document.getElementById('swal_ifsc').value.trim();
+
+                            if (!holder || !bank || !number || !ifsc) {
+                                Swal.showValidationMessage('All bank details are required.');
+                                return false;
+                            }
+
+                            return {
+                                account_holder_name: holder,
+                                bank_name: bank,
+                                account_number: number,
+                                ifsc: ifsc
+                            };
+                        }
+                    }).then(function(result){
+                        if (!result.isConfirmed) {
+                            return;
+                        }
+                        confirmCancellation(result.value || {});
+                    });
+                } else {
+                    if (window.Swal) {
+                        Swal.fire({
+                            title: 'Cancel this order?',
+                            text: isUnpaidCod 
+                                ? 'This order will be cancelled. No payment was collected, so no refund is needed.'
+                                : `Your payment (${method || 'ONLINE'}) for ${amountText} will be refunded within 7 working days.`,
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Yes, cancel order',
+                            cancelButtonText: 'Keep order'
+                        }).then(function(result){
+                            if (!result.isConfirmed) {
+                                return;
+                            }
+                            confirmCancellation();
+                        });
+                    } else if (window.confirm(isUnpaidCod ? 'Cancel this order? No payment was collected.' : 'Cancel this order? ' + amountText + ' will be refunded within 7 working days.')) {
+                        confirmCancellation();
+                    }
+                }
+            }).catch(function(){
+                showError('Unable to fetch cancellation requirements.');
+            }).finally(function(){
+                btn.disabled = false;
+            });
+        });
+
+        // Return order handler
+        document.addEventListener('click', function(e){
+            const btn = e.target.closest('.js-return-order');
+            if (!btn) return;
+            e.preventDefault();
+
+            const orderId = btn.getAttribute('data-order-id');
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+            const postJson = (payload) => {
+                return fetch('/user/orders/' + orderId + '/return', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload || {})
+                }).then(r => r.json());
+            };
+
+            const showError = (message) => {
+                if (window.Swal) {
+                    Swal.fire('Error', message || 'Unable to return the order.', 'error');
+                } else {
+                    alert(message || 'Unable to return the order.');
+                }
+            };
+
+            btn.disabled = true;
+
+            postJson({}).then(function(preview){
+                if (!preview || preview.success !== true) {
+                    showError(preview && preview.message ? preview.message : 'Unable to return the order.');
+                    return;
+                }
+
+                const method = (preview.payment_method || '').toUpperCase();
+                const amountValue = preview.amount != null ? Number(preview.amount).toFixed(2) : null;
+                const amountText = amountValue ? `$${amountValue}` : 'the full order amount';
+                const requiresBankDetails = preview.requires_bank_details === true;
+
+                const confirmReturn = function(extraPayload) {
+                    if (window.Swal) {
+                        Swal.fire({
+                            title: 'Processing return...',
+                            allowOutsideClick: false,
+                            didOpen: () => Swal.showLoading()
+                        });
+                    }
+
+                    return postJson(Object.assign({ confirm: true }, extraPayload || {}))
+                        .then(function(response){
+                            if (window.Swal) { Swal.close(); }
+
+                            if (!response || !response.success) {
+                                showError(response && response.message ? response.message : 'Return request failed.');
+                                return;
+                            }
+
+                            if (window.Swal) {
+                                Swal.fire({
+                                    title: 'Return Request Submitted',
+                                    text: response.refund_notice || 'Your refund will be processed within 7 working days.',
+                                    icon: 'success',
+                                    confirmButtonText: 'OK'
+                                }).then(function() {
+                                    // Reload page to show updated status
+                                    window.location.reload();
+                                });
+                            } else {
+                                alert(response.refund_notice || 'Your refund will be processed within 7 working days.');
+                                // Reload page to show updated status
+                                window.location.reload();
+                            }
+                        })
+                        .catch(function(){
+                            if (window.Swal) { Swal.fire('Error', 'Return request failed. Please try again.', 'error'); }
+                            else { alert('Return request failed. Please try again.'); }
+                        });
+                };
+
+                if (requiresBankDetails) {
+                    if (!window.Swal) {
+                        const holder = prompt('Account Holder Name:');
+                        const bank = prompt('Bank Name:');
+                        const number = prompt('Account Number:');
+                        const ifsc = prompt('IFSC Code:');
+                        if (!holder || !bank || !number || !ifsc) {
+                            showError('Bank details are required to return COD orders.');
+                            return;
+                        }
+                        confirmReturn({
+                            account_holder_name: holder,
+                            bank_name: bank,
+                            account_number: number,
+                            ifsc: ifsc
+                        });
+                        return;
+                    }
+
+                    Swal.fire({
+                        title: 'Bank details required for refund',
+                        html: '<div class="text-start">' +
+                            '<label class="form-label fw-semibold">Account Holder Name</label>' +
+                            '<input type="text" id="swal_account_holder" class="form-control" placeholder="e.g. John Doe" />' +
+                            '<label class="form-label fw-semibold mt-3">Bank Name</label>' +
+                            '<input type="text" id="swal_bank_name" class="form-control" placeholder="e.g. Bank of America" />' +
+                            '<label class="form-label fw-semibold mt-3">Account Number</label>' +
+                            '<input type="text" id="swal_account_number" class="form-control" placeholder="Account Number" />' +
+                            '<label class="form-label fw-semibold mt-3">IFSC Code</label>' +
+                            '<input type="text" id="swal_ifsc" class="form-control" placeholder="IFSC / Routing Code" />' +
+                            '<div class="mt-3 small text-muted">We will use these details to issue a manual refund for your returned order.</div>' +
+                            '</div>',
+                        showCancelButton: true,
+                        confirmButtonText: 'Submit Return Request',
+                        cancelButtonText: 'Close',
+                        focusConfirm: false,
+                        width: 600,
+                        preConfirm: () => {
+                            const holder = document.getElementById('swal_account_holder').value.trim();
+                            const bank = document.getElementById('swal_bank_name').value.trim();
+                            const number = document.getElementById('swal_account_number').value.trim();
+                            const ifsc = document.getElementById('swal_ifsc').value.trim();
+
+                            if (!holder || !bank || !number || !ifsc) {
+                                Swal.showValidationMessage('All bank details are required.');
+                                return false;
+                            }
+
+                            return {
+                                account_holder_name: holder,
+                                bank_name: bank,
+                                account_number: number,
+                                ifsc: ifsc
+                            };
+                        }
+                    }).then(function(result){
+                        if (!result.isConfirmed) {
+                            return;
+                        }
+                        confirmReturn(result.value || {});
+                    });
+                } else {
+                    if (window.Swal) {
+                        Swal.fire({
+                            title: 'Return this order?',
+                            text: `Your payment (${method || 'ONLINE'}) for ${amountText} will be refunded within 7 working days.`,
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Yes, return order',
+                            cancelButtonText: 'Keep order'
+                        }).then(function(result){
+                            if (!result.isConfirmed) {
+                                return;
+                            }
+                            confirmReturn();
+                        });
+                    } else if (window.confirm('Return this order? ' + amountText + ' will be refunded within 7 working days.')) {
+                        confirmReturn();
+                    }
+                }
+            }).catch(function(){
+                showError('Unable to fetch return requirements.');
+            }).finally(function(){
+                btn.disabled = false;
+            });
         });
 
         // Initialize current badges and progress
@@ -320,6 +689,169 @@
         });
 
         poll();
+
+        // Return item handler (item-level return)
+        document.addEventListener('click', function(e){
+            const btn = e.target.closest('.js-return-item');
+            if (!btn) return;
+            e.preventDefault();
+
+            const orderId = btn.getAttribute('data-order-id');
+            const itemId = btn.getAttribute('data-item-id');
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+            const postJson = (payload) => {
+                return fetch('/user/orders/' + orderId + '/return', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload || {})
+                }).then(r => r.json());
+            };
+
+            const showError = (message) => {
+                if (window.Swal) {
+                    Swal.fire('Error', message || 'Unable to return the item.', 'error');
+                } else {
+                    alert(message || 'Unable to return the item.');
+                }
+            };
+
+            btn.disabled = true;
+
+            postJson({ item_ids: [parseInt(itemId)] }).then(function(preview){
+                if (!preview || preview.success !== true) {
+                    showError(preview && preview.message ? preview.message : 'Unable to return the item.');
+                    return;
+                }
+
+                const method = (preview.payment_method || '').toUpperCase();
+                const amountValue = preview.amount != null ? Number(preview.amount).toFixed(2) : null;
+                const amountText = amountValue ? `$${amountValue}` : 'the item amount';
+                const requiresBankDetails = preview.requires_bank_details === true;
+
+                const confirmReturn = function(extraPayload) {
+                    if (window.Swal) {
+                        Swal.fire({
+                            title: 'Processing return...',
+                            allowOutsideClick: false,
+                            didOpen: () => Swal.showLoading()
+                        });
+                    }
+
+                    return postJson(Object.assign({ confirm: true, item_ids: [parseInt(itemId)] }, extraPayload || {}))
+                        .then(function(response){
+                            if (window.Swal) { Swal.close(); }
+
+                            if (!response || !response.success) {
+                                showError(response && response.message ? response.message : 'Return request failed.');
+                                return;
+                            }
+
+                            if (window.Swal) {
+                                Swal.fire({
+                                    title: 'Return Request Submitted',
+                                    text: response.refund_notice || 'Your refund will be processed within 7 working days.',
+                                    icon: 'success',
+                                    confirmButtonText: 'OK'
+                                }).then(function() {
+                                    // Reload page to show updated status
+                                    window.location.reload();
+                                });
+                            } else {
+                                alert(response.refund_notice || 'Your refund will be processed within 7 working days.');
+                                // Reload page to show updated status
+                                window.location.reload();
+                            }
+                        })
+                        .catch(function(){
+                            if (window.Swal) { Swal.fire('Error', 'Return request failed. Please try again.', 'error'); }
+                            else { alert('Return request failed. Please try again.'); }
+                        });
+                };
+
+                if (requiresBankDetails) {
+                    if (!window.Swal) {
+                        const holder = prompt('Account Holder Name:');
+                        const bank = prompt('Bank Name:');
+                        const number = prompt('Account Number:');
+                        const ifsc = prompt('IFSC Code:');
+                        if (!holder || !bank || !number || !ifsc) {
+                            showError('Bank details are required to return COD items.');
+                            return;
+                        }
+                        confirmReturn({
+                            account_holder_name: holder,
+                            bank_name: bank,
+                            account_number: number,
+                            ifsc: ifsc
+                        });
+                    } else {
+                        Swal.fire({
+                            title: 'Return this item?',
+                            html: `
+                                <p>Your payment (${method || 'ONLINE'}) for ${amountText} will be refunded within 7 working days.</p>
+                                <div class="text-start mt-3">
+                                    <label class="form-label">Account Holder Name:</label>
+                                    <input type="text" class="form-control" id="swal-holder" required>
+                                    <label class="form-label mt-2">Bank Name:</label>
+                                    <input type="text" class="form-control" id="swal-bank" required>
+                                    <label class="form-label mt-2">Account Number:</label>
+                                    <input type="text" class="form-control" id="swal-number" required>
+                                    <label class="form-label mt-2">IFSC Code:</label>
+                                    <input type="text" class="form-control" id="swal-ifsc" required>
+                                </div>
+                            `,
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Yes, return item',
+                            cancelButtonText: 'Cancel',
+                            preConfirm: () => {
+                                const holder = document.getElementById('swal-holder').value;
+                                const bank = document.getElementById('swal-bank').value;
+                                const number = document.getElementById('swal-number').value;
+                                const ifsc = document.getElementById('swal-ifsc').value;
+                                if (!holder || !bank || !number || !ifsc) {
+                                    Swal.showValidationMessage('All bank details are required.');
+                                    return false;
+                                }
+                                return { account_holder_name: holder, bank_name: bank, account_number: number, ifsc: ifsc };
+                            }
+                        }).then(function(result){
+                            if (!result.isConfirmed || !result.value) {
+                                return;
+                            }
+                            confirmReturn(result.value);
+                        });
+                    }
+                } else {
+                    if (window.Swal) {
+                        Swal.fire({
+                            title: 'Return this item?',
+                            text: `Your payment (${method || 'ONLINE'}) for ${amountText} will be refunded within 7 working days.`,
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Yes, return item',
+                            cancelButtonText: 'Keep item'
+                        }).then(function(result){
+                            if (!result.isConfirmed) {
+                                return;
+                            }
+                            confirmReturn();
+                        });
+                    } else if (window.confirm('Return this item? ' + amountText + ' will be refunded within 7 working days.')) {
+                        confirmReturn();
+                    }
+                }
+            }).catch(function(){
+                showError('Unable to fetch return requirements.');
+            }).finally(function(){
+                btn.disabled = false;
+            });
+        });
 
         // Rating functionality
         function renderStars(container, currentRating, readOnly, productId, orderItemId) {

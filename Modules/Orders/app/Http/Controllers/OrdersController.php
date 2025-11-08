@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\DiscountCode;
+use App\Services\RefundService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Yajra\DataTables\DataTables;
-use Illuminate\Http\JsonResponse;
 
 class OrdersController extends Controller
 {
@@ -784,28 +786,249 @@ class OrdersController extends Controller
      */
     public function cancel(Request $request, $id)
     {
-        $order = Order::with('orderItems')->findOrFail($id);
+        $order = Order::with([
+            'orderItems',
+            'payment.paymentMethod',
+            'paymentMethod',
+        ])->findOrFail($id);
+
         $user = Auth::user();
         abort_unless($user && $user->hasRole('user') && $order->user_id === $user->id, 403);
 
         if ($order->order_status !== Order::STATUS_PENDING) {
-        return response()->json([
-            'success' => false,
+            return response()->json([
+                'success' => false,
                 'message' => __('You can cancel only pending orders.')
             ], 422);
         }
 
-        // Set all items to cancelled and transition order to cancelled (one email)
-        foreach ($order->orderItems as $item) {
-            $item->order_status = Order::STATUS_CANCELLED;
-            $item->save();
+        $payments = $order->payment;
+        $primaryPayment = $payments->first();
+        $paymentMethodName = strtolower(optional($order->paymentMethod)->name ?? optional($primaryPayment?->paymentMethod)->name ?? 'cod');
+        $isCod = $paymentMethodName === 'cod';
+        $isUnpaid = $primaryPayment ? ($primaryPayment->status === 'unpaid') : true;
+        // Bank details only needed for COD paid orders (not for unpaid COD or Stripe/Razorpay)
+        $requiresBankDetails = $isCod && !$isUnpaid;
+
+        if (! $request->boolean('confirm')) {
+            $amount = (float) ($payments->sum('amount') ?: $order->total_amount);
+            $currency = RefundService::resolveCurrency($order, $primaryPayment);
+
+            return response()->json([
+                'success' => true,
+                'requires_bank_details' => $requiresBankDetails,
+                'is_unpaid_cod' => $isCod && $isUnpaid,
+                'payment_method' => $paymentMethodName,
+                'amount' => round($amount, 2),
+                'currency' => $currency,
+            ]);
         }
-        $order->transitionTo(Order::STATUS_CANCELLED);
-        $order->recalculateOrderStatus();
+
+        $bankDetails = [];
+        if ($requiresBankDetails) {
+            $validatedBank = $request->validate([
+                'account_holder_name' => ['required', 'string', 'max:190'],
+                'bank_name' => ['required', 'string', 'max:190'],
+                'account_number' => ['required', 'string', 'max:64'],
+                'ifsc' => ['required', 'string', 'max:32'],
+            ]);
+            $bankDetails = $validatedBank;
+        }
+
+        DB::transaction(function () use ($order, $payments, $paymentMethodName, $bankDetails, $user, $isCod, $isUnpaid) {
+            foreach ($order->orderItems as $item) {
+                $item->order_status = Order::STATUS_CANCELLED;
+                $item->save();
+            }
+
+            $order->transitionTo(Order::STATUS_CANCELLED);
+            $order->recalculateOrderStatus();
+
+            // COD unpaid: no payment collected, no refund needed
+            if ($isCod && $isUnpaid) {
+                // Payment status stays unpaid (no payment was collected)
+                // Do NOT create refund_requests record
+            } else {
+                // COD paid or Stripe/Razorpay: create refund requests
+                $this->syncRefundRequestsForOrder($order, $paymentMethodName, $payments, [
+                    'bank_details' => $bankDetails,
+                    'user_id' => $user->id,
+                ]);
+            }
+        });
+
+        $message = ($isCod && $isUnpaid) 
+            ? __('Order cancelled successfully.')
+            : __('Your refund will be processed within 7 working days.');
 
         return response()->json([
             'success' => true,
-            'message' => __('Order cancelled successfully')
+            'message' => $message,
+            'refund_notice' => ($isCod && $isUnpaid) ? null : __('Your refund will be processed within 7 working days.')
+        ]);
+    }
+
+    /**
+     * Return order (User endpoint) - for delivered orders
+     */
+    public function returnOrder(Request $request, $id)
+    {
+        $order = Order::with([
+            'orderItems',
+            'payment.paymentMethod',
+            'paymentMethod',
+        ])->findOrFail($id);
+
+        $user = Auth::user();
+        abort_unless($user && $user->hasRole('user') && $order->user_id === $user->id, 403);
+
+        if ($order->order_status !== Order::STATUS_DELIVERED) {
+            return response()->json([
+                'success' => false,
+                'message' => __('You can return only delivered orders.')
+            ], 422);
+        }
+
+        // Check if payment status is paid (required for returns)
+        $payments = $order->payment;
+        $primaryPayment = $payments->first();
+        $isPaid = $primaryPayment ? ($primaryPayment->status === 'paid') : false;
+        
+        if (!$isPaid) {
+            return response()->json([
+                'success' => false,
+                'message' => __('You can return only orders that have been paid.')
+            ], 422);
+        }
+
+        // Get item IDs to return (if provided, it's item-level return; otherwise full order return)
+        $itemIds = $request->input('item_ids', []);
+        if (!is_array($itemIds)) {
+            $itemIds = [];
+        }
+        $itemIds = array_filter(array_map('intval', $itemIds));
+        $isFullOrderReturn = empty($itemIds);
+
+        // Validate item IDs belong to this order
+        if (!$isFullOrderReturn) {
+            $validItemIds = $order->orderItems->pluck('id')->toArray();
+            $invalidIds = array_diff($itemIds, $validItemIds);
+            if (!empty($invalidIds)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('Invalid order items selected for return.')
+                ], 422);
+            }
+
+            // Check if any of these items already have a return request
+            $existingItemRefunds = \App\Models\RefundRequest::where('order_id', $order->id)
+                ->whereIn('order_item_id', $itemIds)
+                ->whereIn('status', [
+                    \App\Models\RefundRequest::STATUS_PENDING,
+                    \App\Models\RefundRequest::STATUS_PROCESSING,
+                    \App\Models\RefundRequest::STATUS_COMPLETED
+                ])
+                ->exists();
+            
+            if ($existingItemRefunds) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('One or more selected items already have a return request.')
+                ], 422);
+            }
+        } else {
+            // Check if a full order return request already exists
+            $existingRefunds = \App\Models\RefundRequest::where('order_id', $order->id)
+                ->whereNull('order_item_id') // Full order return
+                ->whereIn('status', [
+                    \App\Models\RefundRequest::STATUS_PENDING,
+                    \App\Models\RefundRequest::STATUS_PROCESSING,
+                    \App\Models\RefundRequest::STATUS_COMPLETED
+                ])
+                ->exists();
+            
+            if ($existingRefunds) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('A return request for this order already exists.')
+                ], 422);
+            }
+        }
+
+        $paymentMethodName = strtolower(optional($order->paymentMethod)->name ?? optional($primaryPayment?->paymentMethod)->name ?? 'cod');
+        $isCod = $paymentMethodName === 'cod';
+        // Bank details only needed for COD (not for Stripe/Razorpay)
+        $requiresBankDetails = $isCod;
+
+        // Calculate refund amount
+        if ($isFullOrderReturn) {
+            $amount = (float) ($payments->sum('amount') ?: $order->total_amount);
+        } else {
+            // Calculate amount for selected items only
+            $selectedItems = $order->orderItems->whereIn('id', $itemIds);
+            $amount = $selectedItems->sum(function ($item) {
+                return (float) ($item->total ?? $item->line_total ?? 0);
+            });
+        }
+
+        if (! $request->boolean('confirm')) {
+            $currency = RefundService::resolveCurrency($order, $primaryPayment);
+
+            return response()->json([
+                'success' => true,
+                'requires_bank_details' => $requiresBankDetails,
+                'payment_method' => $paymentMethodName,
+                'amount' => round($amount, 2),
+                'currency' => $currency,
+                'is_full_order' => $isFullOrderReturn,
+            ]);
+        }
+
+        $bankDetails = [];
+        if ($requiresBankDetails) {
+            $validatedBank = $request->validate([
+                'account_holder_name' => ['required', 'string', 'max:190'],
+                'bank_name' => ['required', 'string', 'max:190'],
+                'account_number' => ['required', 'string', 'max:64'],
+                'ifsc' => ['required', 'string', 'max:32'],
+            ]);
+            $bankDetails = $validatedBank;
+        }
+
+        DB::transaction(function () use ($order, $payments, $paymentMethodName, $bankDetails, $user, $isFullOrderReturn, $itemIds) {
+            if ($isFullOrderReturn) {
+                // Full order return: mark all items as cancelled
+                foreach ($order->orderItems as $item) {
+                    $item->order_status = Order::STATUS_CANCELLED;
+                    $item->save();
+                }
+
+                // Create a single aggregated refund request for full order
+                $this->syncRefundRequestsForOrder($order, $paymentMethodName, $payments, [
+                    'bank_details' => $bankDetails,
+                    'user_id' => $user->id,
+                    'is_full_order' => true,
+                ]);
+            } else {
+                // Item-level return: mark only selected items as cancelled
+                $selectedItems = $order->orderItems->whereIn('id', $itemIds);
+                foreach ($selectedItems as $item) {
+                    $item->order_status = Order::STATUS_CANCELLED;
+                    $item->save();
+                }
+
+                // Create refund requests for each selected item
+                $this->syncRefundRequestsForItems($order, $selectedItems, $paymentMethodName, $payments, [
+                    'bank_details' => $bankDetails,
+                    'user_id' => $user->id,
+                ]);
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => __('Return request submitted successfully.'),
+            'refund_notice' => __('Your refund will be processed within 7 working days.')
         ]);
     }
 
@@ -814,7 +1037,7 @@ class OrdersController extends Controller
      */
     public function updateStatus(Request $request, $id)
     {
-        $order = Order::with('orderItems')->findOrFail($id);
+        $order = Order::with(['orderItems', 'payment.paymentMethod', 'paymentMethod'])->findOrFail($id);
         $this->authorizeUpdate($order);
 
         $validated = $request->validate([
@@ -823,20 +1046,80 @@ class OrdersController extends Controller
 
         $newStatus = $validated['order_status'];
         $user = Auth::user();
+        $payments = $order->payment;
+        $paymentMethodName = strtolower(optional($order->paymentMethod)->name ?? optional($payments->first()?->paymentMethod)->name ?? 'cod');
 
         if ($user->hasRole('admin')) {
-            foreach ($order->orderItems as $item) {
-                $item->order_status = $newStatus;
-                $item->save();
-            }
-            $order->transitionTo($newStatus);
-            $order->recalculateOrderStatus();
+            DB::transaction(function () use ($order, $payments, $newStatus, $paymentMethodName, $user) {
+                foreach ($order->orderItems as $item) {
+                    $item->order_status = $newStatus;
+                    $item->save();
+                }
+
+                $order->transitionTo($newStatus);
+                $order->recalculateOrderStatus();
+
+                // When COD order is delivered, automatically mark payment as paid
+                if ($newStatus === Order::STATUS_DELIVERED) {
+                    $isCod = $paymentMethodName === 'cod';
+                    if ($isCod) {
+                        foreach ($payments as $payment) {
+                            if ($payment->status === 'unpaid') {
+                                $payment->update([
+                                    'status' => 'paid',
+                                    'paid_at' => now(),
+                                ]);
+                            }
+                        }
+                    }
+                }
+
+                if ($newStatus === Order::STATUS_CANCELLED) {
+                    $primaryPayment = $payments->first();
+                    $isCod = $paymentMethodName === 'cod';
+                    $isUnpaid = $primaryPayment ? ($primaryPayment->status === 'unpaid') : true;
+
+                    // COD unpaid: no payment collected, no refund needed
+                    if ($isCod && $isUnpaid) {
+                        // Payment status stays unpaid (no payment was collected)
+                        // Do NOT create refund_requests record
+                    } else {
+                        // COD paid or Stripe/Razorpay: create refund requests
+                        $this->syncRefundRequestsForOrder($order, $paymentMethodName, $payments, [
+                            'user_id' => $order->user_id,
+                        ]);
+                    }
+                }
+            });
         } elseif ($user->hasRole('provider')) {
             $providerId = $user->id;
             foreach ($order->orderItems->where('provider_id', $providerId) as $item) {
                 $item->transitionTo($newStatus);
             }
             $order->recalculateOrderStatus();
+            
+            // When COD order is delivered (all items), automatically mark payment as paid
+            if ($newStatus === Order::STATUS_DELIVERED) {
+                $isCod = $paymentMethodName === 'cod';
+                if ($isCod && $order->order_status === Order::STATUS_DELIVERED) {
+                    // Check if all items are delivered
+                    $allItemsDelivered = $order->orderItems()->where('order_status', '!=', Order::STATUS_DELIVERED)->count() === 0;
+                    if ($allItemsDelivered) {
+                        foreach ($payments as $payment) {
+                            if ($payment->status === 'unpaid') {
+                                $payment->update([
+                                    'status' => 'paid',
+                                    'paid_at' => now(),
+                                ]);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if ($newStatus === Order::STATUS_CANCELLED) {
+                $this->syncPartialRefundForProvider($order, $providerId, $paymentMethodName);
+            }
         } else {
             abort(403);
         }
@@ -844,6 +1127,153 @@ class OrdersController extends Controller
         return response()->json([
             'success' => true,
             'message' => __('Status updated successfully')
+        ]);
+    }
+
+    private function syncRefundRequestsForOrder(Order $order, string $paymentMethodName, $payments = null, array $options = []): void
+    {
+        $payments = $payments ?? $order->payment()->with('paymentMethod')->get();
+        $initiatorId = $options['user_id'] ?? $order->user_id ?? Auth::id();
+        $bankDetails = $options['bank_details'] ?? [];
+        $isFullOrder = $options['is_full_order'] ?? false;
+        $primaryPayment = $payments->first();
+        $currency = RefundService::resolveCurrency($order, $primaryPayment);
+
+        if ($isFullOrder) {
+            // For full order returns, create a single aggregated refund request
+            $totalAmount = (float) ($payments->sum('amount') ?: $order->total_amount);
+            
+            RefundService::upsertRefundRequest($order, [
+                'payment' => $primaryPayment,
+                'payment_method' => $paymentMethodName,
+                'amount' => $totalAmount,
+                'currency' => $currency,
+                'bank_details' => $bankDetails,
+                'user_id' => $initiatorId,
+                'order_item_id' => null, // null = full order return
+                'provider_id' => null, // null for full order
+            ]);
+        } else {
+            // Legacy: Group order items by provider to create refund requests per provider
+            $itemsByProvider = $order->orderItems->groupBy('provider_id');
+
+            foreach ($itemsByProvider as $providerId => $items) {
+                // Calculate refund amount for this provider's items
+                $providerAmount = $items->sum(function ($item) {
+                    return (float) ($item->total ?? $item->line_total ?? 0);
+                });
+
+                if ($providerAmount <= 0) {
+                    continue;
+                }
+
+                // Find or create payment for this provider portion
+                $payment = $payments->first();
+                if ($payments->count() > 1) {
+                    // If multiple payments, try to match by amount or use first
+                    $payment = $payments->firstWhere('amount', $providerAmount) ?? $payments->first();
+                }
+
+                // Create refund request per provider
+                RefundService::upsertRefundRequest($order, [
+                    'payment' => $payment,
+                    'payment_method' => $paymentMethodName,
+                    'amount' => $providerAmount,
+                    'currency' => $currency,
+                    'bank_details' => $bankDetails,
+                    'user_id' => $initiatorId,
+                    'provider_id' => $providerId,
+                ]);
+            }
+        }
+
+        // Do NOT update payment status to refunded here - it stays 'paid' until admin approves
+    }
+
+    /**
+     * Create refund requests for specific order items (item-level returns)
+     */
+    private function syncRefundRequestsForItems(Order $order, $items, string $paymentMethodName, $payments = null, array $options = []): void
+    {
+        $payments = $payments ?? $order->payment()->with('paymentMethod')->get();
+        $initiatorId = $options['user_id'] ?? $order->user_id ?? Auth::id();
+        $bankDetails = $options['bank_details'] ?? [];
+        $primaryPayment = $payments->first();
+        $currency = RefundService::resolveCurrency($order, $primaryPayment);
+
+        // Create a refund request for each item
+        foreach ($items as $item) {
+            $itemAmount = (float) ($item->total ?? $item->line_total ?? 0);
+            
+            if ($itemAmount <= 0) {
+                continue;
+            }
+
+            // Find payment for this item (try to match by provider or use first)
+            $payment = $payments->first();
+            if ($payments->count() > 1 && $item->provider_id) {
+                // Try to find payment that matches this provider's items
+                $providerItems = $order->orderItems->where('provider_id', $item->provider_id);
+                $providerAmount = $providerItems->sum(function ($i) {
+                    return (float) ($i->total ?? $i->line_total ?? 0);
+                });
+                $payment = $payments->firstWhere('amount', $providerAmount) ?? $payments->first();
+            }
+
+            RefundService::upsertRefundRequest($order, [
+                'payment' => $payment,
+                'payment_method' => $paymentMethodName,
+                'amount' => $itemAmount,
+                'currency' => $currency,
+                'bank_details' => $bankDetails,
+                'user_id' => $initiatorId,
+                'order_item_id' => $item->id,
+                'provider_id' => $item->provider_id,
+            ]);
+        }
+    }
+
+    private function syncPartialRefundForProvider(Order $order, ?int $providerId, string $paymentMethodName): void
+    {
+        if (!$providerId) {
+            return;
+        }
+
+        $items = $order->orderItems->where('provider_id', $providerId);
+        if ($items->isEmpty()) {
+            return;
+        }
+
+        $cancelledAmount = $items->where('order_status', Order::STATUS_CANCELLED)
+            ->sum(function ($item) {
+                return (float) ($item->total ?? $item->line_total ?? 0);
+            });
+
+        if ($cancelledAmount <= 0) {
+            return;
+        }
+
+        $payments = $order->payment()->with('paymentMethod')->get();
+        $payment = $payments->first();
+        $isCod = $paymentMethodName === 'cod';
+        $isUnpaid = $payment ? ($payment->status === 'unpaid') : true;
+
+        // COD unpaid: no payment collected, no refund needed
+        if ($isCod && $isUnpaid) {
+            // Payment status stays unpaid (no payment was collected)
+            // Do NOT create refund_requests record
+            return;
+        }
+
+        $currency = RefundService::resolveCurrency($order, $payment);
+
+        RefundService::upsertRefundRequest($order, [
+            'payment' => $payment,
+            'payment_method' => $paymentMethodName,
+            'amount' => $cancelledAmount,
+            'currency' => $currency,
+            'provider_id' => $providerId,
+            'user_id' => $order->user_id,
         ]);
     }
 
@@ -878,24 +1308,42 @@ class OrdersController extends Controller
             abort_unless($item->provider_id === Auth::id(), 403);
         }
 
-        $item->transitionTo($validated['order_status']);
+        $newStatus = $validated['order_status'];
+        $item->transitionTo($newStatus);
         $order->recalculateOrderStatus();
 
+        // When COD order item is delivered and all items are delivered, mark payment as paid
+        if ($newStatus === Order::STATUS_DELIVERED) {
+            $order->loadMissing(['orderItems', 'payment.paymentMethod', 'paymentMethod']);
+            $paymentMethodName = strtolower(optional($order->paymentMethod)->name ?? optional($order->payment()->with('paymentMethod')->first()?->paymentMethod)->name ?? 'cod');
+            $isCod = $paymentMethodName === 'cod';
+            
+            if ($isCod && $order->order_status === Order::STATUS_DELIVERED) {
+                // Check if all items are delivered
+                $allItemsDelivered = $order->orderItems()->where('order_status', '!=', Order::STATUS_DELIVERED)->count() === 0;
+                if ($allItemsDelivered) {
+                    $payments = $order->payment;
+                    foreach ($payments as $payment) {
+                        if ($payment->status === 'unpaid') {
+                            $payment->update([
+                                'status' => 'paid',
+                                'paid_at' => now(),
+                            ]);
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($newStatus === Order::STATUS_CANCELLED) {
+            $order->loadMissing(['orderItems', 'payment.paymentMethod', 'paymentMethod']);
+            $paymentMethodName = strtolower(optional($order->paymentMethod)->name ?? optional($order->payment()->with('paymentMethod')->first()?->paymentMethod)->name ?? 'cod');
+            $this->syncPartialRefundForProvider($order, $item->provider_id, $paymentMethodName);
+        }
+ 
         return response()->json([
             'success' => true,
             'message' => __('Item status updated successfully')
-        ]);
-    }
-
-    /**
-     * Cancel order item (User endpoint)
-     */
-    public function cancelItem(Request $request, $orderId, $itemId): JsonResponse
-    {
-        // Soft-disabled: do nothing
-        return response()->json([
-            'success' => false,
-            'message' => 'Order tracking is disabled.'
         ]);
     }
 

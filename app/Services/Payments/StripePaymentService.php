@@ -8,6 +8,7 @@ use App\Models\PaymentMethod;
 use App\Models\Cart;
 use App\Mail\OrderConfirmationMail;
 use App\Models\Transaction;
+use App\Services\Checkout\OrderPlacementService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -248,5 +249,107 @@ class StripePaymentService
             ]);
             throw $throwable;
         }
+    }
+
+    public function refundPayment(string $paymentIntentId, ?int $amountMinor = null): string
+    {
+        $intent = $this->client->paymentIntents->retrieve($paymentIntentId);
+        $chargeId = $intent->latest_charge ?? ($intent->charges->data[0]->id ?? null);
+
+        if (!$chargeId) {
+            throw new \RuntimeException('Unable to determine Stripe charge for refund.');
+        }
+
+        // Check if charge has already been refunded
+        try {
+            $charge = $this->client->charges->retrieve($chargeId);
+            if ($charge->refunded) {
+                // Find existing refund ID
+                $refunds = $this->client->refunds->all(['charge' => $chargeId]);
+                if ($refunds->data && count($refunds->data) > 0) {
+                    Log::info('Stripe charge already refunded, returning existing refund ID', [
+                        'payment_intent_id' => $paymentIntentId,
+                        'charge_id' => $chargeId,
+                        'refund_id' => $refunds->data[0]->id,
+                    ]);
+                    return $refunds->data[0]->id;
+                }
+                throw new \RuntimeException('Charge has already been refunded, but refund ID could not be retrieved.');
+            }
+        } catch (\Stripe\Exception\ApiErrorException $e) {
+            // If charge retrieval fails, continue with refund attempt
+            Log::warning('Could not check charge refund status', [
+                'charge_id' => $chargeId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $params = [
+            'charge' => $chargeId,
+        ];
+
+        if ($amountMinor && $amountMinor > 0) {
+            $params['amount'] = $amountMinor;
+        }
+
+        try {
+            $refund = $this->client->refunds->create($params);
+        } catch (\Stripe\Exception\InvalidRequestException $e) {
+            // Handle "already refunded" error gracefully
+            if (stripos($e->getMessage(), 'already been refunded') !== false) {
+                // Try to get existing refund
+                $refunds = $this->client->refunds->all(['charge' => $chargeId]);
+                if ($refunds->data && count($refunds->data) > 0) {
+                    Log::info('Stripe refund already exists, returning existing refund ID', [
+                        'payment_intent_id' => $paymentIntentId,
+                        'charge_id' => $chargeId,
+                        'refund_id' => $refunds->data[0]->id,
+                    ]);
+                    return $refunds->data[0]->id;
+                }
+            }
+            throw $e;
+        }
+
+        Log::info('Stripe refund created', [
+            'payment_intent_id' => $paymentIntentId,
+            'charge_id' => $chargeId,
+            'refund_id' => $refund->id,
+            'amount' => $amountMinor,
+        ]);
+
+        return $refund->id;
+    }
+
+    /**
+     * Create payment intent from checkout session data
+     * This method creates the order first, then creates the payment intent
+     */
+    public function createIntentFromCheckoutSession(string $checkoutSessionId, array $sessionPayload): array
+    {
+        // Create the order from session payload
+        $order = OrderPlacementService::create($sessionPayload, [
+            'payment_status' => 'unpaid',
+            'order_status' => 'pending',
+            'clear_cart' => ($sessionPayload['cart_type'] ?? 'user') === 'user',
+            'clear_session_cart' => ($sessionPayload['cart_type'] ?? 'user') === 'session',
+            'send_email' => false, // Will send after payment confirmation
+        ]);
+
+        // Create payment intent for the order
+        $intentData = $this->createPaymentIntent($order);
+
+        // Store checkout session ID in transaction payload for reference
+        $txn = Transaction::where('gateway', 'stripe')
+            ->where('gateway_payment_id', $intentData['payment_intent_id'])
+            ->first();
+        
+        if ($txn) {
+            $txn->update([
+                'payload' => array_merge($txn->payload ?? [], ['checkout_session_id' => $checkoutSessionId])
+            ]);
+        }
+
+        return $intentData;
     }
 }

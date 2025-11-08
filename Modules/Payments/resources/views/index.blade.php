@@ -18,6 +18,7 @@
                             <th data-column="payment_method">Payment Method</th>
                             <th data-column="amount">Amount</th>
                             <th data-column="status">Payment Status</th>
+                            <th data-column="refund_action" data-orderable="false" data-searchable="false">Refund Requests</th>
                             <th data-column="created_at">Created At</th>
                             <th data-column="actions" data-orderable="false" data-searchable="false">Actions</th>
                         </tr>
@@ -356,6 +357,135 @@
                 });
             });
         };
+
+        document.addEventListener('click', function(event) {
+            const button = event.target.closest('.js-approve-refund');
+            if (!button) {
+                return;
+            }
+
+            event.preventDefault();
+
+            const amount = button.getAttribute('data-amount');
+            const method = button.getAttribute('data-method');
+            const url = button.getAttribute('data-url');
+            const isRetry = button.textContent.trim().toLowerCase().includes('retry');
+            const isCod = button.getAttribute('data-is-cod') === '1';
+            const hasBankDetails = button.getAttribute('data-has-bank-details') === '1';
+            const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+            // For COD refunds with bank details, show bank details modal first
+            if (isCod && hasBankDetails && window.Swal) {
+                const accountHolder = button.getAttribute('data-account-holder') || 'N/A';
+                const bankName = button.getAttribute('data-bank-name') || 'N/A';
+                const accountNumber = button.getAttribute('data-account-number') || 'N/A';
+                const ifsc = button.getAttribute('data-ifsc') || 'N/A';
+
+                const confirmPromise = Swal.fire({
+                    title: isRetry ? 'Retry refund?' : 'Approve refund?',
+                    html: `
+                        <div class="text-start">
+                            <p class="mb-3">Refund amount: <strong>$${amount}</strong> via <strong>${method}</strong></p>
+                            <p class="mb-2 fw-semibold">Bank Details (read-only):</p>
+                            <div class="border rounded p-3 bg-light">
+                                <p class="mb-1"><strong>Account Holder:</strong> ${accountHolder}</p>
+                                <p class="mb-1"><strong>Bank Name:</strong> ${bankName}</p>
+                                <p class="mb-1"><strong>Account Number:</strong> ${accountNumber}</p>
+                                <p class="mb-0"><strong>IFSC:</strong> ${ifsc}</p>
+                            </div>
+                            <p class="mt-3 small text-muted">Please initiate manual bank transfer using the details above.</p>
+                        </div>
+                    `,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: isRetry ? 'Yes, retry' : 'Yes, approve',
+                    cancelButtonText: 'Cancel',
+                    width: 600
+                });
+
+                confirmPromise.then(result => {
+                    if (!result.isConfirmed) {
+                        return;
+                    }
+                    processRefund();
+                });
+            } else {
+                // For Stripe/Razorpay or COD without bank details, show simple confirmation
+                const confirmPromise = window.Swal ?
+                    Swal.fire({
+                        title: isRetry ? 'Retry refund?' : 'Approve refund?',
+                        text: isRetry ? `Retry refund of $${amount} via ${method}?` : `Refund $${amount} via ${method}?`,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: isRetry ? 'Yes, retry' : 'Yes, approve',
+                        cancelButtonText: 'Cancel'
+                    }) :
+                    Promise.resolve({ isConfirmed: window.confirm(isRetry ? `Retry refund of $${amount}?` : `Approve refund of $${amount}?`) });
+
+                confirmPromise.then(result => {
+                    if (!result.isConfirmed) {
+                        return;
+                    }
+                    processRefund();
+                });
+            }
+
+            function processRefund() {
+                if (window.Swal) {
+                    Swal.fire({
+                        title: 'Processing refund...',
+                        allowOutsideClick: false,
+                        didOpen: () => Swal.showLoading()
+                    });
+                }
+
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': csrf
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (window.Swal) {
+                        Swal.close();
+                    }
+
+                    if (data && data.success) {
+                        if (window.Swal) {
+                            Swal.fire('Success', data.message || 'Refund processed successfully.', 'success');
+                        } else {
+                            alert(data.message || 'Refund processed successfully.');
+                        }
+
+                        if (data.refresh_tables && Array.isArray(data.refresh_tables)) {
+                            data.refresh_tables.forEach(tableId => {
+                                if (window.reloadDataTable) {
+                                    window.reloadDataTable(tableId);
+                                }
+                            });
+                        } else if (window.reloadDataTable) {
+                            window.reloadDataTable('payments-table');
+                        }
+                    } else {
+                        const message = data && data.message ? data.message : 'Refund could not be processed. Please try again.';
+                        if (window.Swal) {
+                            Swal.fire('Error', message, 'error');
+                        } else {
+                            alert(message);
+                        }
+                    }
+                })
+                .catch(() => {
+                    if (window.Swal) {
+                        Swal.fire('Error', 'Refund could not be processed. Please try again.', 'error');
+                    } else {
+                        alert('Refund could not be processed. Please try again.');
+                    }
+                });
+            }
+        });
     })();
     </script>
     @endpush

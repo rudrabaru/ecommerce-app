@@ -8,6 +8,7 @@ use App\Models\Payment;
 use App\Models\PaymentMethod;
 use App\Models\Cart;
 use App\Mail\OrderConfirmationMail;
+use App\Services\Checkout\OrderPlacementService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -179,6 +180,162 @@ class RazorpayPaymentService
             ]);
             throw $throwable;
         }
+    }
+
+    public function refundPayment(string $paymentId, ?int $amountMinor = null): string
+    {
+        $params = [];
+        if ($amountMinor && $amountMinor > 0) {
+            $params['amount'] = $amountMinor;
+        }
+
+        try {
+            $payment = $this->client->payment->fetch($paymentId);
+            
+            // Convert payment object to array for easier access
+            $paymentArray = is_array($payment) ? $payment : $payment->toArray();
+            $paymentStatus = $paymentArray['status'] ?? ($payment->status ?? 'unknown');
+            
+            // Check if payment is captured
+            if ($paymentStatus !== 'captured') {
+                // Try to capture if authorized
+                if ($paymentStatus === 'authorized') {
+                    try {
+                        // Get amount and currency from transaction (more reliable than payment object)
+                        $transaction = Transaction::where('gateway', 'razorpay')
+                            ->where('gateway_payment_id', $paymentId)
+                            ->latest('id')
+                            ->first();
+                        
+                        if ($transaction) {
+                            $paymentAmount = $transaction->amount;
+                            $paymentCurrency = $transaction->currency ?? 'INR';
+                        } else {
+                            // Fallback to payment object
+                            $paymentAmount = $paymentArray['amount'] ?? ($payment->amount ?? null);
+                            $paymentCurrency = $paymentArray['currency'] ?? ($payment->currency ?? 'INR');
+                            
+                            if (!$paymentAmount) {
+                                throw new \RuntimeException('Unable to determine payment amount for capture.');
+                            }
+                        }
+                        
+                        // Ensure amount is in minor units (integer)
+                        if (is_float($paymentAmount) || is_string($paymentAmount)) {
+                            $paymentAmount = (int) round((float) $paymentAmount);
+                        }
+                        
+                        // Use the same pattern as captureAndMarkPaid - use client->payment->capture with payment ID
+                        $currencyForCapture = $transaction ? $transaction->currency : $paymentCurrency;
+                        
+                        // Capture using the same method as captureAndMarkPaid (line 118)
+                        $this->client->payment->capture($paymentId, $paymentAmount, ['currency' => $currencyForCapture]);
+                        
+                        Log::info('Razorpay payment captured before refund', [
+                            'payment_id' => $paymentId,
+                            'amount' => $paymentAmount,
+                            'currency' => $currencyForCapture
+                        ]);
+                        
+                        // Refetch payment after capture to get updated status
+                        $payment = $this->client->payment->fetch($paymentId);
+                        $paymentArray = is_array($payment) ? $payment : $payment->toArray();
+                    } catch (\Exception $e) {
+                        Log::warning('Failed to capture Razorpay payment before refund', [
+                            'payment_id' => $paymentId,
+                            'error' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString()
+                        ]);
+                        throw new \RuntimeException('Payment must be captured before refund. Status: ' . $paymentStatus . '. Error: ' . $e->getMessage());
+                    }
+                } else {
+                    throw new \RuntimeException('Payment status must be captured for refund. Current status: ' . $paymentStatus);
+                }
+            }
+
+            $refund = $payment->refund($params);
+        } catch (\Razorpay\Api\Errors\BadRequestError $e) {
+            $errorMessage = $e->getMessage();
+            if (stripos($errorMessage, 'already been refunded') !== false || stripos($errorMessage, 'refunded') !== false) {
+                // Try to get existing refunds
+                try {
+                    $refunds = $this->client->refund->all(['payment_id' => $paymentId]);
+                    if ($refunds->items && count($refunds->items) > 0) {
+                        $refundId = is_array($refunds->items[0]) ? ($refunds->items[0]['id'] ?? null) : ($refunds->items[0]->id ?? null);
+                        if ($refundId) {
+                            Log::info('Razorpay payment already refunded, returning existing refund ID', [
+                                'payment_id' => $paymentId,
+                                'refund_id' => $refundId,
+                            ]);
+                            return $refundId;
+                        }
+                    }
+                } catch (\Exception $e2) {
+                    Log::warning('Could not retrieve existing Razorpay refund', [
+                        'payment_id' => $paymentId,
+                        'error' => $e2->getMessage(),
+                    ]);
+                }
+            }
+            throw new \RuntimeException($errorMessage);
+        }
+
+        // Handle refund response - it might be an array or object
+        $refundArray = is_array($refund) ? $refund : (method_exists($refund, 'toArray') ? $refund->toArray() : []);
+        $refundId = $refundArray['id'] ?? ($refund->id ?? null);
+        
+        // If still not found, check nested structure
+        if (!$refundId && isset($refundArray['refund'])) {
+            $refundId = is_array($refundArray['refund']) ? ($refundArray['refund']['id'] ?? null) : ($refundArray['refund']->id ?? null);
+        }
+
+        if (!$refundId) {
+            Log::warning('Razorpay refund ID not found in response', [
+                'payment_id' => $paymentId,
+                'refund_response' => $refundArray
+            ]);
+            throw new \RuntimeException('Refund was processed but refund ID could not be retrieved from Razorpay response.');
+        }
+
+        Log::info('Razorpay refund processed', [
+            'payment_id' => $paymentId,
+            'refund_id' => $refundId,
+            'amount' => $amountMinor,
+        ]);
+
+        return (string) $refundId;
+    }
+
+    /**
+     * Create Razorpay order from checkout session data
+     * This method creates the order first, then creates the Razorpay order
+     */
+    public function createOrderFromCheckoutSession(string $checkoutSessionId, array $sessionPayload): array
+    {
+        // Create the order from session payload
+        $order = OrderPlacementService::create($sessionPayload, [
+            'payment_status' => 'unpaid',
+            'order_status' => 'pending',
+            'clear_cart' => ($sessionPayload['cart_type'] ?? 'user') === 'user',
+            'clear_session_cart' => ($sessionPayload['cart_type'] ?? 'user') === 'session',
+            'send_email' => false, // Will send after payment confirmation
+        ]);
+
+        // Create Razorpay order for the order
+        $razorpayOrderData = $this->createOrder($order);
+
+        // Store checkout session ID in transaction payload for reference
+        $txn = Transaction::where('gateway', 'razorpay')
+            ->where('gateway_order_id', $razorpayOrderData['razorpay_order_id'])
+            ->first();
+        
+        if ($txn) {
+            $txn->update([
+                'payload' => array_merge($txn->payload ?? [], ['checkout_session_id' => $checkoutSessionId])
+            ]);
+        }
+
+        return $razorpayOrderData;
     }
 
     // Webhook handling removed by requirement; confirmation is handled via confirm endpoint only

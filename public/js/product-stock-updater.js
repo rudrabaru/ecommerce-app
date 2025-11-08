@@ -58,7 +58,7 @@
             adjustQuantity(-1);
         }, true); // capture phase to run before delegated handlers in main.js
     }
-
+    
     if (incBtn) {
         incBtn.addEventListener('click', function(event) {
             event.preventDefault();
@@ -75,7 +75,7 @@
             if (qty < minValue) qty = minValue;
             if (qty > maxValue) qty = maxValue;
             qtyInput.value = qty;
-            updateQuantityButtons();
+                updateQuantityButtons();
         });
     }
     

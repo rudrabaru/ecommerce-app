@@ -123,8 +123,12 @@
 #users-table th:nth-child(6),
 #providers-table th:nth-child(5),
 #orders-table th:nth-child(8),
-#payments-table th:nth-child(7) {
+#payments-table th:nth-child(8) {
     width: 150px;
+}
+
+#payments-table th:nth-child(6) {
+    width: 220px;
 }
 
 /* Ensure proper spacing for action buttons */

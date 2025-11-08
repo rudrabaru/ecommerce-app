@@ -37,8 +37,7 @@ Route::middleware(['web', 'auth'])->group(function () {
     // User Orders - users can cancel their own pending orders and poll status
     Route::middleware(['ensure_role:user'])->prefix('user')->as('user.')->group(function () {
         Route::post('orders/{order}/cancel', [OrdersController::class, 'cancel'])->name('orders.cancel');
+        Route::post('orders/{order}/return', [OrdersController::class, 'returnOrder'])->name('orders.return');
         Route::get('orders/status', [OrdersController::class, 'userStatuses'])->name('orders.status');
     });
-
-    // Order item status update routes removed
 });

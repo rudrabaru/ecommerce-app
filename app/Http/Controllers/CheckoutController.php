@@ -8,10 +8,17 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\PaymentMethod;
 use App\Models\UserAddress;
+use App\Services\Checkout\CheckoutSessionService;
+use App\Services\Checkout\OrderPlacementService;
+use App\Services\Payments\RazorpayPaymentService;
+use App\Services\Payments\StripePaymentService;
+use App\Services\DiscountService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Modules\Products\Models\Product;
 
 class CheckoutController extends Controller
@@ -248,110 +255,66 @@ class CheckoutController extends Controller
             // Collect all unique provider IDs from order items
             $providerIds = collect($orderItems)->pluck('provider_id')->unique()->filter()->values()->toArray();
 
-            // Create single order (always pending initially; gateway confirm will mark paid)
-            $order = Order::create([
+            $orderDraft = [
                 'user_id' => $userId,
-                'provider_ids' => $providerIds, // Store array of provider IDs
-                'total_amount' => $totalOrderAmount,
-                'order_status' => 'pending',
                 'shipping_address' => $address->full_address,
                 'shipping_address_id' => $address->id,
-                'payment_method_id' => $paymentMethod->id,
                 'notes' => $validated['notes'] ?? null,
                 'discount_code' => $discountCode,
                 'discount_amount' => $discountAmountTotal,
-            ]);
-
-            // Create order items with initial pending status
-            foreach ($orderItems as $orderItem) {
-                \App\Models\OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $orderItem['product_id'],
-                    'provider_id' => $orderItem['provider_id'],
-                    'quantity' => $orderItem['quantity'],
-                    'unit_price' => $orderItem['unit_price'],
-                    'line_total' => $orderItem['line_total'],
-                    'line_discount' => $orderItem['line_discount'],
-                    'total' => $orderItem['total'],
-                    'order_status' => \App\Models\OrderItem::STATUS_PENDING,
-                ]);
-            }
-            
-            // Recalculate order status after all items are created (ensures aggregate status is correct)
-            $order->recalculateOrderStatus();
-
-            // Create payment record (unpaid initially; confirm will mark paid)
-            Payment::create([
-                'order_id' => $order->id,
+                'order_items' => $orderItems,
+                'provider_ids' => $providerIds,
+                'total_amount' => $totalOrderAmount,
                 'payment_method_id' => $paymentMethod->id,
-                'amount' => $totalOrderAmount,
+                'payment_method_name' => $paymentMethod->name,
                 'currency' => $paymentMethod->name === 'razorpay' ? 'INR' : 'USD',
-                'status' => 'unpaid',
-            ]);
-
-            $created[] = $order->order_number;
-
-            // Increment discount usage once per checkout if discount used
-            if ($discountCode && $discountAmountTotal > 0 && $d = \App\Models\DiscountCode::whereRaw('upper(code) = ?', [strtoupper((string) $discountCode)])->first()) {
-                (new \App\Services\DiscountService())->incrementUsage($d);
-            }
-
-            // Clear cart only for COD at this moment; for online gateways clear after payment success
-            if ($paymentMethod->name === 'cod') {
-                if ($user) {
-                    $cart->items()->delete();
-                    if (isset($cart)) {
-                        $cart->update(['discount_code' => null, 'discount_amount' => 0]);
-                    }
-                } else {
-                    session()->forget(['cart', 'cart_discount_code', 'cart_discount']);
-                }
-            }
-
-            DB::commit();
+            ];
 
             if ($paymentMethod->name === 'cod') {
-                // Send confirmation email for each order (queue for resilience)
-                foreach ($created as $orderNumber) {
-                    $order = Order::where('order_number', $orderNumber)
-                        ->with(['orderItems.product', 'orderItems.provider', 'paymentMethod', 'user'])
-                        ->first();
-                    if ($order && $order->user && $order->user->email) {
-                        try {
-                            dispatch(new \App\Jobs\SendOrderConfirmationEmail($order));
-                        } catch (\Throwable $e) {
-                            // fallback to sync send
-                            try { Mail::to($order->user->email)->send(new OrderConfirmationMail($order)); } catch (\Throwable $_) {}
-                        }
-                    }
-                }
+                $order = OrderPlacementService::create($orderDraft, [
+                    'payment_status' => 'unpaid',
+                    'order_status' => 'pending',
+                    'clear_cart' => (bool) $userId,
+                    'clear_session_cart' => !$userId,
+                    'send_email' => true,
+                ]);
 
-                // If AJAX, return JSON for SweetAlert handling on frontend
+                DB::commit();
+
                 if ($request->wantsJson() || $request->ajax()) {
-                    $orderIds = Order::whereIn('order_number', $created)->pluck('id');
                     return response()->json([
                         'success' => true,
                         'payment_method' => 'cod',
-                        'order_ids' => $orderIds,
+                        'order_ids' => [$order->id],
                     ]);
                 }
 
-                // Non-AJAX fallback: keep user on checkout with a flash message
                 return redirect()->route('checkout')->with('status', 'Order placed successfully');
             }
 
-            // For online payments, return payload for client to initiate gateway
-            if ($request->wantsJson() || $request->ajax()) {
-                $orderIds = Order::whereIn('order_number', $created)->pluck('id');
+            // For Stripe and Razorpay, create the order first (payment will be initiated separately)
+            if (in_array($paymentMethod->name, ['stripe', 'razorpay'])) {
+                $order = OrderPlacementService::create($orderDraft, [
+                    'payment_status' => 'unpaid',
+                    'order_status' => 'pending',
+                    'clear_cart' => (bool) $userId,
+                    'clear_session_cart' => !$userId,
+                    'send_email' => false, // Will send after payment confirmation
+                ]);
+
+                DB::commit();
+
                 return response()->json([
                     'success' => true,
                     'payment_method' => $paymentMethod->name,
-                    'order_ids' => $orderIds,
+                    'order_ids' => [$order->id],
                 ]);
             }
 
-            return redirect()->route('checkout')
-                ->with('info', 'Payment required to complete your order.');
+            return response()->json([
+                'success' => false,
+                'message' => 'Unsupported payment method.',
+            ], 422);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
             DB::rollback();

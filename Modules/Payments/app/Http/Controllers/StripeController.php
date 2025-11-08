@@ -16,7 +16,13 @@ class StripeController extends Controller
 {
     public function initiate(Request $request, StripePaymentService $service)
     {
-        $user = $request->user();
+        $user = Auth::user();
+        
+        if (!$user) {
+            return response()->json([
+                'message' => 'Unauthenticated',
+            ], 401);
+        }
 
         $validated = $request->validate([
             'order_ids' => ['required', 'array', 'min:1'],
