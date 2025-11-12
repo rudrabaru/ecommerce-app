@@ -1347,8 +1347,12 @@
             }
         }
 
-        async function initiateStripe(orderIds) {
+        async function initiateStripe(checkoutSessionId) {
             try {
+                if (!checkoutSessionId) {
+                    throw new Error('Missing checkout session. Please refresh and try again.');
+                }
+
                 await ensureStripeElementsReady();
                 const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
                 const res = await fetch('/payment/stripe/initiate', {
@@ -1358,7 +1362,7 @@
                         'X-Requested-With': 'XMLHttpRequest',
                         'X-CSRF-TOKEN': token
                     },
-                    body: JSON.stringify({ order_ids: orderIds })
+                    body: JSON.stringify({ checkout_session_id: checkoutSessionId })
                 });
                 
                 if (!res.ok) throw new Error('Stripe initiate failed');
@@ -1375,16 +1379,26 @@
                 }
                 // Call backend confirm (no webhook) to send email, mark paid, clear cart
                 try {
-                    await fetch('/payment/stripe/confirm', {
+                    const confirmResponse = await fetch('/payment/stripe/confirm', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'X-Requested-With': 'XMLHttpRequest',
                             'X-CSRF-TOKEN': token
                         },
-                        body: JSON.stringify({ payment_intent_id: paymentIntent.id })
+                        body: JSON.stringify({ 
+                            payment_intent_id: paymentIntent.id,
+                            checkout_session_id: checkoutSessionId
+                        })
                     });
-                } catch (e) { /* ignore non-blocking */ }
+                    const confirmJson = await confirmResponse.json();
+                    if (!confirmResponse.ok || (confirmJson && confirmJson.success === false)) {
+                        throw new Error(confirmJson.message || 'Payment confirmation failed');
+                    }
+                } catch (e) { 
+                    console.error('Stripe confirmation error:', e);
+                    throw e;
+                }
                 
                 // Payment successful - update cart count and show success
                 updateCartCount(0);
@@ -1419,8 +1433,12 @@
             }
         }
 
-        async function initiateRazorpay(orderIds) {
+        async function initiateRazorpay(checkoutSessionId) {
             try {
+                if (!checkoutSessionId) {
+                    throw new Error('Missing checkout session. Please refresh and try again.');
+                }
+
                 if (!razorpayJsLoaded) {
                     await loadScript('https://checkout.razorpay.com/v1/checkout.js');
                     razorpayJsLoaded = true;
@@ -1434,7 +1452,7 @@
                         'X-Requested-With': 'XMLHttpRequest',
                         'X-CSRF-TOKEN': token
                     },
-                    body: JSON.stringify({ order_ids: orderIds })
+                    body: JSON.stringify({ checkout_session_id: checkoutSessionId })
                 });
                 
                 if (!res.ok) throw new Error('Razorpay initiate failed');
@@ -1485,7 +1503,8 @@
                             },
                             body: JSON.stringify({
                                 razorpay_order_id: data.razorpayOrderId,
-                                razorpay_payment_id: resp.razorpay_payment_id
+                                razorpay_payment_id: resp.razorpay_payment_id,
+                                checkout_session_id: checkoutSessionId
                             })
                         });
                         
@@ -1675,14 +1694,15 @@
                         throw new Error(data.message || 'Checkout initiation failed');
                     }
                     
-                    const orderIds = data.order_ids || [];
                     const paymentMethod = data.payment_method;
+                    const checkoutSessionId = data.checkout_session_id || null;
+                    const orderIds = data.order_ids || [];
                     
                     console.log('Order initiated, payment method:', paymentMethod);
                     
                     if (paymentMethod === 'stripe') {
                         try {
-                            await initiateStripe(orderIds);
+                            await initiateStripe(checkoutSessionId);
                         } catch (error) {
                             console.error('Stripe payment failed:', error);
                             if (typeof Swal !== 'undefined') {
@@ -1702,7 +1722,7 @@
                         }
                     } else if (paymentMethod === 'razorpay') {
                         try {
-                            await initiateRazorpay(orderIds);
+                            await initiateRazorpay(checkoutSessionId);
                         } catch (error) {
                             console.error('Razorpay payment failed:', error);
                             if (typeof Swal !== 'undefined') {

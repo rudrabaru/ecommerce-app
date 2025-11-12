@@ -539,7 +539,6 @@
                             <select id="status" name="status" class="form-select">
                                 <option value="unpaid">Unpaid</option>
                                 <option value="paid">Paid</option>
-                                <option value="refunded">Refunded</option>
                             </select>
                         </div>
                     </form>

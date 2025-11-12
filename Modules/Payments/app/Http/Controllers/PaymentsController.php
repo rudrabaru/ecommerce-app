@@ -112,29 +112,30 @@ class PaymentsController extends Controller
                 return '$' . number_format((float) $row->amount, 2);
             })
             ->addColumn('status', function ($row) {
-                // Aggregate statuses: if all paid = paid, if any refunded = refunded, else unpaid
-                $statuses = explode(',', $row->statuses ?? '');
-                $statuses = array_map(function($s) {
-                    $s = trim($s);
+                $statuses = array_filter(array_map(function($s) {
+                    $s = strtolower(trim($s));
+                    if ($s === '') {
+                        return null;
+                    }
                     if (in_array($s, ['pending', 'processing', 'failed', 'cancelled'], true)) {
                         return 'unpaid';
                     }
+                    if ($s === 'refunded') {
+                        return 'paid';
+                    }
                     return $s;
-                }, $statuses);
-                
+                }, explode(',', $row->statuses ?? '')));
+
                 $final = 'unpaid';
-                if (in_array('refunded', $statuses)) {
-                    $final = 'refunded';
-                } elseif (count($statuses) > 0 && count(array_unique($statuses)) === 1 && $statuses[0] === 'paid') {
+                if (!empty($statuses) && !in_array('unpaid', $statuses, true)) {
                     $final = 'paid';
                 }
-                
+
                 $map = [
                     'unpaid' => 'bg-warning',
                     'paid' => 'bg-success',
-                    'refunded' => 'bg-secondary',
                 ];
-                $cls = $map[$final] ?? 'bg-secondary';
+                $cls = $map[$final] ?? 'bg-warning';
                 return '<span class="badge rounded-pill ' . $cls . '">' . ucfirst($final) . '</span>';
             })
             ->addColumn('refund_action', function ($row) use ($isProvider, $providerId) {

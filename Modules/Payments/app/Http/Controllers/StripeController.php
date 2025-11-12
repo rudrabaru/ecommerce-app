@@ -3,13 +3,10 @@
 namespace Modules\Payments\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\Order;
-use App\Models\Payment;
-use App\Models\PaymentMethod;
+use App\Services\Checkout\CheckoutSessionService;
 use App\Services\Payments\StripePaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class StripeController extends Controller
@@ -25,43 +22,36 @@ class StripeController extends Controller
         }
 
         $validated = $request->validate([
-            'order_ids' => ['required', 'array', 'min:1'],
-            'order_ids.*' => ['integer', 'exists:orders,id'],
+            'checkout_session_id' => ['required', 'string'],
         ]);
 
-        // For simplicity, handle one order per payment
-        $order = Order::whereIn('id', $validated['order_ids'])
-            ->where('user_id', $user->id)
-            ->latest('id')
-            ->firstOrFail();
+        $sessionId = $validated['checkout_session_id'];
+        $sessionPayload = CheckoutSessionService::retrieve($sessionId);
 
-        $paymentMethod = PaymentMethod::where('name', 'stripe')->firstOrFail();
+        if (! $sessionPayload) {
+            return response()->json([
+                'message' => 'Checkout session expired. Please restart the checkout process.',
+            ], 422);
+        }
 
-        DB::beginTransaction();
+        if ((int) ($sessionPayload['user_id'] ?? 0) !== (int) $user->id) {
+            return response()->json([
+                'message' => 'Checkout session does not belong to the authenticated user.',
+            ], 403);
+        }
+
         try {
-            // Ensure payment row exists
-            Payment::firstOrCreate([
-                'order_id' => $order->id,
-                'payment_method_id' => $paymentMethod->id,
-            ], [
-                'amount' => $order->total_amount,
-                'currency' => 'USD',
-                'status' => 'unpaid',
-            ]);
-
-            $pi = $service->createPaymentIntent($order);
-
-            DB::commit();
+            $intent = $service->createIntentFromCheckoutSession($sessionId, $sessionPayload);
 
             return response()->json([
-                'orderId' => $order->id,
-                'clientSecret' => $pi['client_secret'],
+                'checkoutSessionId' => $sessionId,
+                'paymentIntentId' => $intent['payment_intent_id'],
+                'clientSecret' => $intent['client_secret'],
                 'publishableKey' => config('services.stripe.key'),
             ]);
         } catch (\Throwable $e) {
-            DB::rollBack();
             Log::error('Stripe initiate failed', [
-                'order_id' => $order->id ?? null,
+                'checkout_session_id' => $sessionId,
                 'user_id' => $user->id ?? null,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
@@ -88,13 +78,20 @@ class StripeController extends Controller
     {
         $validated = $request->validate([
             'payment_intent_id' => ['required', 'string'],
+            'checkout_session_id' => ['nullable', 'string'],
         ]);
 
         try {
-            $res = $service->confirmAndMarkPaid($validated['payment_intent_id']);
+            $res = $service->confirmAndMarkPaid(
+                $validated['payment_intent_id'],
+                $validated['checkout_session_id'] ?? null
+            );
             return response()->json($res);
         } catch (\Throwable $e) {
-            Log::error('Stripe payment confirm failed: ' . $e->getMessage(), ['pi' => $validated['payment_intent_id']]);
+            Log::error('Stripe payment confirm failed: ' . $e->getMessage(), [
+                'payment_intent_id' => $validated['payment_intent_id'],
+                'checkout_session_id' => $validated['checkout_session_id'] ?? null,
+            ]);
             return response()->json(['success' => false, 'message' => 'Unable to confirm Stripe payment'], 422);
         }
     }

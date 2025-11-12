@@ -9,6 +9,7 @@ use App\Models\Cart;
 use App\Mail\OrderConfirmationMail;
 use App\Models\Transaction;
 use App\Services\Checkout\OrderPlacementService;
+use App\Services\Checkout\CheckoutSessionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -161,15 +162,26 @@ class StripePaymentService
      * Retrieves the PaymentIntent and marks Order/Payment/Transaction as paid,
      * clears cart and sends confirmation email.
      */
-    public function confirmAndMarkPaid(string $paymentIntentId): array
+    public function confirmAndMarkPaid(string $paymentIntentId, ?string $checkoutSessionId = null): array
     {
         $intent = $this->client->paymentIntents->retrieve($paymentIntentId);
 
-        $orderId = (int) ($intent->metadata['order_id'] ?? 0);
-        if ($orderId === 0) {
-            throw new \RuntimeException('Order id missing in intent metadata');
+        $sessionId = $checkoutSessionId ?: ($intent->metadata['checkout_session_id'] ?? null);
+
+        if ($sessionId) {
+            return $this->finalizeIntentForSession($intent, $sessionId);
         }
 
+        $orderId = (int) ($intent->metadata['order_id'] ?? 0);
+        if ($orderId === 0) {
+            throw new \RuntimeException('Checkout session or order metadata missing for payment intent');
+        }
+
+        return $this->finalizeIntentForExistingOrder($intent, $orderId, $paymentIntentId);
+    }
+
+    protected function finalizeIntentForExistingOrder($intent, int $orderId, string $paymentIntentId): array
+    {
         DB::beginTransaction();
         try {
             $order = Order::lockForUpdate()->findOrFail($orderId);
@@ -196,7 +208,6 @@ class StripePaymentService
                 throw new \RuntimeException('PaymentIntent not succeeded');
             }
 
-            // Idempotency check: if already paid, skip
             if ($order->status === 'paid') {
                 Log::info('Order already marked as paid, skipping duplicate confirmation', [
                     'order_id' => $order->id,
@@ -214,7 +225,6 @@ class StripePaymentService
 
             $order->update(['status' => 'paid']);
 
-            // Update Payment status
             $methodId = optional(PaymentMethod::where('name', 'stripe')->first())->id;
             if ($methodId) {
                 Payment::where('order_id', $order->id)
@@ -224,13 +234,11 @@ class StripePaymentService
                 Payment::where('order_id', $order->id)->update(['status' => 'paid']);
             }
 
-            // Clear cart
             if ($order->user_id && ($cart = Cart::where('user_id', $order->user_id)->first())) {
                 $cart->items()->delete();
                 $cart->update(['discount_code' => null, 'discount_amount' => 0]);
             }
 
-            // Queue order confirmation email with logging
             Log::info('Stripe confirmAndMarkPaid: Dispatching order confirmation email job', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
@@ -249,6 +257,108 @@ class StripePaymentService
             ]);
             throw $throwable;
         }
+    }
+
+    protected function finalizeIntentForSession($intent, string $sessionId): array
+    {
+        $payload = CheckoutSessionService::retrieve($sessionId);
+
+        $txn = Transaction::where('gateway', 'stripe')
+            ->where('gateway_payment_id', $intent->id)
+            ->first();
+
+        if (! $payload) {
+            if ($txn && $txn->order_id) {
+                $order = Order::find($txn->order_id);
+                if ($order) {
+                    return ['success' => true, 'order_id' => $order->id, 'order_number' => $order->order_number];
+                }
+            }
+
+            throw new \RuntimeException('Checkout session has expired. Please restart the checkout process.');
+        }
+
+        if ($intent->status !== 'succeeded') {
+            if ($txn) {
+                $txn->update([
+                    'status' => 'failed',
+                    'payload' => array_merge($txn->payload ?? [], [
+                        'intent' => $intent->toArray(),
+                        'error_message' => $intent->last_payment_error->message ?? 'Payment failed',
+                    ]),
+                ]);
+            }
+
+            OrderPlacementService::recordFailedPayment($payload, [
+                'payment_gateway_transaction_id' => $intent->id,
+                'gateway_response' => $intent->toArray(),
+            ]);
+
+            throw new \RuntimeException('PaymentIntent not succeeded');
+        }
+
+        DB::beginTransaction();
+        try {
+            $order = OrderPlacementService::create($payload, [
+                'payment_status' => 'paid',
+                'order_status' => 'pending',
+                'clear_cart' => ($payload['cart_type'] ?? 'user') === 'user',
+                'clear_session_cart' => ($payload['cart_type'] ?? 'user') === 'session',
+                'send_email' => true,
+                'payment_gateway_transaction_id' => $intent->id,
+                'gateway_response' => $intent->toArray(),
+            ]);
+
+            $txnForUpdate = Transaction::where('gateway', 'stripe')
+                ->where('gateway_payment_id', $intent->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($txnForUpdate) {
+                $txnForUpdate->update([
+                    'order_id' => $order->id,
+                    'user_id' => $order->user_id,
+                    'status' => 'paid',
+                    'amount' => (int) $intent->amount_received,
+                    'currency' => strtoupper($intent->currency ?? 'USD'),
+                    'processed_via' => 'controller',
+                    'payload' => array_merge($txnForUpdate->payload ?? [], [
+                        'checkout_session_id' => $sessionId,
+                        'confirm_without_webhook' => true,
+                        'intent' => $intent->toArray(),
+                    ]),
+                ]);
+            } else {
+                $txnForUpdate = Transaction::create([
+                    'order_id' => $order->id,
+                    'user_id' => $order->user_id,
+                    'gateway' => 'stripe',
+                    'gateway_payment_id' => $intent->id,
+                    'amount' => (int) $intent->amount_received,
+                    'currency' => strtoupper($intent->currency ?? 'USD'),
+                    'status' => 'paid',
+                    'processed_via' => 'controller',
+                    'payload' => [
+                        'checkout_session_id' => $sessionId,
+                        'intent' => $intent->toArray(),
+                    ],
+                ]);
+            }
+
+            DB::commit();
+        } catch (\Throwable $throwable) {
+            DB::rollBack();
+            Log::error('Stripe payment confirmation failed for checkout session: ' . $throwable->getMessage(), [
+                'payment_intent_id' => $intent->id,
+                'checkout_session_id' => $sessionId,
+                'error' => $throwable->getMessage()
+            ]);
+            throw $throwable;
+        }
+
+        CheckoutSessionService::forget($sessionId);
+
+        return ['success' => true, 'order_id' => $order->id, 'order_number' => $order->order_number];
     }
 
     public function refundPayment(string $paymentIntentId, ?int $amountMinor = null): string
@@ -327,29 +437,29 @@ class StripePaymentService
      */
     public function createIntentFromCheckoutSession(string $checkoutSessionId, array $sessionPayload): array
     {
-        // Create the order from session payload
-        $order = OrderPlacementService::create($sessionPayload, [
-            'payment_status' => 'unpaid',
-            'order_status' => 'pending',
-            'clear_cart' => ($sessionPayload['cart_type'] ?? 'user') === 'user',
-            'clear_session_cart' => ($sessionPayload['cart_type'] ?? 'user') === 'session',
-            'send_email' => false, // Will send after payment confirmation
-        ]);
-
-        // Create payment intent for the order
-        $intentData = $this->createPaymentIntent($order);
-
-        // Store checkout session ID in transaction payload for reference
-        $txn = Transaction::where('gateway', 'stripe')
-            ->where('gateway_payment_id', $intentData['payment_intent_id'])
-            ->first();
-        
-        if ($txn) {
-            $txn->update([
-                'payload' => array_merge($txn->payload ?? [], ['checkout_session_id' => $checkoutSessionId])
-            ]);
+        $amountBase = (float) ($sessionPayload['total_amount'] ?? 0);
+        if ($amountBase <= 0) {
+            throw new \RuntimeException('Invalid checkout amount for Stripe payment intent.');
         }
 
-        return $intentData;
+        $currency = strtolower($sessionPayload['currency'] ?? 'usd');
+        $amountMinor = (int) round($amountBase * 100);
+
+        $metadata = [
+            'checkout_session_id' => $checkoutSessionId,
+            'user_id' => (string) ($sessionPayload['user_id'] ?? ''),
+        ];
+
+        $intent = $this->client->paymentIntents->create([
+            'amount' => $amountMinor,
+            'currency' => $currency,
+            'payment_method_types' => ['card'],
+            'metadata' => $metadata,
+        ]);
+
+        return [
+            'client_secret' => $intent->client_secret,
+            'payment_intent_id' => $intent->id,
+        ];
     }
 }

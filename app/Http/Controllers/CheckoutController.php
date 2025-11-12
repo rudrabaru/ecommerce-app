@@ -252,6 +252,24 @@ class CheckoutController extends Controller
                 ];
             }
 
+            if ($paymentMethod->name === 'razorpay') {
+                $conversionRate = (float) config('services.razorpay.usd_to_inr', 83.0);
+                if ($conversionRate <= 0) {
+                    $conversionRate = 83.0;
+                }
+
+                $totalOrderAmount = round($totalOrderAmount * $conversionRate, 2);
+                $discountAmountTotal = round($discountAmountTotal * $conversionRate, 2);
+
+                foreach ($orderItems as &$item) {
+                    $item['unit_price'] = round($item['unit_price'] * $conversionRate, 2);
+                    $item['line_total'] = round($item['line_total'] * $conversionRate, 2);
+                    $item['line_discount'] = round(($item['line_discount'] ?? 0) * $conversionRate, 2);
+                    $item['total'] = round($item['total'] * $conversionRate, 2);
+                }
+                unset($item);
+            }
+
             // Collect all unique provider IDs from order items
             $providerIds = collect($orderItems)->pluck('provider_id')->unique()->filter()->values()->toArray();
 
@@ -292,22 +310,23 @@ class CheckoutController extends Controller
                 return redirect()->route('checkout')->with('status', 'Order placed successfully');
             }
 
-            // For Stripe and Razorpay, create the order first (payment will be initiated separately)
+            // For Stripe and Razorpay, store checkout session and defer order placement until payment confirmation
             if (in_array($paymentMethod->name, ['stripe', 'razorpay'])) {
-                $order = OrderPlacementService::create($orderDraft, [
-                    'payment_status' => 'unpaid',
-                    'order_status' => 'pending',
-                    'clear_cart' => (bool) $userId,
-                    'clear_session_cart' => !$userId,
-                    'send_email' => false, // Will send after payment confirmation
+                $sessionId = 'chk_' . (string) Str::uuid();
+
+                $sessionPayload = array_merge($orderDraft, [
+                    'cart_type' => $user ? 'user' : 'session',
+                    'user_id' => $userId,
                 ]);
+
+                CheckoutSessionService::store($sessionId, $sessionPayload);
 
                 DB::commit();
 
                 return response()->json([
                     'success' => true,
                     'payment_method' => $paymentMethod->name,
-                    'order_ids' => [$order->id],
+                    'checkout_session_id' => $sessionId,
                 ]);
             }
 

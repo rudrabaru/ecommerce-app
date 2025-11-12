@@ -3,13 +3,10 @@
 namespace Modules\Payments\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\Order;
-use App\Models\Payment;
-use App\Models\PaymentMethod;
+use App\Services\Checkout\CheckoutSessionService;
 use App\Services\Payments\RazorpayPaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class RazorpayController extends Controller
@@ -25,43 +22,37 @@ class RazorpayController extends Controller
         }
 
         $validated = $request->validate([
-            'order_ids' => ['required', 'array', 'min:1'],
-            'order_ids.*' => ['integer', 'exists:orders,id'],
+            'checkout_session_id' => ['required', 'string'],
         ]);
 
-        $order = Order::whereIn('id', $validated['order_ids'])
-            ->where('user_id', $user->id)
-            ->latest('id')
-            ->firstOrFail();
+        $sessionId = $validated['checkout_session_id'];
+        $sessionPayload = CheckoutSessionService::retrieve($sessionId);
 
-        $paymentMethod = PaymentMethod::where('name', 'razorpay')->firstOrFail();
+        if (! $sessionPayload) {
+            return response()->json([
+                'message' => 'Checkout session expired. Please restart the checkout process.',
+            ], 422);
+        }
 
-        DB::beginTransaction();
+        if ((int) ($sessionPayload['user_id'] ?? 0) !== (int) $user->id) {
+            return response()->json([
+                'message' => 'Checkout session does not belong to the authenticated user.',
+            ], 403);
+        }
+
         try {
-            Payment::firstOrCreate([
-                'order_id' => $order->id,
-                'payment_method_id' => $paymentMethod->id,
-            ], [
-                'amount' => $order->total_amount,
-                'currency' => 'INR',
-                'status' => 'unpaid',
-            ]);
-
-            $r = $service->createOrder($order);
-
-            DB::commit();
+            $r = $service->createOrderFromCheckoutSession($sessionId, $sessionPayload);
 
             return response()->json([
-                'orderId' => $order->id,
                 'razorpayOrderId' => $r['razorpay_order_id'],
                 'amount' => $r['amount'],
                 'currency' => $r['currency'],
                 'key' => $r['key'],
+                'checkoutSessionId' => $sessionId,
             ]);
         } catch (\Throwable $e) {
-            DB::rollBack();
             Log::error('Razorpay initiate failed', [
-                'order_id' => $order->id ?? null,
+                'checkout_session_id' => $sessionId,
                 'user_id' => $user->id ?? null,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
@@ -83,12 +74,14 @@ class RazorpayController extends Controller
         $validated = $request->validate([
             'razorpay_order_id' => ['required', 'string'],
             'razorpay_payment_id' => ['required', 'string'],
+            'checkout_session_id' => ['nullable', 'string'],
         ]);
 
         try {
             $result = $service->captureAndMarkPaid(
                 $validated['razorpay_order_id'],
-                $validated['razorpay_payment_id']
+                $validated['razorpay_payment_id'],
+                $validated['checkout_session_id'] ?? null
             );
 
             return response()->json([
@@ -100,6 +93,7 @@ class RazorpayController extends Controller
             Log::error('Razorpay payment confirmation failed: ' . $e->getMessage(), [
                 'razorpay_order_id' => $validated['razorpay_order_id'],
                 'razorpay_payment_id' => $validated['razorpay_payment_id'],
+                'checkout_session_id' => $validated['checkout_session_id'] ?? null,
                 'exception' => $e,
             ]);
             return response()->json([
